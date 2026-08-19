@@ -6,6 +6,23 @@ in chat. When a request conflicts with a rule below, stop and flag it.
 
 ---
 
+## Team context — read this before suggesting anything
+
+We are complete beginners and we have very minimal time (hackathon
+constraints). Practical implications:
+
+- Prefer the simplest approach that satisfies the rules in this file — no
+  extra abstraction, no "best practice" detours that aren't needed for the
+  demo path.
+- Explain things in plain terms, not jargon-heavy shorthand — we need to be
+  able to defend every file to judges.
+- Flag time-expensive suggestions explicitly and offer the minimal-time
+  alternative first.
+- Stay strictly inside the "Demo path" section below — do not suggest
+  building anything marked "designed, not demoed."
+
+---
+
 ## What we are building
 
 An AI agent that turns a plain-language buying brief into an audited,
