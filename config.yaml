@@ -1,0 +1,74 @@
+# config.yaml — Stage 2 (weights) and Stage 5 (authorisation) source of truth.
+#
+# Nothing in this file is ever passed to the LLM as instruction text. Stage 1/2
+# extraction only reads user language to fill in *which* fields were stated and
+# *what* they were stated as; every number that actually gates or scores a
+# purchase is read from here by plain Python. See CLAUDE.md, "THE ONE RULE".
+
+# ---------------------------------------------------------------------------
+# Stage 5 — authorisation limit
+# ---------------------------------------------------------------------------
+# Total order value the agent may commit to WITHOUT a human approval.
+# Exceeding this escalates (trigger #2) — it never causes a silent rejection
+# and never causes a silent purchase above the line.
+authorisation_limit_inr: 105000
+
+# ---------------------------------------------------------------------------
+# Stage 5 — substitution threshold
+# ---------------------------------------------------------------------------
+# If the #1 ranked product becomes unavailable at confirmation or payment
+# (trigger #3), the agent may silently fall back to #2 ONLY if #1 led #2 by
+# this many points or fewer. A wider gap means #2 is a meaningfully worse
+# fit, so the agent escalates instead of swapping silently.
+substitution_threshold_points: 5
+
+# ---------------------------------------------------------------------------
+# Stage 3 — per-unit price cap defaults
+# ---------------------------------------------------------------------------
+# HARD constraint used by the stage-3 filter. If the user's brief states a
+# per-unit cap ("max ₹22/unit"), that stated value is used and this default is
+# ignored. If the brief omits it, the category default below is applied and
+# logged as an ASSUMED (not CONFIRMED) field per the Stage-1 ambiguous-field
+# rule. Values are per-unit INR ceilings, one per procurement category.
+per_unit_cap_defaults_inr:
+  packaging: 25          # mailer boxes, void fill, printed cartons
+  labels: 3
+  default: 50             # fallback for any category without a specific entry
+
+# ---------------------------------------------------------------------------
+# Stage 2 — category default weights (soft criteria only)
+# ---------------------------------------------------------------------------
+# Used when the user's brief leaves a priority unstated. Each category's
+# weights must sum to 1.0. When the user DOES state a priority (e.g.
+# "reliability matters a lot"), Stage 2's Python weight engine substitutes
+# the stated weight for that criterion and rescales the remaining criteria
+# proportionally so the full set still sums to 1.0 — the ratios below are
+# what that rescale is proportional to, so keep them deliberate, not
+# arbitrary, if you edit them.
+category_default_weights:
+  packaging:
+    reliability: 0.25
+    price: 0.30
+    replacement: 0.25
+    delivery: 0.20
+  labels:
+    reliability: 0.20
+    price: 0.35
+    replacement: 0.20
+    delivery: 0.25
+  default:
+    reliability: 0.25
+    price: 0.25
+    replacement: 0.25
+    delivery: 0.25
+
+# ---------------------------------------------------------------------------
+# Stage 2 — stated-priority phrase → weight mapping
+# ---------------------------------------------------------------------------
+# LLM extracts which phrase the user used for a given criterion (Stage 1);
+# Python looks up the numeric weight here. The LLM never invents or computes
+# the number itself.
+priority_phrase_weights:
+  matters_a_lot: 0.45
+  matters: 0.30
+  nice_to_have: 0.15
