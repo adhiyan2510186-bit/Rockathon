@@ -26,8 +26,8 @@ parser and the UI says so plainly.
 | 3 | `.gitignore`, `.env.example` | — | DONE (key stays out of git) |
 | 4 | `agent/config.py` | reads config.yaml, nowhere else does | DONE |
 | 5 | `agent/models.py` | shared data shapes for all stages | DONE |
-| 6 | `agent/audit.py` | 8 — append-only logger | **NEXT** |
-| 7 | `agent/language.py` | 0-2 — the only file that calls Gemini | to do |
+| 6 | `agent/audit.py` | 8 — append-only logger | DONE |
+| 7 | `agent/language.py` | 0-2 — the only file that calls Gemini | **NEXT** |
 | 8 | `agent/weights.py` | 2 — phrase label -> weights, pure Python | to do |
 | 9 | `data/` mock catalogs + `agent/discovery.py` | 3 — two schemas -> one Product | to do |
 | 10 | `agent/ranking.py` + `tests/test_ranking.py` | 4 — the golden 58.0/48.7/33.7 | to do |
@@ -36,8 +36,21 @@ parser and the UI says so plainly.
 | 13 | `agent/vendor.py`, `agent/payment.py` | 6-7 — mocks with failure switches | to do |
 | 14 | `app.py` | Streamlit, four screens | to do |
 
-`audit.py` is next because every stage after it writes to it. Building it now
-means no stage has to be written twice.
+`audit.py` is done, so every stage from here on can write its own log line as
+it acts instead of being retrofitted later. `language.py` is next: it is the
+only file that touches Gemini, and stages 0-2 are the front of the demo run.
+
+What `audit.py` gives the rest of the build:
+
+- `AuditLogger(context)` — one logger per transaction, passed to every stage.
+  Five methods named after the five event types: `decision`, `assumption`,
+  `escalation`, `fallback`, `action`.
+- Stage label constants (`STAGE_RANKING` etc.) so nine stages spell the stage
+  names the same way.
+- Entries flush to `exports/TXN-####.jsonl` the instant they are created — a
+  crash at stage 6 still leaves stages 0-5 on disk.
+- `finance_view()` renders the same entries as the one-page auditor view, and
+  `replay(transaction_id)` reads a finished run back from disk.
 
 ---
 
