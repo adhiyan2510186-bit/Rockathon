@@ -32,8 +32,8 @@ parser and the UI says so plainly.
 | 9 | `data/` mock catalogs + `agent/discovery.py` | 3 — two schemas -> one Product | DONE |
 | 10 | `agent/ranking.py` + `tests/test_ranking.py` | 4 — the golden 58.0/48.7/33.7 | **DONE — 14 tests green** |
 | 11 | `agent/escalation.py` | one handler, four call sites | **DONE** |
-| 12 | `agent/authorisation.py` | 5 — the limit check | **NEXT** |
-| 13 | `agent/vendor.py`, `agent/payment.py` | 6-7 — mocks with failure switches | to do |
+| 12 | `agent/authorisation.py` | 5 — the limit check | **DONE** |
+| 13 | `agent/vendor.py`, `agent/payment.py` | 6-7 — mocks with failure switches | **NEXT** |
 | 14 | `app.py` | Streamlit, four screens | to do |
 
 `audit.py` is done, so every stage from here on can write its own log line as
@@ -129,6 +129,59 @@ Rs 1,05,000 limit with KraftPro (Rs 1,04,500) as the no-approval-needed
 alternative; and with the cap dropped to Rs 15 so nothing passes, stage 3
 surfaces EcoMail (17% over), ValuePack (20% late) and KraftPro (39% over) in
 that order, flipping to delivery-first when a flexibility order is declared.
+
+### Stage 5: the limit check (`agent/authorisation.py`)
+
+The only human-in-the-loop gate, and deliberately the smallest file so far. One
+multiplication and one comparison:
+
+```
+order total = unit price x quantity        5,000 x Rs 21.90 = Rs 1,09,500
+within  the Rs 1,05,000 limit -> the agent buys it alone, tells the user after
+over    the Rs 1,05,000 limit -> escalation, nothing bought, a human decides
+```
+
+`authorise(context, audit)` is the whole stage. It takes #1 from the ranked list
+(it never re-ranks — stage 4 already chose), records it as `context.selected` so
+a later approval has something to resume with, and compares the total to the
+limit read from config.yaml.
+
+**Two limits, and they do different jobs.** The Rs 22 per-unit cap is a
+constraint on the PRODUCT (stage 3 removes anything above it). The Rs 1,05,000
+authorisation limit is a constraint on the AGENT — an over-limit order is
+perfectly eligible, the agent just may not sign for it. So this file never
+removes anything from the ranked list; it only decides who signs.
+
+**Over the limit, it hands straight to `escalation.handle()`** with trigger #2
+rather than writing its own approval screen. Trigger #2 is a call site, not a
+code path — the overage sentence a judge reads comes from the same place whether
+the trouble was found at stage 3, 5, 6 or 7.
+
+**The autonomous path is logged as loudly as the escalation.** The within-limit
+DECISION entry records total, limit and headroom at the moment the agent decided
+it did not need to ask, so "why was I not consulted?" is answered by a line that
+already existed.
+
+Three ways out of `AWAITING_APPROVAL`, and two of them buy nothing:
+
+| Function | Actor logged | Result |
+|---|---|---|
+| `approve(ctx, audit, approver=...)` | USER | status APPROVED, resumes at stage 6 |
+| `decline(ctx, audit, reason=...)` | USER | status DECLINED, no purchase, reason kept verbatim |
+| `expire(ctx, audit)` | AGENT | status EXPIRED, no purchase, state preserved |
+
+`expire()` is what makes "silence is never approval" a mechanism instead of a
+claim, and the actor is AGENT because the user did nothing — that is the fact
+being recorded. `approve()` does no re-discovery and no re-ranking: the list the
+user was shown is the list they approved. Stage 6 re-validates price and stock at
+the counter instead.
+
+Verified on the demo brief: escalates at Rs 1,09,500 vs Rs 1,05,000 (Rs 4,500
+over, headroom -4,500, gap 9.3, KraftPro offered at Rs 1,04,500); the same brief
+at 4,000 units proceeds alone at Rs 87,600 with Rs 17,400 of headroom. Approving,
+declining and expiring each land in the right state, and calling any of the three
+on a transaction that is not awaiting approval raises rather than silently
+acting. Golden test still 14 green.
 
 ---
 
