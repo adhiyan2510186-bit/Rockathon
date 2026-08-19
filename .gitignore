@@ -1,0 +1,41 @@
+# .gitignore — files git must NEVER upload to GitHub.
+#
+# The single most important line in this file is the first one. Everything else
+# is housekeeping.
+
+# ---------------------------------------------------------------------------
+# SECRETS — never commit these
+# ---------------------------------------------------------------------------
+# .env holds our real Gemini API key. If this were pushed to GitHub, anyone could
+# read it and spend our quota. The team copies .env.example -> .env and fills in
+# the key locally; the .env itself never leaves this laptop.
+.env
+.env.*
+!.env.example
+
+# Streamlit's own secrets file, same reasoning.
+.streamlit/secrets.toml
+
+# ---------------------------------------------------------------------------
+# Generated at runtime — not source code, no reason to track
+# ---------------------------------------------------------------------------
+# Audit trails written during a demo run. The audit log is a DELIVERABLE we show
+# on screen and export live; the point is that it is produced fresh by the run,
+# not that a copy sits in the repo.
+exports/
+*.jsonl
+
+# Python's compiled cache and pytest's scratch directory.
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# ---------------------------------------------------------------------------
+# Editor and OS clutter
+# ---------------------------------------------------------------------------
+.venv/
+venv/
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
