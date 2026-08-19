@@ -31,8 +31,8 @@ parser and the UI says so plainly.
 | 8 | `agent/weights.py` | 2 — phrase label -> weights, pure Python | DONE |
 | 9 | `data/` mock catalogs + `agent/discovery.py` | 3 — two schemas -> one Product | DONE |
 | 10 | `agent/ranking.py` + `tests/test_ranking.py` | 4 — the golden 58.0/48.7/33.7 | **DONE — 14 tests green** |
-| 11 | `agent/escalation.py` | one handler, four call sites | **NEXT** |
-| 12 | `agent/authorisation.py` | 5 — the limit check | to do |
+| 11 | `agent/escalation.py` | one handler, four call sites | **DONE** |
+| 12 | `agent/authorisation.py` | 5 — the limit check | **NEXT** |
 | 13 | `agent/vendor.py`, `agent/payment.py` | 6-7 — mocks with failure switches | to do |
 | 14 | `app.py` | Streamlit, four screens | to do |
 
@@ -83,6 +83,52 @@ The two parsers spell dimensions slightly differently: Gemini returns
 `"200x150x80 mm"`, the offline parser returns `"200x150x80mm"`. Spec matching at
 stage 3 must strip spaces and lowercase before comparing, or an identical box
 fails a hard gate on a space.
+
+### Stage 3-7: the one escalation handler (`agent/escalation.py`)
+
+One public function, `handle(context, trigger, audit, ...)`, called from four
+places. Four call sites, ONE mechanism — CLAUDE.md forbids four separate code
+paths, because a boundary implemented four times is four chances to draw it in
+four different places.
+
+| Call site | Trigger enum | CLAUDE.md trigger | Outcome on the demo data |
+|---|---|---|---|
+| stage 3, nothing passed | `NO_ELIGIBLE_MATCH` | 1 | escalate, 3 near-misses + relaxation proposals |
+| stage 5, over the limit | `OVER_AUTHORISATION_LIMIT` | 2 | escalate, Rs 4,500 over, KraftPro offered as best in-limit |
+| stage 6, unavailable | `UNAVAILABLE_AT_CONFIRMATION` | 3 | escalate — the gap is 9.3, over the 5-point threshold |
+| stage 7, payment declined | `PAYMENT_DECLINED` | 3 | escalate for the same reason |
+
+Four enum names, three triggers: stages 6 and 7 are the same situation ("the
+option we picked cannot be bought") found at two different stages, so they share
+one handler and only the logged stage differs.
+
+Every path runs the same five steps: DETECT, RE-VALIDATE, RELAX, RE-RANK &
+SURFACE, ESCALATE & LOG.
+
+**The only time the agent acts alone** is a trigger-3 fallback where BOTH hold:
+the next option passes an independent re-check of every hard gate, and it trails
+by no more than 5 points. Verified both ways — with the real 9.3-point gap it
+escalates; with a 3-point gap it swaps and logs a FALLBACK instead.
+
+Two details worth defending:
+
+- **Re-validation reuses `discovery.apply_hard_gates`**, it does not write a
+  quick check of its own. Two definitions of "eligible" in one codebase is
+  exactly how an ineligible product ends up bought.
+- **Near-misses are compared as FRACTIONS of the user's own limit**, not raw
+  numbers. Rs 2.50 over a Rs 22 cap (11%) is a smaller ask than 2 days over a
+  10-day window (20%), and raw numbers would have said the opposite.
+
+What it will never do: relax category / quantity / specs, apply any relaxation
+itself (they are text for a human), raise the authorisation limit, or treat
+silence as approval — every escalation parks the transaction in
+`AWAITING_APPROVAL` with its state intact.
+
+Verified against the demo brief: escalation at stage 5 shows Rs 1,09,500 vs the
+Rs 1,05,000 limit with KraftPro (Rs 1,04,500) as the no-approval-needed
+alternative; and with the cap dropped to Rs 15 so nothing passes, stage 3
+surfaces EcoMail (17% over), ValuePack (20% late) and KraftPro (39% over) in
+that order, flipping to delivery-first when a flexibility order is declared.
 
 ---
 
