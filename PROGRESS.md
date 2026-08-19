@@ -27,8 +27,8 @@ parser and the UI says so plainly.
 | 4 | `agent/config.py` | reads config.yaml, nowhere else does | DONE |
 | 5 | `agent/models.py` | shared data shapes for all stages | DONE |
 | 6 | `agent/audit.py` | 8 — append-only logger | DONE |
-| 7 | `agent/language.py` | 0-2 — the only file that calls Gemini | **NEXT** |
-| 8 | `agent/weights.py` | 2 — phrase label -> weights, pure Python | to do |
+| 7 | `agent/language.py` | 0-2 — the only file that calls Gemini | DONE |
+| 8 | `agent/weights.py` | 2 — phrase label -> weights, pure Python | **NEXT** |
 | 9 | `data/` mock catalogs + `agent/discovery.py` | 3 — two schemas -> one Product | to do |
 | 10 | `agent/ranking.py` + `tests/test_ranking.py` | 4 — the golden 58.0/48.7/33.7 | to do |
 | 11 | `agent/escalation.py` | one handler, four call sites | to do |
@@ -51,6 +51,38 @@ What `audit.py` gives the rest of the build:
   crash at stage 6 still leaves stages 0-5 on disk.
 - `finance_view()` renders the same entries as the one-page auditor view, and
   `replay(transaction_id)` reads a finished run back from disk.
+
+`language.py` is done and verified against the live API on 2026-08-19. It is the
+only file that imports the Gemini SDK. Two public functions:
+
+- `check_scope(text, audit)` — stage 0. Returns out_of_scope / incomplete /
+  in_scope. The one clarifying question is logged as a DECISION, not an
+  ESCALATION: escalation stays reserved for the three stage-5 triggers.
+- `extract_brief(text, audit)` — stage 1. Returns a filled `Brief`. A missing
+  per-unit cap is filled from config and tagged ASSUMED, logged the moment it
+  is applied.
+
+Both return `.source` ('gemini' or 'offline') and `.note`, which the UI prints.
+Online and offline both produce the same `_Extraction` and go through the same
+`_to_brief()`, so the fallback cannot behave differently — only the reading of
+the sentence changes.
+
+`config.py` gained one accessor for this: `priority_phrase_labels()`, returning
+the phrase KEYS only. That is the single thing from config.yaml the model is
+shown, and it is names without numbers.
+
+### Verified on the demo brief (both parsers agree)
+
+category packaging · quantity 5000 · cap Rs 22 · 10 days ·
+`stated_priorities = {"reliability": "matters_a_lot"}` — which is what
+`weights.py` turns into reliability 0.45.
+
+### One thing to handle in discovery.py
+
+The two parsers spell dimensions slightly differently: Gemini returns
+`"200x150x80 mm"`, the offline parser returns `"200x150x80mm"`. Spec matching at
+stage 3 must strip spaces and lowercase before comparing, or an identical box
+fails a hard gate on a space.
 
 ---
 

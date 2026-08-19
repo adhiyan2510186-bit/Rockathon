@@ -199,6 +199,18 @@ def priority_phrase_weight(phrase: str) -> float | None:
     return load()["priority_phrase_weights"].get(phrase)
 
 
+def priority_phrase_labels() -> list[str]:
+    """Just the phrase NAMES ('matters_a_lot', 'matters', 'nice_to_have') — never the numbers.
+
+    This is the one thing from config.yaml that agent/language.py is allowed to
+    put in front of the model, and it is deliberately the keys only. The model is
+    told which labels exist so it can pick one; it is never told that
+    matters_a_lot means 0.45. Returning keys from here rather than letting
+    language.py read the raw config keeps that promise checkable in one place.
+    """
+    return sorted(load()["priority_phrase_weights"].keys())
+
+
 # ---------------------------------------------------------------------------
 # Stages 0-2 — language step settings
 # ---------------------------------------------------------------------------
