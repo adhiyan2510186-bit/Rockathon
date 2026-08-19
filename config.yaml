@@ -72,3 +72,36 @@ priority_phrase_weights:
   matters_a_lot: 0.45
   matters: 0.30
   nice_to_have: 0.15
+
+# ---------------------------------------------------------------------------
+# Stages 0-2 — the language step
+# ---------------------------------------------------------------------------
+# The ONLY part of this file that concerns an LLM, and note what is here: a
+# model name and a switch. No limits, no weights, no thresholds. The language
+# model is never told what our authorisation limit is, so no phrasing inside a
+# user's brief can talk it past one. See CLAUDE.md, "THE ONE RULE".
+#
+# model: verified working 2026-08-19. gemini-2.5-flash is NOT usable — Google
+#   returns 404 for new API keys and directs callers to the 3.x line.
+# allow_offline_fallback: if Gemini is unreachable or rate-limited (the free
+#   tier allows roughly 10 requests/minute), agent/language.py switches to a
+#   deterministic word-matching parser so a demo cannot die mid-run. The UI
+#   labels this plainly — we degrade honestly, we never fake a model call.
+llm:
+  provider: gemini
+  model: gemini-3.6-flash
+  allow_offline_fallback: true
+
+# ---------------------------------------------------------------------------
+# Stages 6-7 — mock service failure injection
+# ---------------------------------------------------------------------------
+# Switches for the pretend vendor and pretend payment gateway. These exist so a
+# judge can watch the escalation path fire on demand instead of taking our word
+# for it. Flipped live from the Streamlit sidebar during the demo.
+#
+# The defaults below ARE the scripted demo: confirmation succeeds, then the
+# first payment attempt is declined so stage 7's retry is visible on screen.
+demo_failure_injection:
+  out_of_stock_at_confirmation: false
+  price_drift_at_confirmation: false
+  decline_first_payment_attempt: true
