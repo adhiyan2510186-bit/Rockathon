@@ -271,6 +271,12 @@ build it unless the demo path is finished, tested, and frozen.
 - **Match the golden numbers.** Any change touching the ranker must keep the
   58.0 / 48.7 / 33.7 test green.
 - **Commit after every working state.**
+- **Auto-push meaningful work.** Once a file or change is working state — not a
+  half-finished edit — commit and push it to the GitHub remote (origin/master)
+  without waiting to be asked each time. "Meaningful" means it runs, passes
+  its own checks (e.g. the golden ranker test if touched), and is something we
+  could show a judge. Scratch experiments and broken intermediate states stay
+  local until they clear that bar.
 - **Ask "what breaks in this?"** before adding the next feature.
 - **No refactors of working code once we say the demo path is frozen.**
 - If a request would put a decision (ranking, scoring, limit checks) inside the
