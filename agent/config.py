@@ -92,6 +92,7 @@ def _validate(raw: dict[str, Any]) -> None:
         "per_unit_cap_defaults_inr",
         "category_default_weights",
         "priority_phrase_weights",
+        "weight_rounding_step",
         "llm",
         "demo_failure_injection",
     ]
@@ -123,6 +124,15 @@ def _validate(raw: dict[str, Any]) -> None:
                 f"priority_phrase_weights['{phrase}'] is {weight}; it must be between 0 and 1 "
                 f"so the remaining criteria still have room to be rescaled."
             )
+
+    # A step of 0 would divide by zero when rounding; a step above 0.25 would
+    # flatten four criteria into two or three distinct values and stop the
+    # weights meaning anything.
+    step = raw["weight_rounding_step"]
+    if not 0 < step <= 0.25:
+        raise ConfigError(
+            f"weight_rounding_step is {step}; it must be greater than 0 and at most 0.25."
+        )
 
     if "default" not in raw["category_default_weights"]:
         raise ConfigError("category_default_weights needs a 'default' entry as a fallback")
@@ -209,6 +219,18 @@ def priority_phrase_labels() -> list[str]:
     language.py read the raw config keeps that promise checkable in one place.
     """
     return sorted(load()["priority_phrase_weights"].keys())
+
+
+def weight_rounding_step() -> float:
+    """The step every rescaled weight is rounded to (0.05).
+
+    Not cosmetic. Rescaling the packaging defaults around a stated reliability of
+    0.45 gives price 0.2200, replacement 0.1833, delivery 0.1467; rounding those
+    to 0.05 gives 0.20 / 0.20 / 0.15, which is the set in our deck and the set
+    the golden ranking test asserts. Change this number and that test goes red,
+    which is exactly what it is there for.
+    """
+    return float(load()["weight_rounding_step"])
 
 
 # ---------------------------------------------------------------------------

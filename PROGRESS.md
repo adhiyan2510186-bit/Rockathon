@@ -28,8 +28,8 @@ parser and the UI says so plainly.
 | 5 | `agent/models.py` | shared data shapes for all stages | DONE |
 | 6 | `agent/audit.py` | 8 — append-only logger | DONE |
 | 7 | `agent/language.py` | 0-2 — the only file that calls Gemini | DONE |
-| 8 | `agent/weights.py` | 2 — phrase label -> weights, pure Python | **NEXT** |
-| 9 | `data/` mock catalogs + `agent/discovery.py` | 3 — two schemas -> one Product | to do |
+| 8 | `agent/weights.py` | 2 — phrase label -> weights, pure Python | DONE |
+| 9 | `data/` mock catalogs + `agent/discovery.py` | 3 — two schemas -> one Product | **NEXT** |
 | 10 | `agent/ranking.py` + `tests/test_ranking.py` | 4 — the golden 58.0/48.7/33.7 | to do |
 | 11 | `agent/escalation.py` | one handler, four call sites | to do |
 | 12 | `agent/authorisation.py` | 5 — the limit check | to do |
@@ -98,6 +98,24 @@ These come from the deck. If code disagrees with them, the code is wrong.
   so the agent escalates rather than swapping)
 - Demo order total: 5,000 x Rs 21.90 = **Rs 1,09,500**, which is over the
   Rs 1,05,000 authorisation limit — this is what makes the approval screen fire
+
+### How the weights are produced (confirmed against the golden table)
+
+`weights.compute(brief)` in four steps, all plain Python:
+
+1. Start from the category defaults (packaging: 0.25 / 0.30 / 0.25 / 0.20).
+2. Substitute the stated priority: `matters_a_lot` -> 0.45, leaving 0.55.
+3. Rescale the other three proportionally: 0.2200 / 0.1833 / 0.1467.
+4. **Round to 0.05** -> price 0.20, replacement 0.20, delivery 0.15.
+
+**Step 4 is load-bearing, not cosmetic.** Proportional rescaling ALONE gives
+0.22 / 0.1833 / 0.1467, which does not match the deck. The rounding is what
+lands us on 0.45 / 0.20 / 0.20 / 0.15. The step lives in `config.yaml` as
+`weight_rounding_step: 0.05` — change it and the golden ranking test goes red.
+
+Verified: all 18 combinations tested (6 priority patterns x 3 categories) sum to
+exactly 1.0, including the awkward ones (three criteria at "matters a lot",
+unknown phrase labels, all four stated).
 
 ### How normalisation works (confirmed against the golden table)
 

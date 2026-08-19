@@ -41,10 +41,10 @@ per_unit_cap_defaults_inr:
 # Used when the user's brief leaves a priority unstated. Each category's
 # weights must sum to 1.0. When the user DOES state a priority (e.g.
 # "reliability matters a lot"), Stage 2's Python weight engine substitutes
-# the stated weight for that criterion and rescales the remaining criteria
-# proportionally so the full set still sums to 1.0 — the ratios below are
-# what that rescale is proportional to, so keep them deliberate, not
-# arbitrary, if you edit them.
+# the stated weight for that criterion, rescales the remaining criteria
+# proportionally, then rounds them to weight_rounding_step below so the full
+# set still sums to 1.0 — the ratios here are what that rescale is
+# proportional to, so keep them deliberate, not arbitrary, if you edit them.
 category_default_weights:
   packaging:
     reliability: 0.25
@@ -72,6 +72,27 @@ priority_phrase_weights:
   matters_a_lot: 0.45
   matters: 0.30
   nice_to_have: 0.15
+
+# ---------------------------------------------------------------------------
+# Stage 2 — weight rounding step
+# ---------------------------------------------------------------------------
+# After a stated priority is substituted in, the remaining criteria are
+# rescaled proportionally and then ROUNDED to the nearest multiple of this
+# step. Both halves matter and the rounding is not cosmetic:
+#
+#   packaging defaults 0.25/0.30/0.25/0.20, user says reliability matters a lot
+#   -> substitute reliability 0.45, leaving a 0.55 budget
+#   -> rescale proportionally: price 0.2200, replacement 0.1833, delivery 0.1467
+#   -> round to 0.05:          price 0.20,   replacement 0.20,   delivery 0.15
+#
+# That rounded set is the one in our deck and in the golden ranking test. The
+# unrounded set would produce different scores, so if you change this number the
+# 58.0 / 48.7 / 33.7 test will go red — which is exactly what it is for.
+#
+# Why round at all: a weight is a judgement about what someone cares about.
+# Showing an approver "replacement: 0.1833" claims a precision we do not have.
+# Multiples of 5% are a number a human can argue with.
+weight_rounding_step: 0.05
 
 # ---------------------------------------------------------------------------
 # Stages 0-2 — the language step
