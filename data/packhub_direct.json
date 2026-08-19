@@ -1,0 +1,52 @@
+{
+  "_comment": "PackHub — a DIRECT vendor feed. This is the friendly source: rupees are rupees, lead time is already in days, the seller rating is already out of 5, and the specs are a clean list. Compare it with boxbazaar_aggregator.csv, which describes the SAME kind of product in an entirely different shape. Two schemas is the point: it forces agent/discovery.py to do real translation instead of just reading fields across.",
+  "vendor": "PackHub",
+  "vendor_type": "direct",
+  "currency": "INR",
+  "catalog": [
+    {
+      "sku": "PH-CORUSAFE-DW",
+      "title": "Corusafe DW",
+      "category": "packaging",
+      "unit_price_inr": 21.90,
+      "lead_time_days": 4,
+      "seller_rating": 4.8,
+      "replacement_window_days": 7,
+      "stock_qty": 20000,
+      "attributes": ["double-wall", "kraft", "200x150x80mm"]
+    },
+    {
+      "sku": "PH-KRAFTPRO-DW",
+      "title": "KraftPro DW",
+      "category": "packaging",
+      "unit_price_inr": 20.90,
+      "lead_time_days": 6,
+      "seller_rating": 4.6,
+      "replacement_window_days": 10,
+      "stock_qty": 15000,
+      "attributes": ["double-wall", "kraft", "200x150x80mm"]
+    },
+    {
+      "sku": "PH-MEGABOX-DW",
+      "title": "MegaBox DW",
+      "category": "packaging",
+      "unit_price_inr": 24.50,
+      "lead_time_days": 5,
+      "seller_rating": 4.9,
+      "replacement_window_days": 14,
+      "stock_qty": 30000,
+      "attributes": ["double-wall", "kraft", "200x150x80mm"]
+    },
+    {
+      "sku": "PH-SINGLEWALL-LITE",
+      "title": "SingleWall Lite",
+      "category": "packaging",
+      "unit_price_inr": 14.20,
+      "lead_time_days": 3,
+      "seller_rating": 4.5,
+      "replacement_window_days": 7,
+      "stock_qty": 40000,
+      "attributes": ["single-wall", "kraft", "200x150x80mm"]
+    }
+  ]
+}

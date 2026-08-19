@@ -1,0 +1,12 @@
+# BoxBazaar - an AGGREGATOR feed, and deliberately awkward. Every column below
+# disagrees with PackHub's direct JSON in some way, which is exactly why it is
+# here: prices are in PAISE not rupees, shipping is a RANGE not a number, the
+# vendor score is out of 100 not 5, the returns policy is a SENTENCE not an
+# integer, and the specs are one pipe-separated blob using trade shorthand
+# ("DW" for double-wall). agent/discovery.py has to translate all of it into the
+# same Product shape PackHub lands in. If both files had the same columns, the
+# normaliser would be a rename and would prove nothing.
+item_code,product_name,category_tag,rate_paise,ship_window,vendor_score_100,returns_policy,qty_available,spec_blob
+BB-ECOMAIL-DW,EcoMail DW,PACKAGING,1760,7-9 days,82,30-day replacement,50000,DW | 200 x 150 x 80 mm | kraft | recycled
+BB-VALUEPACK-DW,ValuePack DW,PACKAGING,1490,10-12 days,76,15-day replacement,60000,DW | 200 x 150 x 80 mm | kraft
+BB-CRAFTMAIL-DW,CraftMail DW,PACKAGING,1980,5-6 days,88,20-day replacement,3000,DW | 200 x 150 x 80 mm | kraft

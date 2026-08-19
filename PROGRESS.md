@@ -29,8 +29,8 @@ parser and the UI says so plainly.
 | 6 | `agent/audit.py` | 8 — append-only logger | DONE |
 | 7 | `agent/language.py` | 0-2 — the only file that calls Gemini | DONE |
 | 8 | `agent/weights.py` | 2 — phrase label -> weights, pure Python | DONE |
-| 9 | `data/` mock catalogs + `agent/discovery.py` | 3 — two schemas -> one Product | **NEXT** |
-| 10 | `agent/ranking.py` + `tests/test_ranking.py` | 4 — the golden 58.0/48.7/33.7 | to do |
+| 9 | `data/` mock catalogs + `agent/discovery.py` | 3 — two schemas -> one Product | DONE |
+| 10 | `agent/ranking.py` + `tests/test_ranking.py` | 4 — the golden 58.0/48.7/33.7 | **NEXT** |
 | 11 | `agent/escalation.py` | one handler, four call sites | to do |
 | 12 | `agent/authorisation.py` | 5 — the limit check | to do |
 | 13 | `agent/vendor.py`, `agent/payment.py` | 6-7 — mocks with failure switches | to do |
@@ -116,6 +116,42 @@ lands us on 0.45 / 0.20 / 0.20 / 0.15. The step lives in `config.yaml` as
 Verified: all 18 combinations tested (6 priority patterns x 3 categories) sum to
 exactly 1.0, including the awkward ones (three criteria at "matters a lot",
 unknown phrase labels, all four stated).
+
+### Stage 3: what the two catalogs look like, and what survives
+
+Seven products, two shapes. The aggregator disagrees with the direct feed on
+every column, which is what makes the normaliser real work:
+
+| PackHub (direct JSON) | BoxBazaar (aggregator CSV) | conversion |
+|---|---|---|
+| `unit_price_inr: 21.90` | `rate_paise: 1760` | / 100 |
+| `lead_time_days: 4` | `ship_window: "7-9 days"` | take the LATE end |
+| `seller_rating: 4.8` | `vendor_score_100: 82` | / 20 |
+| `replacement_window_days: 7` | `returns_policy: "30-day replacement"` | pull the number |
+| `attributes: [...]` | `spec_blob: "DW \| 200 x 150 ..."` | split, expand "DW" |
+
+Taking the LATE end of a shipping window is a deliberate judgement call, in
+`_worst_case_days()`: a 10-day deadline is only genuinely met if the latest date
+clears it.
+
+**Three survive, four are rejected — one per reason**, which is what makes the
+filter demonstrable rather than decorative:
+
+- Corusafe DW, KraftPro DW, EcoMail DW -> PASS (the golden three)
+- MegaBox DW -> Rs 24.50, over the Rs 22 cap by Rs 2.50 (near-miss, price)
+- ValuePack DW -> 12 days against a 10-day window (near-miss, delivery)
+- CraftMail DW -> 3,000 in stock against 5,000 needed (fails quantity)
+- SingleWall Lite -> not double-wall (fails a non-negotiable spec)
+
+The two near-misses are deliberate raw material for the escalation handler.
+
+**The spec-spelling problem is solved** in `discovery.spec_key()`: it lowercases,
+strips spaces and punctuation, and expands trade shorthand. Verified that
+`["double-wall","200x150x80mm"]`, `["double-wall","200x150x80 mm"]` and
+`["DW","200 x 150 x 80 mm"]` all produce the same three survivors.
+
+Chain 1 -> 3 verified end to end offline: weights 0.45/0.20/0.20/0.15, three
+survivors matching the deck exactly, order total Rs 1,09,500.
 
 ### How normalisation works (confirmed against the golden table)
 
