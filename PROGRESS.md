@@ -126,6 +126,64 @@ Two different methods, and mixing them up breaks the numbers:
 
 ---
 
+## How narrow are we really? (tested 2026-08-19, say this before a judge finds it)
+
+We tested the parser on deliberately awkward briefs, not just our demo sentence.
+The answer has two halves and the second half is the one that matters.
+
+### Wording: the Gemini path is genuinely flexible
+
+Nobody wrote a rule for any of these. The model handled them:
+
+| Written as | Understood as |
+|---|---|
+| "nothing over **twenty rupees** each" | cap = 20.0 |
+| "delivered in **3 weeks**" | 21 days |
+| "just **don't send junk**" | reliability: matters |
+| "**don't care much** about speed" | delivery: nice_to_have |
+
+So "does it only work on the sentence you rehearsed?" -> no, and that is the
+entire reason there is an LLM in the project.
+
+### Wording: the OFFLINE fallback is brittle, and one failure is not harmless
+
+Same chatty brief, offline parser: it missed "twenty rupees" (digits only), missed
+"end of next week", and missed every priority.
+
+The cap miss is the one to watch. A missed cap becomes the Rs 25 packaging
+default, so a user who said Rs 20 could be shown products at Rs 24. It IS tagged
+ASSUMED and written to the audit log, so it is visible rather than hidden - but
+visible-and-wrong is still wrong. If we lose the API key mid-demo, that is the
+degradation we are accepting.
+
+### The real narrowness is the DATA, not the language
+
+An "office chairs" brief parsed perfectly - 300 units, Rs 8000 cap, 21 days,
+warranty matters - and would then find zero vendors, because our catalogs are
+packaging only. The bottleneck is not phrasing:
+
+1. Mock catalogs contain packaging only.
+2. config.yaml knows `packaging` and `labels`; anything else gets the generic
+   Rs 50 cap and four equal weights.
+3. Four soft criteria, three strength labels. "Must be carbon-neutral" has
+   nowhere to go.
+4. One brief = one product line. "500 boxes and 2000 labels" is not supported
+   (that is the "designed, not demoed" line in CLAUDE.md).
+
+### The sentence to say out loud
+
+> "Wording - we handle a lot of it, because that is the one job the LLM does.
+> Scope - we are deliberately narrow: one product line, packaging category, mock
+> catalogs. The narrowness is in the data, not the language."
+
+### Looked like a bug, is not
+
+The chatty brief lost its deadline ("end of next week" is not a number of days).
+That does not break anything: stage 0 returns `incomplete` and the agent asks one
+question rather than guessing a date. Designed behaviour, working.
+
+---
+
 ## Working agreement
 
 - One file at a time, explained in plain terms after each.
