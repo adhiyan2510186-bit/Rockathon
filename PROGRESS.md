@@ -30,8 +30,8 @@ parser and the UI says so plainly.
 | 7 | `agent/language.py` | 0-2 — the only file that calls Gemini | DONE |
 | 8 | `agent/weights.py` | 2 — phrase label -> weights, pure Python | DONE |
 | 9 | `data/` mock catalogs + `agent/discovery.py` | 3 — two schemas -> one Product | DONE |
-| 10 | `agent/ranking.py` + `tests/test_ranking.py` | 4 — the golden 58.0/48.7/33.7 | **NEXT** |
-| 11 | `agent/escalation.py` | one handler, four call sites | to do |
+| 10 | `agent/ranking.py` + `tests/test_ranking.py` | 4 — the golden 58.0/48.7/33.7 | **DONE — 14 tests green** |
+| 11 | `agent/escalation.py` | one handler, four call sites | **NEXT** |
 | 12 | `agent/authorisation.py` | 5 — the limit check | to do |
 | 13 | `agent/vendor.py`, `agent/payment.py` | 6-7 — mocks with failure switches | to do |
 | 14 | `app.py` | Streamlit, four screens | to do |
@@ -162,6 +162,35 @@ Two different methods, and mixing them up breaks the numbers:
 - **price, delivery** -> `sqrt(margin vs the hard cap)`, where
   `margin = (cap - value) / cap`. The square root is why a bargain cannot
   drown out what the user said mattered.
+
+---
+
+## The golden test is live: `python -m pytest tests/ -q`
+
+**14 tests, all green.** Run this before every commit that touches ranking,
+weights, config or the catalogs.
+
+It covers the whole chain that produces the table — catalogs, normaliser, hard
+gates, weight engine, ranker — because any one of them can move a score. It uses
+the offline parser deliberately: no API key, no network, no rate limit, same
+answer every time.
+
+Beyond the three scores it also locks: the ranking order, the winner's four
+terms, reliability contributing 0.450 of Corusafe's 0.580, the 9.3-point gap,
+the weights, 3-of-7 surviving with four distinct rejection reasons, the
+Rs 1,09,500 order total, determinism across five runs, and independence from
+catalog file order.
+
+**The tripwire is verified.** Changing `weight_rounding_step` from 0.05 to 0.01
+turns 4 tests red; restoring it turns them green. The test can actually fail,
+which is the only thing that makes a passing test mean anything.
+
+### The behaviour test worth knowing about
+
+`test_cheapest_product_ranks_last` asserts the pitch as behaviour, not as a
+number: EcoMail is 20% under the cap and finishes last. If a future change ever
+lets the bargain win, that test fails and tells us the demo has quietly stopped
+making its point.
 
 ---
 
