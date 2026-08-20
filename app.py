@@ -90,6 +90,7 @@ def init_state() -> None:
         "log": None,             # AuditLogger bound to that context
         "brief_note": "",        # 'gemini' or 'offline', for honest labelling
         "scope_note": "",
+        "pending_brief": "",     # the brief so far, while we are still collecting it
         "auth": None,            # AuthorisationOutcome  — stage 5
         "stage3_escalation": None,  # EscalationOutcome   — stage 3, nothing eligible
         "confirmation": None,    # ConfirmationOutcome    — stage 6
@@ -107,6 +108,7 @@ def reset() -> None:
     st.session_state["messages"] = []
     st.session_state["brief_note"] = ""
     st.session_state["scope_note"] = ""
+    st.session_state["pending_brief"] = ""
     for key in ("ctx", "log", "auth", "stage3_escalation", "confirmation", "payment", "summary"):
         st.session_state[key] = None
 
@@ -139,6 +141,22 @@ def handle_message(text: str) -> None:
     Note the three early returns. Each is a place the engine refuses to continue,
     and none of them is an error: an off-topic message, a brief with a hole in it,
     and a search that found nothing eligible are all designed outcomes.
+
+    ANSWERS ARE JOINED TO THE BRIEF THEY ANSWER
+    -------------------------------------------
+    When stage 0 asks its one question, the reply is usually a fragment — "5,000",
+    or "within 10 days". A fragment is not a procurement brief, so sending it to
+    stage 0 on its own gets it refused, and the user is told the agent only
+    handles procurement while it is in the middle of asking them about one.
+
+    So while a question is outstanding we keep the brief so far in
+    `pending_brief`, and the next message is appended to it rather than replacing
+    it. Stage 0 and stage 1 both see everything the user has said about this
+    order, which is what makes asking a question worth doing at all.
+
+    This is conversation state, so it lives here rather than in the engine.
+    `check_scope()` stays a pure function of the text it is handed — the app is
+    what remembers, and the text it hands over is the whole brief.
     """
     say("user", text)
 
@@ -149,24 +167,36 @@ def handle_message(text: str) -> None:
         transaction = TransactionContext(transaction_id=audit_module.new_transaction_id())
         st.session_state["ctx"] = transaction
         st.session_state["log"] = audit_module.AuditLogger(transaction)
+        st.session_state["pending_brief"] = ""
         for key in ("auth", "stage3_escalation", "confirmation", "payment", "summary"):
             st.session_state[key] = None
 
     ctx = st.session_state["ctx"]
     log = st.session_state["log"]
 
+    # Everything the user has told us about THIS order, not just the last line.
+    pending = st.session_state["pending_brief"]
+    brief_text = f"{pending} {text}".strip() if pending else text
+
     # -- stage 0: should we even start? ------------------------------------
-    scope = language.check_scope(text, log)
+    scope = language.check_scope(brief_text, log)
     st.session_state["scope_note"] = scope.note
     if scope.verdict.verdict == "out_of_scope":
+        st.session_state["pending_brief"] = ""
         say("agent", scope.verdict.message)
         return
     if scope.verdict.verdict == "incomplete":
+        # Keep what we have and ask about what is still missing. The question is
+        # driven by `missing_fields`, so it narrows as the user fills things in
+        # instead of asking the same thing twice.
+        st.session_state["pending_brief"] = brief_text
         say("agent", scope.verdict.message)
         return
 
+    st.session_state["pending_brief"] = ""
+
     # -- stage 1 & 2: the sentence becomes numbers --------------------------
-    parsed = language.extract_brief(text, log)
+    parsed = language.extract_brief(brief_text, log)
     st.session_state["brief_note"] = parsed.note
     ctx.brief = parsed.brief
     ctx.weights = weights_module.compute(parsed.brief, log)
