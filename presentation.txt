@@ -673,6 +673,35 @@ SECTION 8.8 - MORE THAN ONE KIND OF PURCHASE
     one ranker serves all three."
 
 
+8.8.6  THE TRAP: EVERY BRIEF WE WROTE OURSELVES STARTS WITH THE NUMBER
+    A bug a user found in ten seconds. All five briefs in our own tests are
+    shaped "5,000 kraft mailer boxes" - quantity first, product second - so the
+    parser learned to read the product as "the words after the number". Then
+    someone typed "Buy me latex gloves under 50 each arriving in 12 days".
+    Product first. The parser walked past the gloves entirely and reported the
+    category as "each arriving in not more than".
+
+    Two more faults were hiding behind it. "50 each" was a price with no
+    currency symbol, so our cap matcher - which wanted "Rs" or a word like
+    "max" - missed it, left the 50 in the sentence, and the quantity matcher
+    took it. The agent had quietly turned a Rs 50 ceiling into an order of
+    fifty. Nothing crashed. No audit entry was wrong. The screen looked normal.
+
+    What we do: the cap matcher accepts a bare number when "each" or "per unit"
+    follows it immediately - which no quantity in a real sentence ever does. And
+    the category falls back to the words after the number OR the words before
+    it, cut at the first word that starts talking about the deal instead of the
+    goods ("under", "each", "delivered", "within"). With the price correctly
+    read as a price, the brief now has no quantity at all - so the scope gate
+    asks the one question it should have asked from the start.
+
+    THE LINE: "Our test briefs were all written by us, so they were all shaped
+    like us. The first real sentence a stranger typed found three bugs at once,
+    and the worst of them read a price as a quantity - the kind that does not
+    crash, does not log an error, and just buys the wrong amount. That is why
+    the parse is now in the test suite in both word orders."
+
+
 ================================================================================
 SECTION 9 - LIKELY QUESTIONS, AND THE SHORT ANSWER
 ================================================================================
@@ -722,4 +751,4 @@ differently, and we had a reason. Same shape every time:
 Skip anything that is just a feature description. This file is only for the
 places where we can show judgement.
 
-Last updated: after furniture and laptops - three categories, one engine.
+Last updated: after a user's own sentence broke the offline parser (8.8.6).

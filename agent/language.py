@@ -478,6 +478,48 @@ _PHRASE_PATTERNS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("nice_to_have", ("nice to have", "would be nice", "bonus", "if possible", "ideally")),
 )
 
+# The offline parser's idea of where a product name stops. Everything in
+# _CLAUSE_BOUNDARY opens a clause ABOUT the purchase (what it may cost, when it
+# must land) rather than naming the thing itself, so the noun phrase ends there.
+# _LEAD_IN is the polite runway in front of it ("buy me...", "i need some...").
+# Neither list decides anything - the category string they build only ever
+# reaches stage 3 to be matched against what we stock, or named back to the user
+# in a refusal. A wrong word here costs us an ugly sentence, never a wrong buy.
+_CLAUSE_BOUNDARY: frozenset[str] = frozenset({
+    "under", "below", "over", "above", "max", "maximum", "minimum", "least",
+    "most", "at", "upto", "each", "apiece", "per", "within", "budget",
+    "cost", "costing", "price", "priced", "rs", "inr", "rupees",
+    "deliver", "delivered", "delivery", "arriving", "arrive", "arrives",
+    "ship", "shipped", "shipping", "by", "before", "in", "no", "not",
+    "that", "which", "needed", "please",
+})
+
+_LEAD_IN: frozenset[str] = frozenset({
+    "buy", "order", "reorder", "get", "source", "procure", "purchase", "find",
+    "need", "want", "looking", "for", "me", "us", "i", "we", "my", "our",
+    "please", "can", "could", "you", "some", "a", "an", "the",
+})
+
+
+def _noun_phrase(segment: str) -> str:
+    """Read a product name out of one stretch of the sentence, or return "".
+
+    Strip the runway off the front, then keep words until one of them turns out
+    to be talking about the deal instead of the goods. Five words is the cap:
+    past that we are copying the sentence back, not naming a product.
+    """
+    words = re.findall(r"[a-z][a-z\-]*", segment)
+    while words and words[0] in _LEAD_IN:
+        words.pop(0)
+
+    kept: list[str] = []
+    for word in words:
+        if word in _CLAUSE_BOUNDARY:
+            break
+        kept.append(word)
+    return " ".join(kept[:5])
+
+
 def _offline_scope(text: str) -> _ScopeCheck:
     """Decide scope by looking for buying words and the three required fields."""
     lowered = text.lower()
@@ -523,7 +565,19 @@ def _offline_extract(text: str) -> _Extraction:
         r"(?:max|maximum|under|below|upto|up to|no more than|at most)\s*"
         r"(?:rs\.?|inr|₹)?\s*(\d[\d,]*(?:\.\d+)?)",
         working,
-    ) or re.search(r"(?:rs\.?|inr|₹)\s*(\d[\d,]*(?:\.\d+)?)\s*(?:per unit|/\s*unit|each|a unit)", working)
+    ) or re.search(
+        # The currency symbol is OPTIONAL here. "under Rs 50 each" is caught by
+        # the pattern above; "50 each" - no symbol, and no cap word either
+        # because the user typed "uner" - reached this line and was rejected,
+        # so the 50 survived into the sentence and the quantity matcher below
+        # read it as an order of fifty. A price misread as a quantity is the
+        # worst kind of parse: nothing looks broken on screen. What makes this
+        # safe to loosen is that "each"/"per unit" must FOLLOW the number
+        # immediately, which no quantity in a real brief ever does ("12 chairs
+        # each" has a noun in the way).
+        r"(?:rs\.?|inr|₹)?\s*(\d[\d,]*(?:\.\d+)?)\s*(?:per unit|/\s*unit|each|apiece|a unit|a piece)",
+        working,
+    )
     if price_match:
         cap = float(price_match.group(1).rstrip(",").replace(",", ""))
         working = working.replace(price_match.group(0), " ", 1)
@@ -577,9 +631,18 @@ def _offline_extract(text: str) -> _Extraction:
     # answer they needed, and it matches what the Gemini path already did - the
     # two parsers should not disagree about whether cement is a thing you can
     # ask for.
-    if not category and quantity_match:
-        tail = working[quantity_match.end():]
-        category = tail.split(",")[0].strip(" .").lower()
+    #
+    # WHICH words are the user's own is the whole difficulty. This used to take
+    # everything AFTER the quantity, because our own briefs are shaped "5,000
+    # kraft mailer boxes" - noun after number. "Buy me latex gloves under 50
+    # each" is shaped the other way round, so that rule walked straight past the
+    # product and returned "each arriving in not more than" as the category.
+    # We now try the tail, then the head, and cut both at the first word that
+    # opens a constraint clause.
+    if not category:
+        tail = working[quantity_match.end():] if quantity_match else ""
+        head = working[: quantity_match.start()] if quantity_match else working
+        category = _noun_phrase(tail) or _noun_phrase(head)
 
     # --- stated priorities -------------------------------------------------
     # We look clause by clause, so "reliability matters a lot" attaches the

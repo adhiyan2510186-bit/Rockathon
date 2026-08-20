@@ -288,3 +288,62 @@ def test_a_category_nobody_stocks_is_reported_honestly():
     assert stocked == ["furniture", "laptops", "packaging"]
     assert "labels" not in stocked
     assert "cement" not in stocked
+
+
+# ---------------------------------------------------------------------------
+# The brief does not have to be shaped like ours
+# ---------------------------------------------------------------------------
+# Every brief in this file and in tests/test_ranking.py opens with the number:
+# "12 ergonomic task chairs", "5,000 kraft mailer boxes". Real people do not.
+# "Buy me latex gloves under 50 each" puts the product first and the number
+# second, and the parser used to read the words AFTER the number as the product
+# - which handed stage 3 a category called "each arriving in not more than".
+#
+# The user then sees the agent decline a thing they never asked for. Nothing
+# crashes, nothing is logged as wrong, and the one honest answer we owed them
+# ("we don't stock gloves") never gets said. That is why this is a test and not
+# a tidy-up.
+
+@pytest.mark.parametrize(
+    "text, category, quantity, cap, days",
+    [
+        # Product first, number second - the shape that used to break.
+        ("Buy me latex gloves under 50 each arriving in not more than 12 days",
+         "latex gloves", None, 50.0, 12),
+        # Same sentence with the user's original typo. We echo their word back
+        # rather than guessing at it; "uner" is still a better answer than a
+        # category made of the delivery clause.
+        ("Buy me latex gloves uner 50 each arriving in not more than 12 days",
+         "latex gloves uner", None, 50.0, 12),
+        # Number first, noun after - the shape our own briefs use, unchanged.
+        ("200 bags of cement, max Rs 400 each, delivered within 7 days",
+         "bags of cement", 200, 400.0, 7),
+    ],
+    ids=["noun-first", "noun-first-with-typo", "number-first"],
+)
+def test_an_unstocked_product_is_named_from_the_users_own_words(text, category, quantity, cap, days):
+    """Whatever we cannot map to a category, we at least repeat back correctly."""
+    extraction = language._offline_extract(text)
+
+    assert extraction.category == category
+    assert extraction.quantity == quantity
+    assert extraction.max_price_per_unit_inr == cap
+    assert extraction.max_delivery_days == days
+
+
+def test_a_price_written_without_a_currency_symbol_is_not_read_as_a_quantity():
+    """"50 each" is a ceiling. Read as an order of fifty, it looks like nothing
+    went wrong - the pool just quietly comes back with the wrong sized order.
+
+    So the number must land in the cap and NOT in the quantity, and the missing
+    quantity must reach the scope gate as the one question worth asking.
+    """
+    text = "Buy me latex gloves under 50 each arriving in not more than 12 days"
+    extraction = language._offline_extract(text)
+
+    assert extraction.max_price_per_unit_inr == 50.0
+    assert extraction.quantity is None
+
+    check = language._offline_scope(text)
+    assert check.verdict == "incomplete"
+    assert check.missing_fields == ["quantity"]
