@@ -162,6 +162,81 @@ def urgency_chips(signal) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Identity — who is selling it, and what it actually is
+# ---------------------------------------------------------------------------
+
+def source_badge(product, extra: str = "") -> None:
+    """Who this is being bought from, as one badge that can be read at a glance.
+
+    A coloured mark for the supplier, the supplier's name, and what kind of
+    supplier it is. All three are on the badge because two of them are load
+    bearing: "who" answers the invoice question, and "direct vendor" vs
+    "marketplace" answers a different one a buyer actually asks - am I buying
+    from the maker, or through a middleman who can substitute on me?
+
+    The colour comes from theme.vendor_colour, which is a separate ramp from the
+    chart palette on purpose. See ui/theme.py.
+    """
+    colour = theme.vendor_colour(product.source)
+    mark = escape(product.source[:1].upper())
+    tail = f'<span class="vendor-kind">{escape(extra)}</span>' if extra else ""
+
+    st.markdown(
+        f'<div class="chip-row"><span class="vendor">'
+        f'<span class="vendor-mark" style="background:{colour}">{mark}</span>'
+        f'<span class="vendor-name">{escape(product.source)}</span>'
+        f'<span class="vendor-kind">{escape(theme.vendor_kind(product.source_type))}</span>'
+        f"{tail}</span></div>",
+        unsafe_allow_html=True,
+    )
+
+
+def spec_badges(product, required: Sequence[str] = ()) -> None:
+    """What this item is, spec by spec, with the buyer's own requirements ticked.
+
+    Two states, and the difference matters. A ticked badge is something the buyer
+    asked for and this product has - it is why the product is on the screen at
+    all. An unticked one is something the supplier lists that nobody asked about.
+    Showing them as one flat list would hide which specs did the qualifying.
+
+    Matching is the same set membership the eligibility check uses, so a tick
+    here can never disagree with the reason the product qualified.
+    """
+    if not product.specs:
+        st.caption("This supplier lists no specification for the item.")
+        return
+
+    wanted = {spec.strip().lower() for spec in required}
+    parts = []
+    for spec in product.specs:
+        met = spec.strip().lower() in wanted
+        tick = '<span class="spec-tick">✓</span>' if met else ""
+        classes = "spec spec-met" if met else "spec"
+        parts.append(f'<span class="{classes}">{tick}{escape(spec)}</span>')
+
+    st.markdown(f'<div class="chip-row">{"".join(parts)}</div>', unsafe_allow_html=True)
+    if wanted:
+        st.caption("✓ marks something you asked for. Anything missing one of those was not considered.")
+
+
+def keyvalues(items: Sequence[tuple[str, str]], mono: bool = False) -> None:
+    """A compact grid of (label, value) facts. Numbers aligned, labels quiet.
+
+    Used where a reader wants to look one figure up rather than compare a shape -
+    the item's terms on the recommendation, the references on the receipt.
+    `mono` puts the values in a monospace face, which is what a reference number
+    wants and a price does not.
+    """
+    cell = "kv-val kv-mono" if mono else "kv-val"
+    parts = [
+        f'<div class="kv-item"><div class="kv-key">{escape(label)}</div>'
+        f'<div class="{cell}">{escape(value)}</div></div>'
+        for label, value in items
+    ]
+    st.markdown(f'<div class="kv">{"".join(parts)}</div>', unsafe_allow_html=True)
+
+
+# ---------------------------------------------------------------------------
 # The comparison table
 # ---------------------------------------------------------------------------
 
@@ -214,20 +289,40 @@ def comparison_table(ranked: Sequence[ScoredProduct], market=None) -> None:
     )
 
 
-def score_breakdown(scored: ScoredProduct) -> None:
+def score_breakdown(scored: ScoredProduct, weights=None, weight_note: str = "") -> None:
     """Every term of one product's score, so nothing has to be taken on trust.
 
-    Lives inside a drill-down. This is the arithmetic from the deck - weight x
-    normalised = contribution, four terms summing to the score - and a judge who
-    opens it can check the total by hand.
+    Lives inside a drill-down. This is the arithmetic - your weight times the
+    product's scaled figure, four terms adding up to the score - laid out twice
+    on purpose:
+
+      the table   one row per criterion, with the product's real figure next to
+                  the scaled one, for a reader checking WHERE a number came from
+      the sum     the same four terms as one worked calculation, for a reader
+                  checking THAT it adds up
+
+    A reader with a calculator can reproduce the total from either. That is the
+    whole claim of this screen: the same request produces the same four lines and
+    the same total on every run, and none of it was written by a language model.
+
+    `weights` and `weight_note` are passed in so the arithmetic names its own
+    inputs - which weight came from the buyer's own words and which from the
+    default for this kind of purchase. A weight with no stated origin is exactly
+    the kind of number a finance manager cannot sign off.
     """
     import pandas as pd
+
+    if weight_note:
+        st.caption(weight_note)
 
     st.dataframe(
         pd.DataFrame([
             {
                 "Criterion": term.criterion,
                 "Your weight": term.weight,
+                "Where the weight came from": (
+                    weights.sources.get(term.criterion, "") if weights else ""
+                ),
                 "Product's figure": term.raw_value,
                 "Scaled 0-1": term.normalised,
                 "Points": term.contribution * 100,
@@ -243,7 +338,27 @@ def score_breakdown(scored: ScoredProduct) -> None:
             "Points": st.column_config.NumberColumn(format="%.1f"),
         },
     )
-    st.caption(f"Total: {scored.score} out of 100")
+
+    st.code(_score_sum(scored), language="text")
+
+
+def _score_sum(scored: ScoredProduct) -> str:
+    """The four terms written out as one calculation a reader can follow by hand.
+
+    Kept as plain text rather than a chart or a second table because addition is
+    the one thing here that a reader should be able to check with their finger on
+    the screen.
+    """
+    width = max(len(term.criterion) for term in scored.terms)
+    lines = [
+        f"{term.criterion:<{width}}   {term.weight:.2f} × {term.normalised:.3f}"
+        f"  =  {term.contribution:.3f}"
+        for term in scored.terms
+    ]
+    total = sum(term.contribution for term in scored.terms)
+    lines.append("-" * (width + 26))
+    lines.append(f"{'total':<{width}}{'':>15}  =  {total:.3f}   ×100  =  {scored.score}")
+    return "\n".join(lines)
 
 
 def buyer_reviews(product) -> None:

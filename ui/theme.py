@@ -149,6 +149,54 @@ def active() -> Palette:
 
 
 # ---------------------------------------------------------------------------
+# Supplier identity — a fourth colour role, kept off the charts on purpose
+# ---------------------------------------------------------------------------
+# A supplier badge wants a colour: "Amazon" and "PackHub" should be tellable
+# apart from across a room. But the four CATEGORICAL hues above are spoken for -
+# blue means reliability everywhere in this app - and a blue Amazon badge sitting
+# beside a blue reliability chip would make one colour mean two things, which is
+# the one thing the rule at the top of this file forbids.
+#
+# So supplier colour is its own small ramp, deliberately outside both the series
+# and the status sets, and it is only ever used as a small badge mark. It never
+# appears in a chart, so it can never be mistaken for a data series.
+_VENDOR_HUES: tuple[str, ...] = (
+    "#0e7c86",  # teal
+    "#b5388f",  # magenta
+    "#4a5b6b",  # slate
+    "#8a5a2b",  # umber
+    "#5d6f1f",  # olive
+    "#7a3f6b",  # plum
+)
+
+
+def vendor_colour(source: str) -> str:
+    """A stable badge hue for one supplier, e.g. 'Amazon' -> magenta.
+
+    Assigned by the supplier's position in the source list rather than by a hash
+    of its name, so two suppliers can never land on the same colour while there
+    are hues left - and so a new adapter picks up a colour without anyone editing
+    this file. Same supplier, same colour, every run.
+    """
+    from agent import sources  # local import: theme is imported by everything
+
+    names = [adapter.display_name for adapter in sources.ADAPTERS.values()]
+    index = names.index(source) if source in names else len(names)
+    return _VENDOR_HUES[index % len(_VENDOR_HUES)]
+
+
+def vendor_kind(source_type: str) -> str:
+    """'direct' -> 'Direct vendor'. What kind of supplier this is, in buyer words.
+
+    A buyer does care about the difference — buying from the maker and buying
+    through a middleman are different risks — so the word is on the badge. What
+    they do not care about is the file format it arrived in, which is why that
+    stays in the drill-down.
+    """
+    return "Direct vendor" if source_type == "direct" else "Marketplace"
+
+
+# ---------------------------------------------------------------------------
 # Urgency — colour AND icon AND word, always all three
 # ---------------------------------------------------------------------------
 
@@ -264,6 +312,57 @@ def _css(p: Palette) -> str:
   /* A tinted chip carries a real signal. The text stays in an ink token - a
      coloured dot beside it carries the identity, never the words themselves. */
   .chip-strong {{ color: {p.ink}; font-weight: 580; }}
+
+  /* ---- supplier badge --------------------------------------------------- */
+  /* The mark carries the colour, the words carry the meaning. Same discipline
+     as the chips: colour is never the only thing saying who this is. */
+  .vendor {{
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      padding: 0.28rem 0.7rem 0.28rem 0.32rem; border-radius: 999px;
+      border: 1px solid {p.border_strong}; background: {p.surface};
+  }}
+  .vendor-mark {{
+      width: 1.4rem; height: 1.4rem; border-radius: 7px; flex: none;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 0.72rem; font-weight: 700; color: #ffffff; letter-spacing: 0;
+  }}
+  .vendor-name {{ font-size: 0.86rem; font-weight: 620; color: {p.ink}; }}
+  .vendor-kind {{
+      font-size: 0.7rem; font-weight: 560; letter-spacing: 0.05em;
+      text-transform: uppercase; color: {p.ink_muted};
+  }}
+
+  /* ---- spec badges ------------------------------------------------------ */
+  /* Dashed border: the supplier lists it. Solid with a tick: it is one of the
+     things the buyer asked for, so it had to be there for this to qualify. */
+  .spec {{
+      display: inline-flex; align-items: center; gap: 0.3rem;
+      font-size: 0.78rem; font-weight: 520; line-height: 1;
+      padding: 0.32rem 0.55rem; border-radius: 7px;
+      border: 1px dashed {p.border_strong}; background: {p.surface};
+      color: {p.ink_secondary}; white-space: nowrap;
+  }}
+  .spec-met {{
+      border-style: solid; border-color: {p.tint(p.good, 0.55)};
+      background: {p.tint(p.good, 0.08)}; color: {p.ink};
+  }}
+  .spec-tick {{ color: {p.good}; font-weight: 700; }}
+
+  /* ---- key/value grid --------------------------------------------------- */
+  .kv {{
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(126px, 1fr));
+      gap: 0.75rem 1.1rem; margin: 0.2rem 0 0.1rem;
+  }}
+  .kv-item {{ border-left: 2px solid {p.border}; padding-left: 0.6rem; }}
+  .kv-key {{
+      font-size: 0.7rem; font-weight: 560; letter-spacing: 0.05em;
+      text-transform: uppercase; color: {p.ink_muted};
+  }}
+  .kv-val {{
+      font-size: 0.95rem; font-weight: 620; color: {p.ink};
+      font-variant-numeric: tabular-nums;
+  }}
+  .kv-mono {{ font-family: ui-monospace, "SFMono-Regular", Menlo, monospace; }}
 
   /* ---- misc ------------------------------------------------------------ */
   .rule {{ height: 1px; background: {p.border}; margin: 1.1rem 0; border: 0; }}

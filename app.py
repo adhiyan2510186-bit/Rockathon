@@ -560,6 +560,27 @@ def _empty_request_state() -> None:
             st.rerun()
 
 
+def _weight_note(ctx) -> str:
+    """One line saying where the four weights came from, for the arithmetic to cite.
+
+    The score is only as defensible as its weights, so wherever the maths is shown
+    it says whose numbers they are — the buyer's own words, their answer to the
+    usage question, or the documented default for this kind of purchase. A weight
+    with no stated origin is the number a finance manager would refuse to sign.
+    """
+    brief = ctx.brief
+    if brief is not None and brief.context_tag:
+        label = config.context_label(brief.category, brief.context_tag).lower()
+        return (
+            f"Weighted for **{label}**, which you chose. Same request, same "
+            f"weights, same result — every run."
+        )
+    return (
+        "Weights come from what you said mattered; anything you did not mention "
+        "uses the documented default for this kind of purchase."
+    )
+
+
 def _brief_readback(ctx) -> None:
     """What the agent understood, as chips a buyer can check at a glance.
 
@@ -658,6 +679,13 @@ def render_recommendation() -> None:
         f"arrives in {winner.product.delivery_days} days",
     )
 
+    # Who it comes from and what it is, directly under the recommendation. Both
+    # are things a buyer checks before they read a single figure: an unfamiliar
+    # supplier or a missing spec ends the conversation, and no amount of score
+    # makes up for either.
+    ui.source_badge(winner.product)
+    ui.spec_badges(winner.product, ctx.brief.specs)
+
     runner_up_gap = winner.score - ctx.ranked[1].score if len(ctx.ranked) > 1 else None
     ui.figures([
         ("Order total", f"₹{total:,.0f}",
@@ -689,7 +717,7 @@ def render_recommendation() -> None:
 
     for scored in ctx.ranked:
         with ui.detail(f"Score breakdown — {scored.product.name} ({scored.score})"):
-            ui.score_breakdown(scored)
+            ui.score_breakdown(scored, ctx.weights, _weight_note(ctx))
             ui.buyer_reviews(scored.product)
 
     rejected = [result for result in ctx.filter_results if not result.passed]
@@ -878,11 +906,27 @@ def _outcome_trail(ctx) -> None:
 
     if summary is not None:
         st.markdown("")
+        authority = (
+            f"approved by {APPROVER}" if summary.approved_by_human
+            else "within the agent's own limit"
+        )
         ui.hero("Order placed",
                 f"{summary.product_label} — ₹{summary.amount_inr:,.0f}",
                 f"{summary.quantity:,} {config.unit_noun(ctx.brief.category)}"
-                f" · payment {summary.payment_reference}",
+                f" at ₹{summary.unit_price_inr:.2f} each · {authority}",
                 variant="done")
+
+        # The three references, together, the moment the order completes. This is
+        # what someone quotes when they ring up about it in a month - and the
+        # order reference is the one that pulls back every single thing that
+        # happened, which is why it is first and why it is on this screen rather
+        # than only on the trail.
+        ui.keyvalues([
+            ("Order reference", ctx.transaction_id),
+            ("Payment", summary.payment_reference),
+            ("Supplier lock", summary.lock_reference),
+        ], mono=True)
+        st.caption("Quote the order reference for anything to do with this purchase.")
 
 
 def _escalation_options(outcome) -> None:
@@ -911,6 +955,62 @@ _EVENT_WORDS = {
 }
 
 
+def _order_record(ctx) -> None:
+    """The order this trail is about, at the top of the trail.
+
+    A list of events answers "what did it do?". It does not answer the question
+    anyone actually opens this screen with — "what did we buy, from whom, for how
+    much, and who said yes?" — without reading fifteen lines and adding up. So the
+    answer sits above the events, with the reference beside it, and the arithmetic
+    that produced the choice one click below.
+
+    Every figure here is read off what an earlier step already recorded. Nothing
+    on this screen is recalculated, because a second opinion on a settled number
+    is how a record ends up disagreeing with itself.
+    """
+    ui.section(f"Order {ctx.transaction_id}")
+
+    chosen = ctx.selected or (ctx.ranked[0] if ctx.ranked else None)
+    if chosen is None or ctx.brief is None:
+        st.caption("No product was chosen, so nothing was ordered.")
+        return
+
+    summary = st.session_state["summary"]
+    product = chosen.product
+    quantity = ctx.brief.quantity
+
+    # Paid figures when there are any, the quoted ones otherwise. The two can
+    # differ - a supplier may re-quote at confirmation - and the record has to
+    # show what was actually charged, not what we expected to be charged.
+    unit_price = summary.unit_price_inr if summary else product.price_per_unit_inr
+    total = summary.amount_inr if summary else product.order_total_inr(quantity)
+
+    if summary is not None:
+        outcome = "Bought"
+        who = APPROVER if summary.approved_by_human else "Agent, within its limit"
+    elif ctx.status is TransactionStatus.AWAITING_APPROVAL:
+        outcome, who = "Waiting on you", "Nobody yet — nothing ordered"
+    elif ctx.status is TransactionStatus.DECLINED:
+        outcome, who = "Declined", f"{APPROVER} said no"
+    else:
+        outcome, who = "Chosen", "Not ordered"
+
+    ui.source_badge(product, extra=outcome)
+    ui.keyvalues([
+        ("Item", product.name),
+        ("Quantity", f"{quantity:,} {config.unit_noun(ctx.brief.category)}"),
+        ("Unit price", f"₹{unit_price:,.2f}"),
+        ("Order total", f"₹{total:,.0f}"),
+        ("Match", f"{chosen.score} / 100"),
+        ("Authorised by", who),
+    ])
+    st.markdown("")
+    ui.spec_badges(product, ctx.brief.specs)
+
+    with ui.detail(f"How the {chosen.score} was worked out"):
+        ui.score_breakdown(chosen, ctx.weights, _weight_note(ctx))
+
+
 def render_activity() -> None:
     """Everything that happened to this order, in the order it happened."""
     ctx = st.session_state["ctx"]
@@ -920,7 +1020,10 @@ def render_activity() -> None:
         st.caption("Nothing has happened yet.")
         return
 
-    ui.section(f"Order {ctx.transaction_id}")
+    _order_record(ctx)
+
+    ui.rule()
+    ui.section("What happened")
     st.caption(f"{len(ctx.audit)} events · notifying {', '.join(log.notify_list())}")
 
     for entry in log.entries():

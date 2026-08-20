@@ -737,6 +737,41 @@ SECTION 8.5 - THE INTERFACE: DESIGN DECISIONS THAT ARE ACTUALLY ENGINEERING
     THE LINE:   "Config that looks like it does something and does not is worse
                  than no config, because the next person trusts it."
 
+8.5.12  THE SUPPLIER BADGE GOT ITS OWN COLOURS, NOT THE CHART'S
+    The trap:   Suppliers should be colour-coded - Amazon, Flipkart, PackHub
+                should be tellable apart at a glance. Four validated hues are
+                already sitting in the palette. Use those.
+    Naive:      Exactly that, and it quietly breaks the rule the whole palette
+                rests on. Blue means "reliability" everywhere in this app. A blue
+                Amazon badge beside a blue reliability chip makes one colour mean
+                two things, and then it means nothing.
+    We do:      A separate small ramp for supplier identity (ui/theme.py,
+                vendor_colour), deliberately outside both the four series hues
+                and the four status hues, and used only on a badge mark - never
+                in a chart, so it can never be read as a data series. The colour
+                is assigned by the supplier's position in the source list, so a
+                new adapter picks up a colour with no UI change and two suppliers
+                cannot collide.
+    Also:       The badge always carries the NAME and the kind of supplier
+                ("Direct vendor" / "Marketplace") in words. Same rule as the
+                urgency chips: colour never carries the meaning on its own.
+    THE LINE:   "Colour-coding the vendors was the obvious ask, and the obvious
+                 way to do it would have made our chart palette ambiguous. A
+                 colour that means two things means nothing, so supplier identity
+                 got its own ramp and stays off the charts entirely."
+
+8.5.13  THE SPEC BADGES SAY WHICH SPECS DID THE QUALIFYING
+    The trap:   Print the supplier's spec list. It looks complete.
+    Naive:      A flat row of chips - "double-wall, kraft, 200x150x80mm" - where
+                the buyer cannot tell which of those they actually asked for and
+                which the supplier simply happens to list.
+    We do:      Ticked, solid badges for the specs the brief required; dashed,
+                quiet ones for everything else. The match is the same set
+                membership the eligibility check uses, so a tick on screen can
+                never disagree with the reason the product qualified.
+    THE LINE:   "Two states, because they answer different questions: this is why
+                 the product is on your screen, and this is what else you get."
+
 ================================================================================
 SECTION 8.8 - MORE THAN ONE KIND OF PURCHASE
 ================================================================================
@@ -893,4 +928,5 @@ differently, and we had a reason. Same shape every time:
 Skip anything that is just a feature description. This file is only for the
 places where we can show judgement.
 
-Last updated: after a user's own sentence broke the offline parser (8.8.6).
+Last updated: after the audit view got the supplier badge, the spec badges and the
+worked-out score sum (8.5.12, 8.5.13).
