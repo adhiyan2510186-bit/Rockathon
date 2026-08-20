@@ -49,12 +49,12 @@ def _run(switches: dict[str, bool] | None = None) -> AppTest:
     if switches:
         app.run()
 
-    [b for b in app.button if b.label == "Try this example"][0].click().run()
+    app.button(key="start_recent").click().run()
     return app
 
 
 def _approve(app: AppTest) -> AppTest:
-    return [b for b in app.button if b.label == "Approve this order"][0].click().run()
+    return app.button(key="approve").click().run()
 
 
 # ---------------------------------------------------------------------------
@@ -135,7 +135,7 @@ def test_a_clean_card_takes_one_attempt():
 
 def test_declining_reaches_no_vendor_at_all():
     app = _run()
-    app = [b for b in app.button if b.label == "Decline"][0].click().run()
+    app = app.button(key="decline").click().run()
 
     assert not app.exception
     assert app.session_state["ctx"].status.value == "declined"
@@ -154,7 +154,7 @@ def test_every_run_gets_its_own_transaction_and_its_own_audit_file():
     assert app.session_state["ctx"].status.value == "completed"
 
     # "Run this brief again" - the sidebar control, without the retyping.
-    [b for b in app.button if b.label == "Run this brief again"][0].click().run()
+    app.button(key="run_again").click().run()
     second = app.session_state["ctx"].transaction_id
 
     assert not app.exception

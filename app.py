@@ -76,6 +76,14 @@ DEMO_BRIEF = (
     "delivered within 10 days. Reliability matters a lot - we got burned last quarter."
 )
 
+# Every button below carries an explicit `key`. Tests select on the key, not the
+# label, so wording can change without breaking the suite - which it did three
+# times before we did this.
+
+# The one-line gist of DEMO_BRIEF, for the repeat-order shortcut. Short enough
+# to read at a glance; clicking it sends the full sentence above.
+RECENT_REQUEST_LABEL = "5,000 kraft mailer boxes  ·  max Rs 22/unit  ·  within 10 days"
+
 # Not wired to a button any more - the scope gate runs on whatever is typed
 # into the chat box. Kept as the example our tests type, so the demo script
 # and the test agree on one sentence.
@@ -311,7 +319,7 @@ def render_sidebar() -> None:
         if ctx is not None:
             st.caption(f"Order {ctx.transaction_id} · {len(ctx.audit)} events")
 
-        if st.button("New order", width="stretch"):
+        if st.button("New order", width="stretch", key="new_order"):
             reset()
             st.rerun()
 
@@ -341,7 +349,7 @@ def render_sidebar() -> None:
             # good, and trying the next scenario means running the brief again.
             if st.session_state["last_brief"]:
                 st.caption("")
-                if st.button("Run this brief again", width="stretch"):
+                if st.button("Run this brief again", width="stretch", key="run_again"):
                     run_again(st.session_state["last_brief"])
                     st.rerun()
                 st.caption(
@@ -389,12 +397,19 @@ def _empty_request_state() -> None:
     ui.hero(
         "Procurement",
         "What do you need to buy?",
-        "Describe it in a sentence — how many, what specification, your budget "
-        "and your deadline.",
+        "Type your request in the box below — how many, what specification, "
+        "your budget and your deadline.",
     )
 
-    ui.example(DEMO_BRIEF)
-    if st.button("Try this example", width="stretch", type="primary"):
+    # A repeat-order shortcut, which is what an ops manager's tool would actually
+    # offer: Meena reorders packaging every quarter. It doubles as the fast way
+    # to start the demo without typing a long sentence live, but it is not framed
+    # as a demo button, because to a real user it would not be one.
+    #
+    # Honest scope: this is a stub with a single hardcoded entry. There is no
+    # request history in this build, and nothing here reads one.
+    st.caption("Recent requests")
+    if st.button(RECENT_REQUEST_LABEL, width="content", key="start_recent"):
         handle_message(DEMO_BRIEF)
         st.rerun()
 
@@ -642,12 +657,12 @@ def _approval_actions(ctx, auth) -> None:
     st.markdown("")
     approve, decline = st.columns([1, 1])
     with approve:
-        if st.button("Approve this order", type="primary", width="stretch"):
+        if st.button("Approve this order", type="primary", width="stretch", key="approve"):
             authorisation.approve(ctx, st.session_state["log"], approver=APPROVER)
             execute()
             st.rerun()
     with decline:
-        if st.button("Decline", width="stretch"):
+        if st.button("Decline", width="stretch", key="decline"):
             authorisation.decline(ctx, st.session_state["log"],
                                   reason=st.session_state.get("decline_reason", ""),
                                   decliner=APPROVER)

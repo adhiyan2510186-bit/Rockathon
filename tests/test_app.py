@@ -51,10 +51,14 @@ def _fresh() -> AppTest:
     return app
 
 
-def _click(app: AppTest, label: str) -> AppTest:
-    matches = [button for button in app.button if button.label == label]
-    assert matches, f"no button labelled {label!r}. Present: {[b.label for b in app.button]}"
-    return matches[0].click().run()
+def _click(app: AppTest, key: str) -> AppTest:
+    """Click by KEY, never by label.
+
+    Wording is a design decision that should be free to change. Selecting on it
+    made this suite fail three times for reasons that had nothing to do with
+    behaviour.
+    """
+    return app.button(key=key).click().run()
 
 
 def _surface_text(app: AppTest) -> str:
@@ -102,7 +106,7 @@ def test_off_topic_mid_order_is_refused_without_disturbing_the_order():
     the order is left exactly as it was - not cancelled, not restarted, not
     quietly re-parsed with weather in the brief.
     """
-    app = _click(_fresh(), "Try this example")
+    app = _click(_fresh(), "start_recent")
     before = app.session_state["ctx"]
     ranked_before = [(s.product.name, s.score) for s in before.ranked]
 
@@ -117,7 +121,7 @@ def test_off_topic_mid_order_is_refused_without_disturbing_the_order():
 
 def test_the_whole_demo_path_runs_without_an_exception():
     """Brief in, ranked, over the limit, approved, payment declines once, closes."""
-    app = _click(_fresh(), "Try this example")
+    app = _click(_fresh(), "start_recent")
     assert not app.exception
 
     state = app.session_state
@@ -127,7 +131,7 @@ def test_the_whole_demo_path_runs_without_an_exception():
     assert state["auth"].within_limit is False
     assert state["ctx"].status.value == "awaiting_approval"
 
-    app = _click(app, "Approve this order")
+    app = _click(app, "approve")
     assert not app.exception
 
     state = app.session_state
@@ -140,8 +144,8 @@ def test_the_whole_demo_path_runs_without_an_exception():
 
 
 def test_declining_buys_nothing():
-    app = _click(_fresh(), "Try this example")
-    app = _click(app, "Decline")
+    app = _click(_fresh(), "start_recent")
+    app = _click(app, "decline")
 
     assert not app.exception
     assert app.session_state["ctx"].status.value == "declined"
@@ -149,7 +153,7 @@ def test_declining_buys_nothing():
 
 
 def test_the_timing_signal_reaches_the_screen_without_moving_the_decision():
-    app = _click(_fresh(), "Try this example")
+    app = _click(_fresh(), "start_recent")
 
     market = app.session_state["market"]
     winner = app.session_state["ctx"].ranked[0]
@@ -176,7 +180,7 @@ PIPELINE_VOCABULARY = [
 
 def test_no_pipeline_vocabulary_on_the_surface():
     """The default screen is for a buyer. Implementation talk goes in drill-downs."""
-    app = _click(_fresh(), "Try this example")
+    app = _click(_fresh(), "start_recent")
     surface = _surface_text(app)
 
     found = [word for word in PIPELINE_VOCABULARY if word in surface]
@@ -188,5 +192,5 @@ def test_no_pipeline_vocabulary_on_the_surface():
 
 def test_the_simulated_data_label_is_always_present():
     """We never draw a convincing chart and let a reader assume it is real."""
-    app = _click(_fresh(), "Try this example")
+    app = _click(_fresh(), "start_recent")
     assert "simulated market data" in _surface_text(app)

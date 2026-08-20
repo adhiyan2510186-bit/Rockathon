@@ -42,5 +42,9 @@ linkColor = "#9085e9"
 runOnSave = true
 
 [client]
-toolbarMode = "minimal"
+# "viewer" keeps the options menu (top right) with the things a USER needs -
+# including the light/dark theme toggle under Settings - while hiding the
+# developer items (rerun, clear cache, deploy). "minimal" hides the menu
+# altogether, which also hides the theme toggle.
+toolbarMode = "viewer"
 showErrorDetails = true
