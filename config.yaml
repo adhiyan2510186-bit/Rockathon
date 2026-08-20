@@ -126,3 +126,7 @@ demo_failure_injection:
   out_of_stock_at_confirmation: false
   price_drift_at_confirmation: false
   decline_first_payment_attempt: true
+  # A genuinely dead card: both attempts fail, so stage 7 stops retrying and uses
+  # the escalation path instead. OFF by default — it is the switch that makes
+  # trigger 3 visible at stage 7, not part of the scripted run.
+  decline_every_payment_attempt: false

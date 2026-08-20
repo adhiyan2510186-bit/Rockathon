@@ -34,8 +34,8 @@ parser and the UI says so plainly.
 | 11 | `agent/escalation.py` | one handler, four call sites | **DONE** |
 | 12 | `agent/authorisation.py` | 5 — the limit check | **DONE** |
 | 13 | `agent/vendor.py` | 6 — confirmation & lock, with failure switches | **DONE** |
-| 14 | `agent/payment.py` | 7 — mock payment, retry once then fall back | **NEXT** |
-| 15 | `app.py` | Streamlit, four screens | to do |
+| 14 | `agent/payment.py` | 7 — mock payment, retry once then fall back | **DONE** |
+| 15 | `app.py` | Streamlit, four screens | **NEXT** |
 
 `audit.py` is done, so every stage from here on can write its own log line as
 it acts instead of being retrofitted later. `language.py` is next: it is the
@@ -255,11 +255,100 @@ a Rs 21.95 fallback is refused on the money ceiling; and calling `confirm()` on 
 RANKED or AWAITING_APPROVAL transaction raises rather than acting. Golden test
 still 14 green.
 
+### Stage 7: mock payment (`agent/payment.py`)
+
+The only stage that spends money, and CLAUDE.md's whole spec for it is three
+words: retry once, then fall back.
+
+```
+attempt 1 declined  ->  retry: a declined card is usually transient
+attempt 2 declined  ->  stop. This option cannot be bought.
+cannot be bought    ->  escalation trigger 3, the same handler stage 6 uses
+```
+
+`pay(context, audit, confirmation, overrides=None)` is the stage. Note the third
+argument: **it takes stage 6's ConfirmationOutcome rather than digging it out of
+the context**, so you physically cannot call this function without a confirmation
+in your hand. The ordering of stages 6 and 7 is enforced by the signature instead
+of by everyone remembering.
+
+**It pays for the locked quote and nothing else.** The amount comes from the
+ConfirmationOutcome — never recomputed from the ranked product, never re-read
+from the catalog. Stage 6 already settled "is this still the price?"; asking again
+here would be a second, competing answer, and the gap between the two answers is
+where a customer gets charged a figure nobody approved.
+
+**A retry is a retry, not a fresh decision.** Same lock reference, same amount,
+same product. Verified: both attempts in the demo carry one lock and one figure.
+Retrying is also capped at `MAX_ATTEMPTS_PER_LOCK = 2` — a named constant rather
+than a loop condition, so "retry once" is checkable in one place. Retry loops are
+how real systems produce duplicate charges.
+
+**The fallback gets its own lock before it gets paid for.** When both attempts
+fail and the handler swaps to the next eligible product, that product goes back
+through stage 6 for a fresh price check, stock check and lock reference. You
+cannot pay for something you never confirmed, and paying for one thing with the
+paperwork for another is exactly the failure stage 6 exists to prevent. It also
+means the fallback passes the authorised money ceiling on the way through.
+
+**The declines are logged as they happen**, not summarised afterwards. That is
+what makes "we retried once" checkable rather than asserted — the decline entry
+exists even if the retry then throws. Finance is on the notify list for a
+completed payment but not for a decline: a decline is an operational hiccup, a
+payment is a number that has to reconcile against somebody's books.
+
+**The gateway has no randomness in it.** It reads two switches and returns
+approved or declined. A demo that pays on some rehearsals and not others is a
+demo you cannot rehearse.
+
+A fourth switch was added to config.yaml for this stage:
+
+| Switch | Default | What it shows |
+|---|---|---|
+| `decline_first_payment_attempt` | **on** | the scripted demo — one decline, retry succeeds on screen |
+| `decline_every_payment_attempt` | off | a dead card, so both attempts fail and trigger 3 becomes visible |
+
+Both apply only while paying for the FIRST locked product, the same rule
+vendor.py uses for its quote switches: **an injected failure is one bad day, not
+a curse on the whole run.** If the dead-card switch killed every card, the
+fallback path would be unreachable — and that is the path the rule exists to
+demonstrate.
+
+**One wording bug caught in testing, worth knowing about.** A fallback paid on
+its first attempt has declines behind it in the transaction, but none of them
+were ITS declines — they belonged to the option it replaced. Counting all
+declines together produced the sentence "the first attempt was declined; the
+retry succeeded" about a payment that was approved first time. The retry story is
+now told from the winning lock's own attempt number, with earlier failures
+reported as what they actually were.
+
+Verified on the demo brief: the scripted run declines once and pays Rs 1,09,500
+on attempt 2 (`PAY-TXN-####-02`, same lock, same amount); switch off and it pays
+first time; a dead card with the real 9.3-point gap declines twice and escalates
+with nothing bought; with the gap forced to 3 points it declines twice, falls back
+to KraftPro, RE-LOCKS it at stage 6 and pays Rs 1,04,500 on that lock's first
+attempt. Paying an unconfirmed or already-escalated transaction raises rather than
+acting. Golden test still 14 green.
+
+**Stages 5 → 7 now read back as one audit trail**, which is the stage-8 view:
+
+```
+01  ESCALATION  AGENT  5   Rs 1,09,500 exceeds the Rs 1,05,000 limit by Rs 4,500; held.
+02  DECISION    USER   5   Meena approved the Rs 1,09,500 order; resuming at confirmation.
+03  ACTION      AGENT  6   Re-validated at Rs 21.90, 20,000 in stock. Locked as LOCK-...
+04  ACTION      AGENT  7   Attempt 1 of 2 declined. Retrying once, same lock, same amount.
+05  ACTION      AGENT  7   Paid Rs 1,09,500 against lock LOCK-... on attempt 2.
+```
+
+notify list across the run: `['requester', 'finance']`.
+
 ---
 
 ## Numbers that must not drift
 
-These come from the deck. If code disagrees with them, the code is wrong.
+These are what the demo path is built on. Three of the eight demo steps only
+happen because of these exact figures, so if the code disagrees with them the
+demo has quietly changed behaviour — see "the golden test" below.
 
 - Ranking: **Corusafe 58.0 / KraftPro 48.7 / EcoMail 33.7**
 - Corusafe's arithmetic: `0.45x1.000 + 0.20x0.067 + 0.15x0.775 + 0.20x0.000 = 0.580`
@@ -340,6 +429,27 @@ Two different methods, and mixing them up breaks the numbers:
 
 **14 tests, all green.** Run this before every commit that touches ranking,
 weights, config or the catalogs.
+
+**Why it matters is the demo, not the deck.** Judges watch the run, not the
+slides, so "the code disagrees with the deck" is the wrong reason to care about
+this test. The right one: three of the eight demo steps only happen because of
+these exact numbers.
+
+| Demo step | Only happens because |
+|---|---|
+| 4 — ranked comparison, every score term visible | the table IS 58.0 / 48.7 / 33.7 |
+| 5 — over the limit, approval screen fires | 5,000 x Rs 21.90 = Rs 1,09,500 > Rs 1,05,000 |
+| 6-7 — confirmation/payment fails, agent escalates | the 9.3-point gap beating the 5-point threshold |
+
+If Corusafe stops winning or its price shifts, **the approval screen never
+fires** — and that screen is the whole "autonomy the user can audit" moment. We
+would not find out from a wrong number on a slide. We would find out on stage,
+when the agent quietly bought the boxes instead of asking Meena.
+
+The scenario it actually protects against: twenty minutes before presenting,
+someone nudges a catalog price or a weight to make a screen look nicer, and the
+ranker now picks KraftPro. Half a second of `pytest` says so. Nothing else in the
+project will.
 
 It covers the whole chain that produces the table — catalogs, normaliser, hard
 gates, weight engine, ranker — because any one of them can move a score. It uses
