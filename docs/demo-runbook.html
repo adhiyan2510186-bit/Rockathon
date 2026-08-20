@@ -1,0 +1,506 @@
+<title>Procurement Agent Demo Runbook</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@500;600&display=swap">
+
+<style>
+  /* Tokens: complete light palette on bare :root, redefined for both dark states.
+     Values come from ui/theme.py so this page and the app share one system. */
+  :root {
+    --canvas:      #f6f6f4;
+    --surface:     #fcfcfb;
+    --sunk:        #efeeea;
+    --border:      #e4e4e0;
+    --border-firm: #cfcfc9;
+    --ink:         #0b0b0b;
+    --ink-2:       #52514e;
+    --ink-3:       #83827c;
+    --accent:      #4a3aa7;
+    --accent-wash: rgba(74, 58, 167, 0.08);
+    --good:        #0ca30c;
+    --serious:     #ec835a;
+    --critical:    #d03b3b;
+    --warn-wash:   rgba(236, 131, 90, 0.11);
+    --shadow:      0 1px 2px rgba(11, 11, 11, 0.05);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --canvas:      #111110;
+      --surface:     #1a1a19;
+      --sunk:        #232320;
+      --border:      #34342f;
+      --border-firm: #4a4a44;
+      --ink:         #ffffff;
+      --ink-2:       #c3c2b7;
+      --ink-3:       #8e8d84;
+      --accent:      #9085e9;
+      --accent-wash: rgba(144, 133, 233, 0.13);
+      --good:        #0ca30c;
+      --serious:     #ec835a;
+      --critical:    #d03b3b;
+      --warn-wash:   rgba(236, 131, 90, 0.14);
+      --shadow:      0 1px 2px rgba(0, 0, 0, 0.4);
+    }
+  }
+  :root[data-theme="dark"] {
+    --canvas:      #111110;
+    --surface:     #1a1a19;
+    --sunk:        #232320;
+    --border:      #34342f;
+    --border-firm: #4a4a44;
+    --ink:         #ffffff;
+    --ink-2:       #c3c2b7;
+    --ink-3:       #8e8d84;
+    --accent:      #9085e9;
+    --accent-wash: rgba(144, 133, 233, 0.13);
+    --good:        #0ca30c;
+    --serious:     #ec835a;
+    --critical:    #d03b3b;
+    --warn-wash:   rgba(236, 131, 90, 0.14);
+    --shadow:      0 1px 2px rgba(0, 0, 0, 0.4);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--canvas);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+    font-size: 16px;
+    line-height: 1.6;
+    margin: 0;
+    padding: clamp(1.5rem, 4vw, 3.5rem) 1.25rem 5rem;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page { max-width: 46rem; margin: 0 auto; }
+
+  /* ---- masthead ---------------------------------------------------------- */
+  .masthead { margin-bottom: 2.5rem; }
+  .kicker {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.72rem; font-weight: 500; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--accent); margin: 0 0 0.7rem;
+  }
+  h1 {
+    font-family: "IBM Plex Serif", Georgia, serif;
+    font-size: clamp(1.9rem, 5vw, 2.5rem); font-weight: 600;
+    line-height: 1.15; letter-spacing: -0.02em; margin: 0 0 0.6rem;
+    text-wrap: balance;
+  }
+  .standfirst { font-size: 1.02rem; color: var(--ink-2); margin: 0; max-width: 34rem; }
+
+  .totals {
+    display: flex; flex-wrap: wrap; gap: 0.5rem 1.75rem;
+    margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px solid var(--border);
+  }
+  .total-item { display: flex; flex-direction: column; gap: 0.15rem; }
+  .total-label {
+    font-family: "IBM Plex Mono", monospace; font-size: 0.68rem;
+    letter-spacing: 0.09em; text-transform: uppercase; color: var(--ink-3);
+  }
+  .total-value {
+    font-size: 1.05rem; font-weight: 600; font-variant-numeric: tabular-nums;
+  }
+
+  /* ---- sections ---------------------------------------------------------- */
+  h2 {
+    font-family: "IBM Plex Serif", Georgia, serif;
+    font-size: 1.35rem; font-weight: 600; letter-spacing: -0.01em;
+    margin: 3rem 0 0.35rem; text-wrap: balance;
+  }
+  .section-note { color: var(--ink-2); margin: 0 0 1.5rem; font-size: 0.95rem; }
+
+  /* ---- steps ------------------------------------------------------------- */
+  /* Numbered because this IS a sequence: the demo only works in this order. */
+  .step {
+    display: grid; grid-template-columns: 2.25rem 1fr; gap: 0 1rem;
+    padding: 1.25rem 0; border-top: 1px solid var(--border);
+  }
+  .step:last-child { border-bottom: 1px solid var(--border); }
+  .num {
+    font-family: "IBM Plex Mono", monospace; font-size: 0.85rem; font-weight: 600;
+    color: var(--accent); font-variant-numeric: tabular-nums;
+    padding-top: 0.15rem;
+  }
+  .step-body { min-width: 0; }
+  h3 {
+    font-size: 1.02rem; font-weight: 600; margin: 0 0 0.6rem;
+    letter-spacing: -0.005em;
+  }
+  .step-body p { margin: 0 0 0.6rem; color: var(--ink-2); }
+  .step-body p:last-child { margin-bottom: 0; }
+
+  /* Do / See / Say — three kinds of content, three treatments.
+     Mono means: something you physically type or click. */
+  .do {
+    font-family: "IBM Plex Mono", monospace; font-size: 0.82rem; line-height: 1.55;
+    background: var(--sunk); border: 1px solid var(--border);
+    border-radius: 7px; padding: 0.6rem 0.75rem; margin: 0 0 0.6rem;
+    color: var(--ink); overflow-x: auto; white-space: pre-wrap;
+  }
+  .say {
+    border-left: 2px solid var(--accent); background: var(--accent-wash);
+    border-radius: 0 7px 7px 0; padding: 0.65rem 0.9rem; margin: 0.6rem 0 0;
+    font-size: 0.95rem; color: var(--ink);
+  }
+  .say::before {
+    content: "Say"; display: block;
+    font-family: "IBM Plex Mono", monospace; font-size: 0.64rem;
+    letter-spacing: 0.11em; text-transform: uppercase;
+    color: var(--accent); margin-bottom: 0.3rem;
+  }
+  .say em { font-style: normal; font-weight: 600; }
+
+  kbd, code {
+    font-family: "IBM Plex Mono", monospace; font-size: 0.86em;
+    background: var(--sunk); border: 1px solid var(--border);
+    border-radius: 4px; padding: 0.05em 0.35em; color: var(--ink);
+  }
+
+  /* ---- warnings ---------------------------------------------------------- */
+  .warn {
+    background: var(--warn-wash); border: 1px solid var(--border-firm);
+    border-left: 2px solid var(--serious);
+    border-radius: 0 8px 8px 0; padding: 0.85rem 1rem; margin: 1.25rem 0;
+    font-size: 0.93rem; color: var(--ink);
+  }
+  .warn strong { font-weight: 600; }
+  .warn-label {
+    display: block; font-family: "IBM Plex Mono", monospace; font-size: 0.64rem;
+    letter-spacing: 0.11em; text-transform: uppercase;
+    color: var(--serious); margin-bottom: 0.3rem;
+  }
+
+  /* ---- table ------------------------------------------------------------- */
+  .scroll { overflow-x: auto; margin: 1rem 0; }
+  table {
+    width: 100%; border-collapse: collapse; font-size: 0.9rem;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; overflow: hidden;
+  }
+  th, td { text-align: left; padding: 0.6rem 0.8rem; border-bottom: 1px solid var(--border); }
+  th {
+    font-family: "IBM Plex Mono", monospace; font-size: 0.68rem; font-weight: 500;
+    letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3);
+    background: var(--sunk); white-space: nowrap;
+  }
+  tr:last-child td { border-bottom: 0; }
+  td { color: var(--ink-2); }
+  td:first-child { color: var(--ink); font-weight: 500; white-space: nowrap; }
+  td.num-cell { font-variant-numeric: tabular-nums; }
+
+  /* ---- optional beats ---------------------------------------------------- */
+  .beats { display: grid; gap: 0.75rem; margin: 1.25rem 0; }
+  .beat {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 9px; padding: 0.9rem 1.05rem; box-shadow: var(--shadow);
+  }
+  .beat h4 { margin: 0 0 0.3rem; font-size: 0.95rem; font-weight: 600; }
+  .beat p { margin: 0; font-size: 0.9rem; color: var(--ink-2); }
+  .beat .do { margin-top: 0.6rem; margin-bottom: 0; }
+
+  footer {
+    margin-top: 3.5rem; padding-top: 1.25rem; border-top: 1px solid var(--border);
+    font-size: 0.85rem; color: var(--ink-3);
+  }
+  a { color: var(--accent); }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+
+<div class="page">
+
+  <header class="masthead">
+    <p class="kicker">Team E-Vets · run sheet</p>
+    <h1>Procurement Agent Demo Runbook</h1>
+    <p class="standfirst">
+      One unbroken run through every feature, in the order that tells the story.
+      Roughly eight minutes with the encores.
+    </p>
+    <div class="totals">
+      <div class="total-item">
+        <span class="total-label">Main run</span>
+        <span class="total-value">~6 min</span>
+      </div>
+      <div class="total-item">
+        <span class="total-label">Encores</span>
+        <span class="total-value">~2 min</span>
+      </div>
+      <div class="total-item">
+        <span class="total-label">App</span>
+        <span class="total-value">localhost:8501</span>
+      </div>
+    </div>
+  </header>
+
+  <h2>Before you stand up</h2>
+  <p class="section-note">Two minutes, done once, off-stage.</p>
+
+  <div class="step">
+    <div class="num">00</div>
+    <div class="step-body">
+      <h3>Set the stage</h3>
+      <p class="do">streamlit run app.py     →  open http://localhost:8501
+Ctrl+Shift+R             →  force a fresh load</p>
+      <p>In the sidebar, open <strong>Demo controls</strong> and confirm only
+        <em>First payment attempt declines</em> is ticked. Open <strong>Suppliers</strong>
+        and confirm both are ticked. Then press <strong>New order</strong>.</p>
+    </div>
+  </div>
+
+  <div class="warn">
+    <span class="warn-label">Know this before you present</span>
+    <strong>Code edits reload automatically; theme changes do not.</strong>
+    If you touch <code>.streamlit/config.toml</code>, restart the server or the
+    light/dark switch will not move.
+  </div>
+
+  <h2>The main run</h2>
+  <p class="section-note">
+    The story is: it knows what it is for, it reads a messy sentence, it explains
+    itself, and it knows where its authority stops.
+  </p>
+
+  <div class="step">
+    <div class="num">01</div>
+    <div class="step-body">
+      <h3>It knows what it is not for</h3>
+      <p class="do">Type into the box at the bottom:
+What's the weather in Chennai tomorrow?</p>
+      <p>It states its scope and stays ready. No order is started.</p>
+      <div class="say">There is no “off-topic” button here — the check runs on
+        whatever anyone types, from any screen. <em>An agent that will answer
+        anything will also buy anything.</em></div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="num">02</div>
+    <div class="step-body">
+      <h3>One messy sentence in</h3>
+      <p class="do">Request tab  →  Recent requests  →  click the entry
+"5,000 kraft mailer boxes · max Rs 22/unit · within 10 days"</p>
+      <p>Stay on the <strong>Request</strong> tab and read the chips back.
+        Requirements and preferences are shown separately.</p>
+      <div class="say">Requirements decide who <em>qualifies</em>. Preferences
+        decide who <em>wins</em>. Blurring those two is how an agent quietly
+        rejects a product for being slightly imperfect.</div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="num">03</div>
+    <div class="step-body">
+      <h3>Show that the model only reads</h3>
+      <p class="do">Open the drill-down:  “How this was read”</p>
+      <p>The extracted fields, and where every weight came from.</p>
+      <div class="say">This is the only place a language model touched anything.
+        It turned English into these fields and then had no further say.
+        <em>Every number after this point is plain Python.</em></div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="num">04</div>
+    <div class="step-body">
+      <h3>The recommendation</h3>
+      <p class="do">Recommendation tab</p>
+      <p>Corusafe DW, ₹1,09,500, the four figure tiles, then the red
+        <strong>! Order today</strong> chip with “about 3 days of cover left”.</p>
+      <div class="say">It leads with the decision and the cost, not a table.
+        And it is already telling her the timing is tight.</div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="num">05</div>
+    <div class="step-body">
+      <h3>Why this one — the chart to slow down on</h3>
+      <p class="do">Scroll to “Why this one”</p>
+      <p>Point at the blue segment on the winner, then at its absence on EcoMail.</p>
+      <div class="say">She said reliability matters. Blue is reliability — it is
+        most of the winner’s bar and <em>none</em> of the cheapest option’s.
+        The cheapest product here is twenty percent under her budget and it
+        ranks last. <em>The formula has no favourite. The brief does.</em></div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="num">06</div>
+    <div class="step-body">
+      <h3>Open the arithmetic, because you can</h3>
+      <p class="do">Open:  “Score breakdown — Corusafe DW (58.0)”
+Then:  “Not considered (4)”</p>
+      <p>Four terms that sum to 58.0, then the rejected products with reasons.</p>
+      <div class="say">Weight times value, four terms, checkable by hand.
+        And we keep the rejections — <em>“here are three products” is a claim;
+        “we looked at seven, three qualified, here is why the other four did not”
+        is a checkable one.</em></div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="num">07</div>
+    <div class="step-body">
+      <h3>Market context</h3>
+      <p class="do">Scroll to “Market context”</p>
+      <p>Two charts. On the stock chart, trace the winner’s line down to the
+        dotted “you need 5,000” rule.</p>
+      <div class="say">Where that line crosses is a date. They hit zero in four
+        days, but they can no longer fill <em>her</em> order in three.
+        And note the label — this is simulated data and we say so.</div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="num">08</div>
+    <div class="step-body">
+      <h3>The guardrail — your strongest thirty seconds</h3>
+      <p class="do">Approval tab</p>
+      <p>₹1,09,500 — ₹4,500 over the limit. Nothing has been ordered.</p>
+      <div class="say">The agent found the best fit, flagged it as urgent, and
+        <em>still stopped to ask.</em> Urgency changes priority. It never changes
+        authority. An agent that can talk itself past its own spending limit by
+        claiming something is urgent is exactly what we built this to rule out.</div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="num">09</div>
+    <div class="step-body">
+      <h3>Approve, and let it fail once</h3>
+      <p class="do">Click:  Approve this order</p>
+      <p>Supplier confirms → first payment declines → retry succeeds → order placed.</p>
+      <div class="say">It re-checked the price with the supplier before paying —
+        against the source, not against its own cached copy. Then the card
+        declined, it retried once, and it closed. <em>It did not retry forever.</em></div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="num">10</div>
+    <div class="step-body">
+      <h3>The trail</h3>
+      <p class="do">Activity tab  →  open “The finance record”
+              →  open “Read it back from disk”</p>
+      <div class="say">Every line was written the moment it happened, not
+        assembled afterwards. <em>An assumption logged after the purchase is
+        just a story.</em> And that is read back from the exported file — what a
+        finance system would actually receive.</div>
+    </div>
+  </div>
+
+  <h2>Encores</h2>
+  <p class="section-note">Pick one or two. Each needs a fresh order.</p>
+
+  <div class="warn">
+    <span class="warn-label">How to reset</span>
+    A completed order is final — the agent will not reopen one. Use
+    <strong>Demo controls → Run this brief again</strong>. It starts a new order
+    with a new reference and its own audit file, using whatever switches are set.
+    <strong>That is deliberate:</strong> reopening a finished order to try a
+    different ending would make the audit trail a lie.
+  </div>
+
+  <div class="scroll">
+    <table>
+      <thead>
+        <tr><th>Tick this switch</th><th>Then approve, and it will…</th><th>The line</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Vendor is out of stock</td>
+          <td>Escalate instead of quietly taking second place</td>
+          <td>“Number one led by 9.3 points. That is a meaningfully worse fit, so a human decides.”</td>
+        </tr>
+        <tr>
+          <td>Price moved since we looked</td>
+          <td>Catch it at confirmation — no money moves</td>
+          <td>“It re-reads from source. Checking its own cached copy would pass every time.”</td>
+        </tr>
+        <tr>
+          <td>Every payment attempt declines</td>
+          <td>Stop after one retry and escalate</td>
+          <td>“Retrying forever is how one failed payment becomes forty.”</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>If you have more time</h2>
+  <p class="section-note">Four more beats, each a different part of the design.</p>
+
+  <div class="beats">
+    <div class="beat">
+      <h4>It acts alone when it is allowed to</h4>
+      <p>A smaller order sits inside the limit, so it buys without asking and
+        tells her afterwards. This is the half people forget: the boundary has
+        two sides.</p>
+      <p class="do">1,000 kraft mailer boxes, double-wall, 200x150x80 mm, max Rs 22 per unit, delivered within 10 days. Reliability matters a lot.</p>
+    </div>
+
+    <div class="beat">
+      <h4>Nothing qualifies</h4>
+      <p>No product clears every requirement. It surfaces three near-misses with
+        the exact gap, and proposes — never applies — a relaxation.</p>
+      <p class="do">5,000 kraft mailer boxes, double-wall, 200x150x80 mm, max Rs 12 per unit, delivered within 3 days.</p>
+    </div>
+
+    <div class="beat">
+      <h4>It asks one question, not twelve</h4>
+      <p>An incomplete brief gets a single targeted question, and your fragment
+        answer is joined to the brief it answers. <strong>Note:</strong> the
+        scores differ, because this version never says reliability matters — the
+        cheapest option wins instead. That contrast is worth pointing out.</p>
+      <p class="do">I need some mailer boxes
+   → then answer:  5,000 of them, double-wall, 200x150x80 mm, max Rs 22 each, within 10 days</p>
+    </div>
+
+    <div class="beat">
+      <h4>Swap the suppliers out from under it</h4>
+      <p>Untick BoxBazaar and run again. Same engine, different feed. The winner
+        holds at 58.0, but the runner-up drops from 48.7 to 34.0 — because the
+        pool it is compared against just shrank. The pool <em>is</em> the comparison.</p>
+      <p class="do">Sidebar → Suppliers → untick BoxBazaar → Run this brief again</p>
+    </div>
+  </div>
+
+  <h2>Things that will bite you</h2>
+
+  <div class="warn">
+    <span class="warn-label">The golden numbers</span>
+    <strong>58.0 / 48.7 / 33.7 only appear for the full brief.</strong> If you
+    demo the clarifying-question path first, the scores will legitimately differ.
+    Use the <strong>Recent requests</strong> entry for the numbers on your slide.
+  </div>
+
+  <div class="warn">
+    <span class="warn-label">If the model rate-limits</span>
+    The free tier allows about ten requests a minute. If it trips, the app falls
+    back to a deterministic parser and <em>says so on screen</em>. Do not hide
+    it — say <strong>“we degrade honestly; we never fake a model call”</strong>
+    and carry on. The ranking is unaffected either way.
+  </div>
+
+  <div class="warn">
+    <span class="warn-label">If something breaks badly</span>
+    <code>git checkout v1-demo-frozen</code> is a known-good, tested build.
+    Never delete that tag.
+  </div>
+
+  <h2>Dark mode</h2>
+  <p class="section-note">
+    The options menu at the top right → <strong>Settings</strong> →
+    <strong>Appearance</strong>. Worth a beat if someone asks about polish: it is
+    a second validated palette, not an inversion — the same hues re-stepped for a
+    dark surface, because a palette that clears every contrast gate on white will
+    fail all of them on black if you just flip it.
+  </p>
+
+  <footer>
+    Full talking points in <code>presentation.txt</code> · efficiency claims with
+    file paths in <code>EFFICIENCY.md</code> · design rules in <code>CLAUDE.md</code>
+  </footer>
+
+</div>
