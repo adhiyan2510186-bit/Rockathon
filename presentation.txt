@@ -1,0 +1,533 @@
+================================================================================
+PRESENTATION.TXT - what to SAY, and why it shows we understood the problem
+Team E-Vets - Autonomous Commerce Engineering Agent
+================================================================================
+
+HOW TO USE THIS FILE
+--------------------
+This is not the deck and it is not documentation. It is the list of moments
+where we hit a real problem in procurement, thought about it, and made a
+deliberate choice - written as things to say out loud.
+
+Judges do not reward features. They reward evidence that you understood the
+problem well enough to make a call a naive build would never think to make.
+Almost every entry below has the same shape:
+
+    the trap  ->  what the obvious build does  ->  what we do  ->  the line
+
+If you only memorise one thing per section, memorise THE LINE.
+
+Companion files:
+    EFFICIENCY.md - engineering claims (speed, cost, complexity), with file paths
+    CLAUDE.md     - the rules the code obeys
+    presentation.txt (this file) - domain judgement and pain points
+
+Keep adding to this as we build. An entry earns its place if a judge could
+plausibly ask "did you think about X?" and we want a real answer.
+
+
+================================================================================
+SECTION 0 - THE ONE LINE THAT FRAMES EVERYTHING
+================================================================================
+
+    "The LLM interprets language. It never decides the purchase."
+
+Say this early and come back to it. Every design choice below is downstream of
+it. If a judge remembers one sentence from us, this is the one.
+
+The supporting fact, ready for the follow-up question:
+
+    "Every number a judge could question - score, margin, limit check, ranking,
+     urgency - is computed in plain Python from the same inputs every time.
+     Our ranker is about sixty lines and it is unit-tested against the exact
+     numbers on our slide. Same brief in, same ranking out, every run."
+
+And the sharpest version, if they push on why that matters:
+
+    "Our authorisation limit lives in a config file, not in a prompt. No
+     phrasing inside a user's brief can talk the agent past it, because the
+     agent never sees the limit as instruction. You cannot jailbreak a number
+     the model was never shown."
+
+
+================================================================================
+SECTION 1 - READING WHAT A HUMAN ACTUALLY WROTE
+================================================================================
+
+1.1  THE SPACE THAT KILLS THE DEMO
+    The trap:   Our parser returns "200x150x80 mm". The catalog says
+                "200x150x80mm". Same box. One space apart.
+    Naive:      String comparison fails, the box fails a NON-NEGOTIABLE spec
+                gate, and the app shows zero eligible products for no visible
+                reason. On stage that looks like the whole system is broken.
+    We do:      Every spec is reduced to a comparable key - lowercase, no
+                spaces, no punctuation - before comparison. Trade shorthand is
+                expanded too: the aggregator writes "DW", the user writes
+                "double-wall", the parser sometimes writes "double wall". All
+                three have to mean one thing.
+    THE LINE:   "We hit this for real while testing. A single space was failing
+                 a hard constraint and hiding every product. Matching on
+                 punctuation is how a procurement agent silently tells a buyer
+                 'nothing exists' when the warehouse is full."
+
+1.2  ONE QUESTION, NOT A FORM
+    The trap:   Real briefs are incomplete. "I need mailer boxes" has no
+                quantity, no cap, no deadline.
+    Naive:      Either guess and start searching, or interrogate the user with
+                a six-field form - which is just a form with extra steps.
+    We do:      Stage 0 asks ONE targeted question about the field that
+                actually blocks discovery. No search starts on a guess.
+    THE LINE:   "An agent that guesses your budget and then shows you a ranked
+                 list has made a purchasing decision on your behalf and hidden
+                 it as a search result."
+
+1.3  ASSUMED IS NOT CONFIRMED
+    The trap:   The user never answers the clarifying question. We still need a
+                number to proceed.
+    Naive:      Fill in a default and carry on as though the user said it.
+    We do:      Apply a declared default from config, and log it as ASSUMED -
+                never CONFIRMED - at the moment it is applied, before discovery
+                is allowed to use it.
+    THE LINE:   "An assumption presented as an instruction is exactly the
+                 failure an audit trail exists to prevent. Our log can always
+                 tell you which numbers came from the buyer and which came
+                 from us."
+
+1.4  WE DEGRADE HONESTLY
+    The trap:   The free API tier rate-limits at roughly ten requests a minute.
+                A demo can die mid-run.
+    Naive:      Hide it, or let the app crash on stage.
+    We do:      Fall back to a deterministic offline parser, and the UI says so
+                plainly.
+    THE LINE:   "If the model is unreachable we switch to a deterministic
+                 parser and we tell you we did. We degrade honestly. We never
+                 fake a model call."
+
+
+================================================================================
+SECTION 2 - TWO VENDORS, TWO SCHEMAS, ONE TRUTH
+================================================================================
+
+2.1  WE MADE THE DATA HARD ON PURPOSE
+    The trap:   It is very tempting to write two mock catalogs with the same
+                columns, because then "normalisation" is easy.
+    Naive:      Two identical schemas. The normaliser is a rename. It proves
+                nothing and a judge sees through it instantly.
+    We do:      Deliberately incompatible feeds. Prices in PAISE vs rupees.
+                Shipping as a RANGE vs a number. Vendor score out of 100 vs a
+                rating out of 5. Returns as a SENTENCE vs an integer. Specs as
+                a pipe-separated blob of trade shorthand vs a clean list.
+    THE LINE:   "If both our feeds had the same columns, our normaliser would be
+                 a rename and would prove nothing. Every one of those five
+                 conversions is a place a real integration actually breaks."
+
+2.2  THE PESSIMISTIC SHIPPING WINDOW  ** strong answer, expect this question **
+    The trap:   The aggregator promises "7-9 days". Which number do you store?
+    Naive:      Take 7. It is the first number in the string, and it makes more
+                products pass the deadline.
+    We do:      Store 9. Always the late end.
+    Why:        A window is a promise about the earliest AND the latest date.
+                A user's 10-day deadline is only genuinely met if the LATEST
+                date clears it. Taking the 7 lets a product pass a hard gate on
+                its best-case story.
+    THE LINE:   "Promising a buyer seven days and delivering on nine is how a
+                 supplier loses a customer. We plan against the date it might
+                 actually arrive, not against its most flattering reading. It is
+                 one function, deliberately, so it can be argued with."
+
+2.3  WE TELL YOU WHAT WE CAN ACTUALLY BUY
+    The trap:   Our config has default weights and a price cap for the "labels"
+                category. No vendor in our catalogs stocks a single labels
+                product.
+    Naive:      List the categories from config. The agent then offers to buy
+                things it cannot source.
+    We do:      Read the available categories from the CATALOGS, not from
+                config.
+    THE LINE:   "Those are two different questions. Config knows what we have
+                 opinions about; the catalogs know what we can actually buy. We
+                 answer the buyer with the second one."
+
+2.4  A TYPO MUST NOT SILENTLY HALVE THE POOL
+    The trap:   Source selection is a list of keys. A typo passes an unknown key.
+    Naive:      Ignore unknown keys and return whatever matched.
+    We do:      Raise immediately, naming the unknown source and the known ones.
+    THE LINE:   "A typo that quietly drops one vendor would change our ranking
+                 with no visible cause and no error. That is the one class of
+                 bug an audit log cannot catch, because nothing wrong appears to
+                 have happened."
+
+
+================================================================================
+SECTION 3 - RANKING: WHERE THE JUDGEMENT LIVES
+================================================================================
+
+3.1  THE CHEAPEST OPTION LOSES, AND THAT IS THE POINT
+    The setup:  EcoMail is 20% under the price cap. It ranks LAST.
+    Why:        The buyer said "reliability matters a lot - we got burned last
+                quarter." Reliability contributed 0.450 of the winner's 0.580
+                and 0.000 of EcoMail's 0.337.
+    THE LINE:   "The formula has no favourite. The brief does. If she had said
+                 price matters most, the same sixty lines would hand you
+                 EcoMail - and we can show you that live."
+
+3.2  THE SQUARE ROOT
+    The trap:   Score price by raw margin under the cap, and a deep discount
+                dominates everything the buyer actually said.
+    Naive:      Linear margin. A 20%-under bargain drowns out a stated priority.
+    We do:      Score margins on sqrt(margin). Steep near the cap, flat far from
+                it.
+    Why:        It matches how buyers actually think. The first rupee under
+                budget feels like a win; the twentieth barely registers.
+    THE LINE:   "A bargain should not be able to shout down what the buyer told
+                 us mattered. The square root is what stops that."
+
+3.3  PRICE APPEARS TWICE AND IT IS NOT DOUBLE COUNTING
+    Expect this question. It looks like a bug and it is not.
+    Stage 3 asks:  "Is it under 22 rupees at all?"           -> eligibility
+    Stage 4 asks:  "How far under, versus what else passed?"  -> preference
+    THE LINE:   "Two different questions, one measurement, each used once.
+                 Classification controls eligibility, not scoring. A product
+                 that qualifies on price still has to earn its position on it."
+
+3.4  WE ROUND THE WEIGHTS ON PURPOSE
+    The trap:   Rescaling weights produces 0.1833333.
+    Naive:      Show it. It looks precise and rigorous.
+    We do:      Round to multiples of 0.05.
+    THE LINE:   "A weight is a judgement about what someone cares about. Showing
+                 an approver 'replacement: 0.1833' claims a precision we do not
+                 have. Multiples of five percent are a number a human can argue
+                 with - and an approver who cannot argue with a number is not
+                 really approving anything."
+
+3.5  WE KEEP THE REJECTIONS
+    The trap:   Only the survivors matter, right?
+    Naive:      Return the three that passed.
+    We do:      Return all seven, each failure carrying a plain-words reason -
+                "arrives in 12 days against a 10-day window, 2 days late".
+    THE LINE:   "'Here are three products' is a claim. 'We looked at seven,
+                 three qualified, and here is exactly why the other four did
+                 not' is a checkable one. Those rejection reasons are also what
+                 the escalation handler needs to build a near-miss list."
+
+
+================================================================================
+SECTION 4 - TIMING: ADVICE THAT KNOWS IT IS ONLY ADVICE
+================================================================================
+
+4.1  THE GUARDRAIL  ** this is our strongest single moment - rehearse it **
+    The setup:  Our winner is flagged "Order today - about 3 days of cover
+                left" AND it still stops and asks for human approval, because
+                109,500 rupees is over our 105,000 authorisation limit.
+    THE LINE:   "Urgency changes priority. It never changes authority. An agent
+                 that can talk itself past its own spending limit by claiming
+                 something is urgent is precisely the failure this project
+                 exists to rule out."
+    If pushed - and this is the good part:
+                "It is structural, not a promise. The signals module imports
+                 neither the ranker nor the authorisation check. It takes the
+                 ranked list as read-only input and returns a separate object.
+                 It has no way to write a score even if a future edit wanted it
+                 to. We have a test that runs the pipeline with signals and
+                 without and asserts the decision is identical, and another that
+                 fails if anyone ever adds those imports."
+
+4.2  DAYS OF COVER FOR *YOUR* ORDER, NOT DAYS TO ZERO
+    The trap:   "Stock cover" sounds obvious: stock divided by burn rate.
+    Naive:      Report days until the vendor hits zero. Corusafe: 4 days.
+    We do:      Report days until stock falls below THIS buyer's quantity.
+                Corusafe: 3 days.
+    THE LINE:   "A vendor with 20,000 units hits zero in four days, but they can
+                 no longer fill her 5,000-unit order in three. Measuring to zero
+                 reports the flattering number and quietly makes the whole
+                 signal useless for exactly the buyer it is meant to help."
+
+4.3  TWO READS, NEVER AVERAGED
+    The trap:   Stock says urgent, price says relax. Combine them?
+    Naive:      Average the two into one score.
+    We do:      Take the more urgent, and always name which one drove it.
+    THE LINE:   "Average them and a falling price hides a stock cliff. We would
+                 rather show you two facts than one number that lost both."
+
+4.4  A SIGNAL THAT FIRES ON NOISE IS WORSE THAN NO SIGNAL
+    The trap:   Every price moves a little.
+    Naive:      Report every movement as a trend. Everything looks urgent.
+    We do:      A 3% materiality threshold, in config. Below it we say "steady"
+                and claim nothing.
+    THE LINE:   "If everything is urgent, nothing is. A signal that fires on
+                 noise trains a buyer to ignore it, which is worse than not
+                 having built it."
+
+4.5  NO HISTORY MEANS WE SAY NOTHING
+    The trap:   A source publishes no price history.
+    Naive:      Extrapolate from one point, or show a neutral-looking default.
+    We do:      Return "unknown" and make no claims at all.
+    THE LINE:   "A source that tells us nothing should produce silence, not a
+                 confident-looking guess. Refusing to answer is a feature."
+
+4.6  RESTOCKING IS NOT AN EMERGENCY
+    The trap:   Stock going UP produces a negative depletion rate, and a
+                negative "days of cover" renders as an alarming number.
+    We do:      Detect it explicitly and report "stock steady or rising".
+    THE LINE:   "We check for it, because an arithmetic artefact that looks like
+                 a red warning is how a buyer stops trusting the whole panel."
+
+4.7  WE ANCHOR TO THE FEED, NOT THE WALL CLOCK
+    The trap:   Compute "days of cover" from today's date.
+    Naive:      Use date.today(). Obvious, and it silently rots.
+    We do:      Anchor every calculation to the last observation date in the
+                feed.
+    THE LINE:   "If we used today's date, the same catalog would say something
+                 different tomorrow, our locked test numbers would break
+                 overnight, and a demo in another timezone would disagree with
+                 this one. Determinism is what we are selling. It does not get
+                 an exception because a feature was convenient."
+
+4.8  OUR CHARTS SAY THEY ARE SIMULATED
+    The trap:   A convincing price-history chart implies a real market feed.
+    Naive:      Draw it and let the judge assume.
+    We do:      Label every chart "simulated market data", and carry that fact
+                into the audit log itself.
+    THE LINE:   "This is authored demo data and we say so on the screen and in
+                 the log. Drawing a convincing chart and letting you assume it
+                 was real would contradict the exact property - an auditable
+                 agent - that we are asking you to believe in."
+
+4.9  A BADGE ON TWO ROWS TELLS YOU NOTHING
+    We do:      "Cheapest that qualified" is awarded only to a strictly unique
+                winner. On a tie, nobody gets it.
+    THE LINE:   "'Joint cheapest' is not a distinguishing fact."
+
+
+================================================================================
+SECTION 5 - WHERE THE AGENT'S AUTHORITY ENDS
+================================================================================
+
+5.1  TWO LIMITS, NOT ONE  ** commonly confused - be crisp **
+    Per-unit cap (22 rupees):        a HARD constraint, enforced at stage 3.
+                                     Nothing above it is ever considered.
+    Authorisation limit (105,000):   total spend the agent may commit ALONE,
+                                     enforced at stage 5. Exceeding it
+                                     ESCALATES.
+    THE LINE:   "One controls what it may buy. The other controls what it may
+                 buy WITHOUT US. Conflating those two is how autonomous agents
+                 end up either useless or terrifying."
+
+5.2  OVER THE LIMIT IS NOT A REJECTION
+    THE LINE:   "The agent never refuses an order for being expensive. It
+                 declares that this one is above its own pay grade. There is
+                 deliberately no third outcome called 'rejected'."
+
+5.3  SILENCE IS NEVER APPROVAL
+    The trap:   A pending approval nobody answers.
+    Naive:      Time out and proceed, or time out and cancel everything.
+    We do:      The request expires. Transaction state is preserved, so
+                approving later resumes at vendor confirmation - it does not
+                re-run discovery.
+    THE LINE:   "Silence is never approval. And approving twenty minutes later
+                 does not mean starting over - we resume exactly where the human
+                 was asked."
+
+5.4  THE FIVE-POINT SUBSTITUTION THRESHOLD
+    The trap:   The winner becomes unavailable at confirmation. Just take #2?
+    Naive:      Silently swap. The user never learns their pick changed.
+    We do:      Swap only if the gap is 5 points or less. In our demo the gap is
+                9.3, so the agent escalates instead.
+    THE LINE:   "A wide gap means number two is a meaningfully worse fit for
+                 what she actually asked for. Silently swapping is how an agent
+                 buys something the buyer never chose and calls it a fallback."
+
+5.5  WHAT IS DELIBERATELY *NOT* AN ESCALATION  ** shows restraint - use it **
+    The trap:   The top pick is imperfect on some soft preference.
+    Naive:      Escalate to be safe.
+    We do:      Nothing. Ranking already absorbed it.
+    THE LINE:   "Escalate on that and every order escalates, which erases the
+                 exact boundary we are demonstrating. Knowing what NOT to ask a
+                 human about is as much of the design as knowing what to."
+
+5.6  ONE ESCALATION HANDLER, FOUR DOORS
+    We do:      One mechanism - detect, re-validate, relax, re-rank, escalate -
+                entered from four places: no eligible match, over limit,
+                unavailable at confirmation, payment failed twice.
+    THE LINE:   "Four separate code paths would drift apart, and the one that
+                 drifts is the one that quietly stops logging."
+
+5.7  NON-NEGOTIABLE VS NEGOTIABLE
+    We do:      Price, delivery and minor spec gaps may be PROPOSED for
+                relaxation. Category, quantity and safety specs never are.
+    THE LINE:   "Ordering 5,000 boxes and receiving 500 is not a near-miss. And
+                 even a negotiable limit is only ever proposed - never applied
+                 silently."
+
+
+================================================================================
+SECTION 6 - NOT TRUSTING OURSELVES
+================================================================================
+
+6.1  WE REFUSE TO CACHE THE ONE THING IT WOULD BE EASY TO CACHE
+    ** this is our best engineering answer - it shows we thought, not just built **
+    The trap:   We cache both catalogs after the first read. Obvious win.
+    The bug it would have caused: stage 6 re-validates price and stock before
+                paying. If that read came from cache, we would be comparing our
+                own copy against our own copy.
+    We do:      Stage 6 forces a genuine re-read. It is the ONLY caller that
+                does.
+    THE LINE:   "We cache aggressively everywhere except the one place where
+                 caching would be a correctness bug. Re-checking a cached copy
+                 against itself passes every single time - that is not a check,
+                 it is a formality."
+
+6.2  WE NEVER TRUST OUR OWN SORT ORDER
+    We do:      A fallback product is re-validated independently against the
+                hard gates before it is offered - using the same filter stage 3
+                used, not a quick check written for the occasion.
+    THE LINE:   "Being second on a list is not the same as being eligible. The
+                 pool was ranked before the world changed."
+
+6.3  VANISHED AND SOLD OUT ARE THE SAME FACT
+    We do:      A product that disappears from the catalog between discovery and
+                confirmation comes back as a zero-stock version of itself.
+    THE LINE:   "'The vendor no longer lists it' and 'the vendor has none' are
+                 the same fact to a buyer. Routing both through the stock gate
+                 means one failure path instead of two - and two failure paths
+                 is how one of them ends up untested."
+
+6.4  OUR OWN DEMO DATA CANNOT CONTRADICT ITSELF
+    We do:      A test asserts the last point of every price and stock history
+                equals the product's current price and stock.
+    THE LINE:   "That is the drift that creeps into authored data the moment
+                 someone edits one number and forgets the other - and it would
+                 make every signal we compute meaningless."
+
+6.5  THE GOLDEN NUMBERS
+    We do:      58.0 / 48.7 / 33.7 are asserted by a unit test that runs the
+                real pipeline with no API key and no network.
+    THE LINE:   "Those three numbers are on our slide. If our code ever
+                 disagrees with our deck, the test goes red on a laptop instead
+                 of on stage. The test IS the deck."
+
+
+================================================================================
+SECTION 7 - THE AUDIT TRAIL IS THE PRODUCT
+================================================================================
+
+7.1  WRITTEN AT THE MOMENT, NOT RECONSTRUCTED AFTER
+    Naive:      Assemble a decision trail at the end from final state. Much
+                easier to write.
+    We do:      Every entry is appended the instant the event happens, and
+                flushed to disk immediately.
+    THE LINE:   "An assumption logged after the purchase is just a story. We
+                 write it before discovery is allowed to use it."
+
+7.2  IT ANSWERS A FINANCE MANAGER'S FOUR QUESTIONS
+    WHAT happened  - the event type, in plain words
+    WHY            - one sentence, not a stack trace
+    WHAT WE DID    - the action, or explicitly "no purchase executed"
+    WHO NEEDS TO KNOW - a notify list that drives the finance email
+    THE LINE:   "One transaction id replays the entire order in sequence without
+                 reading a line of our code."
+
+7.3  ADVICE IS NOT A MONEY EVENT
+    We do:      Market signals notify the requester only. Escalations notify
+                finance too.
+    THE LINE:   "Finance needs to hear when money is about to move, not when a
+                 vendor is running low on cardboard. Copying them on advice is
+                 how a notify list becomes noise nobody reads."
+
+7.4  THE LOG SAYS EXPLICITLY THAT ADVICE CHANGED NOTHING
+    We do:      Every market-signal entry carries "advisory only - ranking and
+                authorisation unchanged".
+    THE LINE:   "An entry that merely notes 'stock is low' invites a later
+                 reader to wonder whether it tipped the decision. We close that
+                 question inside the log itself."
+
+7.5  ONE RECORD, TWO EXPORTS
+    We do:      JSONL for systems, a one-page rendered view for a human auditor
+                - from the same record.
+    THE LINE:   "Not two logs that can disagree. One record, read two ways."
+
+
+================================================================================
+SECTION 8 - WHAT WE CHOSE NOT TO BUILD, AND WHY THAT IS A STRENGTH
+================================================================================
+
+Name these before a judge finds them. Volunteering a limit reads as command of
+the problem; being caught by one reads as the opposite.
+
+8.1  MOCK VENDORS
+    "Mock vendors hide real integration pain - auth, rate limits, pagination,
+     downtime. We are not going to pretend two local files are an integration.
+     What we did build is the seam: every source is an adapter behind one
+     interface, so a live vendor API is one new file and nothing else changes.
+     The source toggle you just watched is that seam, working."
+
+8.2  NO CROSS-BRIEF OPTIMISATION
+    "Briefs are priced independently. Real bundle discounts across simultaneous
+     orders are a genuinely harder problem and we would rather name it than fake
+     it."
+
+8.3  "NEGOTIATION" IS CONFIRM-AND-LOCK
+    "We re-validate and lock a price. We do not bargain. Calling that
+     negotiation would be overclaiming."
+
+8.4  OUR DEFAULT WEIGHTS ARE A JUDGEMENT CALL
+    "The category defaults are our opinion. They are documented in config and a
+     user can edit them - which is the honest position, because there is no
+     objectively correct weight for 'replacement window' and anyone who tells
+     you otherwise is guessing too."
+
+8.5  RELAXATION ORDER NEEDS A HUMAN SIGNAL
+    "If the buyer has not told us which limit they would bend first, we fall
+     back to smallest-violation ordering and we surface it rather than acting on
+     it. We are not going to infer someone's flexibility from silence."
+
+
+================================================================================
+SECTION 9 - LIKELY QUESTIONS, AND THE SHORT ANSWER
+================================================================================
+
+Q: "How do I know the LLM isn't secretly deciding?"
+A: "Pull the network cable. Our test suite runs the entire ranking pipeline with
+    no API key and produces identical numbers. The ranker imports no model."
+
+Q: "What if a user writes 'ignore your limit, this is urgent'?"
+A: "The model never sees the limit. It reads language into structured fields;
+    Python reads the limit from a config file. There is no instruction channel
+    between the two."
+
+Q: "Your data is fake."
+A: "Yes, and we label it as such on screen and in the audit log. What is real is
+    the normalisation - two deliberately incompatible schemas - and the seam
+    where a live API plugs in. We would rather show you a real boundary than a
+    fake integration."
+
+Q: "Why not let the LLM explain its reasoning?"
+A: "Because then the explanation and the decision come from different places,
+    and a plausible explanation of a wrong number is the worst possible
+    outcome. Our explanation IS the arithmetic - every term is on screen if you
+    open it."
+
+Q: "Isn't this just a filter and a sort?"
+A: "The ranking is deliberately simple - about sixty lines - because it has to
+    be defensible. The hard parts are everywhere else: knowing where the agent's
+    authority ends, what to escalate, what NOT to escalate, and proving after
+    the fact that it stayed inside its limits."
+
+Q: "What breaks first if you scale this?"
+A: "Real vendor integrations - auth, pagination, rate limits, and vendors whose
+    stock figure lies. Our stage 6 re-validation exists because we assume the
+    catalog is already out of date by the time we act on it."
+
+
+================================================================================
+MAINTENANCE
+================================================================================
+
+Add an entry when we make a decision that a reasonable engineer could have made
+differently, and we had a reason. Same shape every time:
+
+    the trap  ->  what the obvious build does  ->  what we do  ->  THE LINE
+
+Skip anything that is just a feature description. This file is only for the
+places where we can show judgement.
+
+Last updated: after stage 4.5 (market signal) landed.

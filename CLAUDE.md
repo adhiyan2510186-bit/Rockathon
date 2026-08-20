@@ -107,7 +107,10 @@ copilots, credit-decision dashboards). Concretely:
 
 - Drill-downs and hover states in the UI (opened on demand)
 - `PROGRESS.md` — the narrative for us
-- `EFFICIENCY.md` — the engineering claims for the presentation (see below)
+- `EFFICIENCY.md` — the engineering claims (speed, cost, complexity), with paths
+- `presentation.txt` — the domain judgement: pain points, traps, and the exact
+  lines to say out loud. What EFFICIENCY.md is to *how well we built it*,
+  presentation.txt is to *how well we understood the problem*.
 - Module docstrings — for us and for judges reading the repo
 
 ---
@@ -488,6 +491,12 @@ Do not build these unless the demo path is finished, tested, and frozen.
   drill-down, a docstring, or `EFFICIENCY.md`.
 - **Log efficiency wins as they happen.** Any genuinely efficient piece of code
   gets an `EFFICIENCY.md` entry with its file path, at the time it is written.
+- **Log pain points as they happen.** Whenever we make a call a reasonable
+  engineer could have made differently and we had a reason — a trap in the
+  domain, a bug we hit, a tempting shortcut we refused — add it to
+  `presentation.txt` in the same shape: the trap, what the obvious build does,
+  what we do, and THE LINE to say. That file is the evidence we understood the
+  problem, not just the code. Skip anything that is only a feature description.
 - **Commit after every working state.**
 - **Auto-push meaningful work.** Once a file or change is working state — not a
   half-finished edit — commit and push it to the GitHub remote (origin/master)
