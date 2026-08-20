@@ -1,0 +1,17 @@
+# Pin the app to light mode.
+#
+# Streamlit otherwise follows whichever laptop it is running on. Our chart
+# palette was validated for accessibility against a LIGHT chart surface, and a
+# palette validated on light tells you nothing about how it renders on dark.
+# Pinning means the colours a judge sees are the colours we checked, on any
+# machine we demo from.
+[theme]
+base = "light"
+primaryColor = "#4a3aa7"
+backgroundColor = "#f6f6f4"
+secondaryBackgroundColor = "#fcfcfb"
+textColor = "#0b0b0b"
+
+[client]
+toolbarMode = "minimal"
+showErrorDetails = true

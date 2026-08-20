@@ -482,6 +482,99 @@ the problem; being caught by one reads as the opposite.
 
 
 ================================================================================
+SECTION 8.5 - THE INTERFACE: DESIGN DECISIONS THAT ARE ACTUALLY ENGINEERING
+================================================================================
+
+8.5.1  WE TOOK THE EXPLANATION OFF THE SCREEN AND PUT IT IN OUR MOUTHS
+    The trap:   Our own reasoning is the best thing about this project, so the
+                temptation is to print all of it, all the time.
+    Naive:      Captions everywhere. "Stage 4 - ranked, pure Python, same brief
+                in, same order out." It reads as a slide, not a product, and a
+                buyer skips every word of it.
+    We do:      Clean surface, and every piece of reasoning one click away in a
+                drill-down. Progressive disclosure.
+    THE LINE:   "The reasoning is our whole thesis, so we did not delete it - we
+                made it earned rather than shoved. Watch what happens when I ask
+                the product WHY." (open the score breakdown)
+    Why it is better on stage: a judge watching you OPEN the arithmetic on
+    request is far more convincing than a judge skim-reading it in a wall of
+    captions they never asked for.
+
+8.5.2  WE HAVE A TEST THAT FAILS IF WE START EXPLAINING OURSELVES AGAIN
+    The trap:   "Clean UI" is a rule that erodes one helpful caption at a time.
+    We do:      tests/test_app.py::test_no_pipeline_vocabulary_on_the_surface
+                drives the real app and fails if "stage 4", "pure Python",
+                "normalise", "hard gate" or a dozen other terms appear on the
+                default screen. Drill-down contents are deliberately exempt.
+    THE LINE:   "We turned a design rule into a failing test, because a design
+                rule nobody enforces is a preference."
+
+8.5.3  WE DID NOT PICK OUR CHART COLOURS
+    The trap:   Choose four colours that look distinct TO US.
+    Naive:      Exactly that. It is how roughly one in twelve men - quite
+                possibly someone on the panel - ends up unable to read your
+                chart.
+    We do:      Use a published, pre-validated categorical palette unchanged and
+                in its documented order, so adjacent series clear real
+                colour-vision-deficiency separation thresholds. Our line charts
+                plot at most three products, because only the first three slots
+                clear the stricter all-pairs gate.
+    Also:       Two of the four slots are low-contrast on a light background. The
+                documented mitigation is visible direct labels or a table view.
+                We ship both, on the same screen.
+    THE LINE:   "We treated accessibility as a constraint with numbers in it,
+                not as a nice-to-have. Colour never carries meaning alone
+                anywhere in this app."
+
+8.5.4  WE PINNED THE APP TO LIGHT MODE
+    The trap:   Streamlit follows whatever laptop it is running on.
+    We do:      .streamlit/config.toml pins base="light".
+    THE LINE:   "Our palette was validated against a light surface. Validating on
+                light tells you nothing about how it renders on dark. Pinning
+                means the colours you are seeing are the colours we checked - on
+                any machine we demo from."
+
+8.5.5  TWO CHARTS, NEVER ONE WITH TWO Y-AXES
+    The trap:   Price and stock over the same dates. Obvious to overlay.
+    Naive:      A dual-axis chart. It looks sophisticated.
+    We do:      Two separate charts.
+    THE LINE:   "With two y-scales you can manufacture any correlation you like
+                by choosing the scales. Two charts cannot lie that way. It is the
+                single most common way a dashboard misleads the person reading
+                it."
+
+8.5.6  THE STOCK CHART HAS THE BUYER'S OWN NUMBER DRAWN ACROSS IT
+    We do:      A dotted reference line at the order quantity - "you need 5,000".
+    THE LINE:   "Stock falling is mildly interesting. Stock falling TOWARD the
+                line you need is a date. That crossing is the fact our timing
+                engine computes, and here it is drawn rather than asserted."
+
+8.5.7  AN ESCALATION IS NOT AN ERROR, SO IT IS NOT RED
+    The trap:   Being asked to approve something is an interruption, so colour it
+                like a warning.
+    We do:      The approval card is the same shape as the recommendation card in
+                a different key. No alarm banner.
+    THE LINE:   "Being asked to approve a large order is the system working
+                exactly as designed. Colouring it like a failure teaches the user
+                to dread the one moment we are proudest of."
+
+8.5.8  COLOUR FOLLOWS THE CRITERION, NEVER THE RANK
+    We do:      Reliability is blue whether it is the biggest contribution or
+                zero. A product keeps its colour when the pool changes.
+    THE LINE:   "If colours got reassigned by rank, every filter change would
+                repaint the chart and the reader would lose the thread mid-demo."
+
+8.5.9  WE SPLIT ONE 819-LINE FILE INTO A LAYER THAT CANNOT DECIDE ANYTHING
+    We do:      ui/theme.py, ui/charts.py, ui/components.py, and an app.py that
+                only holds state and calls the engine. The UI reads objects the
+                engine already produced and computes nothing.
+    THE LINE:   "If a number on screen could be computed in the interface, it
+                could disagree with the audit log - and then we would have two
+                answers to one question. The log is supposed to be the answer, so
+                the screen is not allowed to do arithmetic."
+
+
+================================================================================
 SECTION 9 - LIKELY QUESTIONS, AND THE SHORT ANSWER
 ================================================================================
 
@@ -530,4 +623,4 @@ differently, and we had a reason. Same shape every time:
 Skip anything that is just a feature description. This file is only for the
 places where we can show judgement.
 
-Last updated: after stage 4.5 (market signal) landed.
+Last updated: after the interface rebuild (four product screens, three charts).

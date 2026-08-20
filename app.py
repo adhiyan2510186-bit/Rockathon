@@ -1,35 +1,48 @@
-"""The interface: four screens over the engine in agent/.
+"""The interface. Four screens over the engine in agent/.
 
 WHAT THIS FILE IS ALLOWED TO DO
 -------------------------------
 Show things, and pass button presses through to the engine. That is the whole
 job.
 
-Every number on every screen is read off an object some stage already produced —
+Every number on every screen is read off an object some stage already produced -
 the score from `ScoredProduct`, the overage from `AuthorisationOutcome`, the
-amount paid from `PaymentOutcome`. This file computes nothing, decides nothing,
-and never re-reads a catalog. If a figure shown here could disagree with the
-audit log, we would have two answers to one question, and the log is supposed to
-be the answer.
+timing from `MarketSignal`. This file computes nothing, decides nothing, and
+never re-reads a catalog. If a figure shown here could disagree with the audit
+log, we would have two answers to one question, and the log is supposed to be
+the answer.
 
-That is also why the stage-8 close lives in `agent/close.py` and not here: a run
-driven from a test or a notebook has to end the same way a run driven from these
-buttons does.
+WHAT IT LOOKS LIKE, AND WHY
+---------------------------
+This is a product, not a walkthrough of our own architecture. The buyer is an ops
+manager reordering packaging. She has never heard of "stage 4" and never sees the
+words. So:
 
-THE FOUR SCREENS (CLAUDE.md, "Interface")
------------------------------------------
-  1  Brief        chat intake — stages 0, 1, 2
-  2  Comparison   what was found and how it scored — stages 3, 4
-  3  Decision     the authorisation gate and what happened after — stages 5-8
-  4  Audit        the trail, replayed from disk — stage 8
+  * the recommendation comes first, as a sentence and a cost - not a table dump
+  * timing, price trend and stock cover are chips, not paragraphs
+  * a chart carries anything where the SHAPE is the point
+  * one primary action per screen
+  * every piece of reasoning is one click away in a drill-down, never printed
+    by default
 
-Tabs rather than a wizard, so a judge can jump straight to the audit trail and
-read it while the rest is still on screen.
+That last rule is the important one. The reasoning IS our product - "autonomy the
+user can audit" is the whole thesis - so it is all still here. It is earned
+rather than shoved: we open the score breakdown deliberately when someone asks,
+which lands far better than a wall of captions nobody was asked to read.
+
+THE FOUR SCREENS
+----------------
+  Request         what the buyer asked for, and what we understood
+  Recommendation  what to buy, why, and how the timing looks
+  Approval        the one gate where a human decides, and what followed
+  Activity        the full trail, replayed from disk
+
+Tabs rather than a wizard, so the trail can be read while the rest is on screen.
 
 STREAMLIT, IN ONE PARAGRAPH
 ---------------------------
 Streamlit re-runs this entire file top to bottom on every click. So nothing about
-a transaction can live in a local variable — it all lives in `st.session_state`,
+a transaction can live in a local variable - it all lives in `st.session_state`,
 which survives the re-run. The engine is called only from the two handler
 functions below; the screens themselves just read whatever is in state. That
 split is what stops a re-run from accidentally re-running discovery or paying
@@ -50,10 +63,13 @@ from agent import (
     language,
     payment as payment_module,
     ranking,
+    signals,
+    sources,
     vendor,
     weights as weights_module,
 )
-from agent.models import SOFT_CRITERIA, TransactionContext, TransactionStatus
+from agent.models import TransactionContext, TransactionStatus
+from ui import charts, components as ui, theme
 
 DEMO_BRIEF = (
     "5,000 kraft mailer boxes, double-wall, 200x150x80 mm, max Rs 22 per unit, "
@@ -62,14 +78,24 @@ DEMO_BRIEF = (
 
 OFF_TOPIC_EXAMPLE = "What's the weather in Chennai tomorrow?"
 
-# The switches, with the plain-words labels the sidebar shows. Keys come from the
-# stage files themselves so a rename cannot leave the sidebar flipping a switch
-# nothing reads any more.
+# Who the approval is recorded as. The stage-5 audit entry is one of the very
+# few written with actor USER - it marks where the agent's authority ended and
+# a person's began - so it has to name someone rather than say "the user".
+APPROVER = "Meena (ops manager)"
+
+# Keys come from the stage files themselves, so a rename cannot leave a control
+# flipping a switch nothing reads any more.
 SWITCH_LABELS = {
-    vendor.SWITCH_OUT_OF_STOCK: "Stage 6 · vendor is out of stock",
-    vendor.SWITCH_PRICE_DRIFT: "Stage 6 · price drifted up since discovery",
-    payment_module.SWITCH_DECLINE_FIRST: "Stage 7 · decline the first payment attempt",
-    payment_module.SWITCH_DECLINE_EVERY: "Stage 7 · decline every payment attempt",
+    vendor.SWITCH_OUT_OF_STOCK: "Vendor is out of stock",
+    vendor.SWITCH_PRICE_DRIFT: "Price moved since we looked",
+    payment_module.SWITCH_DECLINE_FIRST: "First payment attempt declines",
+    payment_module.SWITCH_DECLINE_EVERY: "Every payment attempt declines",
+}
+
+_FINISHED = {
+    TransactionStatus.COMPLETED,
+    TransactionStatus.DECLINED,
+    TransactionStatus.EXPIRED,
 }
 
 
@@ -81,22 +107,23 @@ def init_state() -> None:
     """Put every key we read into session_state once, so no screen guesses.
 
     Streamlit re-runs the file constantly; a missing key is the most common way
-    one of these apps dies mid-demo. Setting them all here means every screen can
-    read state without defending itself.
+    one of these apps dies mid-demo.
     """
     defaults = {
-        "messages": [],          # the chat transcript: list of (role, text)
-        "ctx": None,             # TransactionContext — the shared state CLAUDE.md requires
-        "log": None,             # AuditLogger bound to that context
-        "brief_note": "",        # 'gemini' or 'offline', for honest labelling
+        "messages": [],
+        "ctx": None,
+        "log": None,
+        "brief_note": "",
         "scope_note": "",
-        "pending_brief": "",     # the brief so far, while we are still collecting it
-        "auth": None,            # AuthorisationOutcome  — stage 5
-        "stage3_escalation": None,  # EscalationOutcome   — stage 3, nothing eligible
-        "confirmation": None,    # ConfirmationOutcome    — stage 6
-        "payment": None,         # PaymentOutcome         — stage 7
-        "summary": None,         # CloseSummary           — stage 8
+        "pending_brief": "",
+        "market": None,             # MarketRead - stage 4.5, advisory only
+        "auth": None,
+        "stage3_escalation": None,
+        "confirmation": None,
+        "payment": None,
+        "summary": None,
         "switches": config.failure_injection(),
+        "source_keys": list(sources.ALL_SOURCE_KEYS),
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -104,27 +131,18 @@ def init_state() -> None:
 
 
 def reset() -> None:
-    """Clear everything except the failure switches, which the demo leaves set."""
+    """Clear the order, keeping the demo controls where they were set."""
     st.session_state["messages"] = []
     st.session_state["brief_note"] = ""
     st.session_state["scope_note"] = ""
     st.session_state["pending_brief"] = ""
-    for key in ("ctx", "log", "auth", "stage3_escalation", "confirmation", "payment", "summary"):
+    for key in ("ctx", "log", "market", "auth", "stage3_escalation",
+                "confirmation", "payment", "summary"):
         st.session_state[key] = None
 
 
 def say(role: str, text: str) -> None:
-    """Add one line to the chat transcript."""
     st.session_state["messages"].append((role, text))
-
-
-# The three states a transaction cannot come back from. The next brief after
-# one of these is a new order with its own transaction id and its own log.
-_FINISHED = {
-    TransactionStatus.COMPLETED,
-    TransactionStatus.DECLINED,
-    TransactionStatus.EXPIRED,
-}
 
 
 # ---------------------------------------------------------------------------
@@ -132,9 +150,9 @@ _FINISHED = {
 # ---------------------------------------------------------------------------
 
 def handle_message(text: str) -> None:
-    """Stages 0 → 5 for one user message. Stops wherever the engine stops.
+    """Stages 0 through 5 for one user message. Stops wherever the engine stops.
 
-    Reading this function top to bottom IS the pipeline, which is deliberate — a
+    Reading this function top to bottom IS the pipeline, which is deliberate - a
     judge asking "what happens when I type a sentence?" should be able to follow
     one screen of code.
 
@@ -144,41 +162,33 @@ def handle_message(text: str) -> None:
 
     ANSWERS ARE JOINED TO THE BRIEF THEY ANSWER
     -------------------------------------------
-    When stage 0 asks its one question, the reply is usually a fragment — "5,000",
-    or "within 10 days". A fragment is not a procurement brief, so sending it to
-    stage 0 on its own gets it refused, and the user is told the agent only
-    handles procurement while it is in the middle of asking them about one.
+    When the agent asks its one clarifying question, the reply is usually a
+    fragment - "5,000", or "within 10 days". A fragment is not a procurement
+    brief, so sending it on its own gets it refused, and the user is told we only
+    handle procurement while we are in the middle of asking them about one.
 
     So while a question is outstanding we keep the brief so far in
-    `pending_brief`, and the next message is appended to it rather than replacing
-    it. Stage 0 and stage 1 both see everything the user has said about this
-    order, which is what makes asking a question worth doing at all.
-
+    `pending_brief`, and the next message is appended rather than replacing it.
     This is conversation state, so it lives here rather than in the engine.
-    `check_scope()` stays a pure function of the text it is handed — the app is
-    what remembers, and the text it hands over is the whole brief.
     """
     say("user", text)
 
-    # A finished transaction is not reopened. The next brief is a new order, with
-    # a new transaction id and its own audit file.
     ctx = st.session_state["ctx"]
     if ctx is None or ctx.status in _FINISHED:
         transaction = TransactionContext(transaction_id=audit_module.new_transaction_id())
         st.session_state["ctx"] = transaction
         st.session_state["log"] = audit_module.AuditLogger(transaction)
         st.session_state["pending_brief"] = ""
-        for key in ("auth", "stage3_escalation", "confirmation", "payment", "summary"):
+        for key in ("market", "auth", "stage3_escalation", "confirmation", "payment", "summary"):
             st.session_state[key] = None
 
     ctx = st.session_state["ctx"]
     log = st.session_state["log"]
 
-    # Everything the user has told us about THIS order, not just the last line.
     pending = st.session_state["pending_brief"]
     brief_text = f"{pending} {text}".strip() if pending else text
 
-    # -- stage 0: should we even start? ------------------------------------
+    # -- should we even start? ---------------------------------------------
     scope = language.check_scope(brief_text, log)
     st.session_state["scope_note"] = scope.note
     if scope.verdict.verdict == "out_of_scope":
@@ -186,32 +196,29 @@ def handle_message(text: str) -> None:
         say("agent", scope.verdict.message)
         return
     if scope.verdict.verdict == "incomplete":
-        # Keep what we have and ask about what is still missing. The question is
-        # driven by `missing_fields`, so it narrows as the user fills things in
-        # instead of asking the same thing twice.
         st.session_state["pending_brief"] = brief_text
         say("agent", scope.verdict.message)
         return
 
     st.session_state["pending_brief"] = ""
 
-    # -- stage 1 & 2: the sentence becomes numbers --------------------------
+    # -- the sentence becomes numbers --------------------------------------
     parsed = language.extract_brief(brief_text, log)
     st.session_state["brief_note"] = parsed.note
     ctx.brief = parsed.brief
     ctx.weights = weights_module.compute(parsed.brief, log)
 
-    # -- stage 3: two catalogs, one shape, one gate -------------------------
+    # -- two catalogs, one shape, one gate ---------------------------------
     ctx.status = TransactionStatus.DISCOVERING
-    ctx.filter_results = discovery.run(parsed.brief, log)
+    ctx.filter_results = discovery.run(parsed.brief, log, st.session_state["source_keys"])
 
     if not ctx.eligible:
         outcome = escalation.handle(ctx, escalation.Trigger.NO_ELIGIBLE_MATCH, log)
         st.session_state["stage3_escalation"] = outcome
-        say("agent", outcome.headline + "  \n\nSee the **Decision** tab.")
+        say("agent", outcome.headline)
         return
 
-    # -- stage 4: pure Python, same answer every run ------------------------
+    # -- ranking: pure Python, same answer every run ------------------------
     ctx.ranked = ranking.rank(
         ctx.eligible,
         ctx.weights,
@@ -221,19 +228,25 @@ def handle_message(text: str) -> None:
     )
     ctx.status = TransactionStatus.RANKED
 
-    # -- stage 5: may the agent sign for this? ------------------------------
+    # -- timing: advisory only, and it runs AFTER the ranking is final ------
+    # Placed here deliberately. Nothing below reads it, so it cannot influence
+    # the authorisation decision that follows. See CLAUDE.md, stage 4.5.
+    st.session_state["market"] = signals.read(ctx.ranked, parsed.brief, log)
+
+    # -- may the agent sign for this? --------------------------------------
     auth = authorisation.authorise(ctx, log)
     st.session_state["auth"] = auth
 
     if auth.within_limit:
-        say("agent", auth.headline + "  \n\nProceeding without approval — see the **Decision** tab.")
+        say("agent", auth.headline)
         execute()
     else:
-        say("agent", auth.headline + "  \n\n**This needs your approval** — see the **Decision** tab.")
+        say("agent", auth.headline)
 
 
 def execute() -> None:
-    """Stages 6 → 8. Run after the agent clears itself, or after a human approves.
+    """Confirmation, payment and close. Runs after the agent clears itself, or
+    after a human approves.
 
     Each stage can stop the run, and when it does it has already written its own
     audit entry and parked the transaction. This function's only job is to notice
@@ -260,560 +273,484 @@ def execute() -> None:
     say("agent", summary.headline)
 
 
-
 # ---------------------------------------------------------------------------
-# Sidebar
+# Sidebar — deliberately quiet
 # ---------------------------------------------------------------------------
 
 def render_sidebar() -> None:
-    """Transaction state, the honest parser label, and the failure switches."""
+    """Account-level controls, and the demo switches tucked out of the way.
+
+    The failure switches are collapsed. They are how a judge watches the
+    escalation path fire on demand, but they are not something a real buyer has,
+    and leaving them open on the main surface would make the app look like a test
+    harness.
+    """
     with st.sidebar:
-        st.subheader("Transaction")
+        st.markdown("### Procurement")
         ctx = st.session_state["ctx"]
-        if ctx is None:
-            st.caption("No transaction yet. Send a brief to start one.")
-        else:
-            st.code(ctx.transaction_id, language=None)
-            st.caption(f"Status: **{ctx.status.value}** · {len(ctx.audit)} audit entries")
+        if ctx is not None:
+            st.caption(f"Order {ctx.transaction_id} · {len(ctx.audit)} events")
 
-        st.divider()
-        st.subheader("Language step")
-        # We label the parser honestly rather than hiding a degraded run. If the
-        # key is missing or the free tier is exhausted, the offline parser takes
-        # over and the screen says so — see CLAUDE.md, "we degrade honestly".
-        if language.is_online():
-            st.success("Gemini reachable · " + config.llm_model())
-        else:
-            st.warning("Offline parser · no API key found")
-        note = st.session_state["brief_note"] or st.session_state["scope_note"]
-        if note:
-            st.caption(note)
-
-        st.divider()
-        st.subheader("Failure injection")
-        st.caption(
-            "Mock switches for the vendor and payment stages, so the escalation "
-            "path can be triggered on demand instead of taken on trust."
-        )
-        switches = dict(st.session_state["switches"])
-        for key, label in SWITCH_LABELS.items():
-            switches[key] = st.checkbox(label, value=switches.get(key, False), key=f"sw_{key}")
-        st.session_state["switches"] = switches
-
-        st.divider()
-        if st.button("Reset — new transaction", width="stretch"):
+        if st.button("New order", width="stretch"):
             reset()
             st.rerun()
 
-        st.caption(
-            "Limits are read from config.yaml, never from a prompt: "
-            f"authorisation Rs {config.authorisation_limit_inr():,.0f}, "
-            f"substitution threshold {config.substitution_threshold_points():.0f} pts."
-        )
+        st.markdown("")
+        st.caption(f"Approval needed above ₹{config.authorisation_limit_inr():,.0f}")
+
+        with st.expander("Suppliers"):
+            chosen = []
+            for key, adapter in sources.ADAPTERS.items():
+                if st.checkbox(adapter.display_name, key in st.session_state["source_keys"],
+                               key=f"src_{key}"):
+                    chosen.append(key)
+            # Never let the pool empty. A run with no suppliers is not a useful
+            # demonstration of anything, it just looks broken.
+            st.session_state["source_keys"] = chosen or list(sources.ALL_SOURCE_KEYS)
+
+        with st.expander("Demo controls"):
+            st.caption("Force a failure to see how the agent responds.")
+            switches = dict(st.session_state["switches"])
+            for key, label in SWITCH_LABELS.items():
+                switches[key] = st.checkbox(label, switches.get(key, False), key=f"sw_{key}")
+            st.session_state["switches"] = switches
 
 
 # ---------------------------------------------------------------------------
-# Screen 1 — the brief
+# Screen 1 — Request
 # ---------------------------------------------------------------------------
 
-def render_brief_tab() -> None:
-    """Chat intake, then what stages 1 and 2 made of the sentence."""
-    st.subheader("1 · Brief")
-    st.caption(
-        "The language model reads the sentence and fills in fields. That is the "
-        "only thing it does in this app — it never scores, ranks or approves."
-    )
-
-    left, right = st.columns(2)
-    if left.button("Load the demo brief", width="stretch"):
-        handle_message(DEMO_BRIEF)
-        st.rerun()
-    if right.button("Try an off-topic message", width="stretch"):
-        handle_message(OFF_TOPIC_EXAMPLE)
-        st.rerun()
+def render_request() -> None:
+    """The conversation, and a compact read-back of what we understood."""
+    if not st.session_state["messages"]:
+        _empty_request_state()
+        return
 
     for role, text in st.session_state["messages"]:
-        with st.chat_message(role if role == "user" else "assistant"):
+        with st.chat_message("user" if role == "user" else "assistant"):
             st.markdown(text)
 
     ctx = st.session_state["ctx"]
     if ctx is None or ctx.brief is None:
         return
 
+    ui.rule()
+    _brief_readback(ctx)
+
+
+def _empty_request_state() -> None:
+    """What a first-time user sees. One clear action, not an instruction manual."""
+    st.markdown("")
+    ui.hero(
+        "Procurement",
+        "What do you need to buy?",
+        "Describe it in a sentence — quantity, specification, budget and deadline.",
+    )
+    left, right = st.columns(2)
+    with left:
+        if st.button("Try a packaging reorder", width="stretch", type="primary"):
+            handle_message(DEMO_BRIEF)
+            st.rerun()
+    with right:
+        if st.button("Ask something off-topic", width="stretch"):
+            handle_message(OFF_TOPIC_EXAMPLE)
+            st.rerun()
+
+
+def _brief_readback(ctx) -> None:
+    """What the agent understood, as chips a buyer can check at a glance.
+
+    Requirements and preferences are shown differently because they DO different
+    things: a requirement can disqualify a product, a preference can only change
+    its position. Presenting them as one undifferentiated list would hide the
+    single most important distinction in the whole system.
+    """
     brief = ctx.brief
-    st.divider()
-    st.markdown("**What the parser extracted, and what each field is for**")
 
-    rows = []
-    for field, value in (
-        ("category", brief.category),
-        ("quantity", f"{brief.quantity:,}"),
-        ("specs", ", ".join(brief.specs) or "-"),
-        ("max_price_per_unit_inr", f"Rs {brief.max_price_per_unit_inr:.2f}"),
-        ("max_delivery_days", f"{brief.max_delivery_days} days"),
-    ):
-        status = brief.field_status.get(field)
-        rows.append(
-            {
-                "Field": field,
-                "Value": value,
-                # HARD / SOFT / AMBIGUOUS comes from a fixed table in models.py,
-                # not from the model. The LLM finds values; the table says what
-                # values are for.
-                "Class": brief.classification(field).value.upper(),
-                # CONFIRMED means the user said it. ASSUMED means we applied a
-                # declared default because they did not — and it is logged as an
-                # assumption the moment it is applied.
-                "Provenance": status.value.upper() if status else "-",
-            }
-        )
-
-    # Whether to show the ASSUMED note is decided on the HARD rows alone. The
-    # soft rows below nearly always carry a category default, so counting them
-    # would make the note permanent furniture and it would stop meaning what it
-    # is there to mean: the brief was silent about a gate, so we filled it in.
-    hard_rows_assumed = any(row["Provenance"] == "ASSUMED" for row in rows)
-
-    # The SOFT criteria go in the SAME table, so the difference between the two
-    # classes is something a judge can see rather than something we have to say.
-    # A hard field is a pass/fail gate at stage 3 — fail it and the product is
-    # never scored. A soft criterion cannot reject anything; it only decides how
-    # much we prefer one survivor over another at stage 4.
-    #
-    # price and delivery appear in both halves on purpose. That is the reuse
-    # CLAUDE.md describes, not double counting: "does it qualify?" and "how far
-    # under the cap did it land?" are two different questions about one number.
-    if ctx.weights:
-        for criterion in SOFT_CRITERIA:
-            weight = ctx.weights.values.get(criterion, 0.0)
-            source = ctx.weights.sources.get(criterion, "")
-            rows.append(
-                {
-                    "Field": criterion,
-                    "Value": f"weight {weight:.2f}",
-                    "Class": brief.classification(criterion).value.upper(),
-                    # Same two meanings the hard rows use: a weight the user's own
-                    # words produced is CONFIRMED, one taken from the category
-                    # defaults in config.yaml is ASSUMED.
-                    "Provenance": "CONFIRMED" if source.startswith("user-stated") else "ASSUMED",
-                }
-            )
-
-    st.dataframe(rows, hide_index=True, width="stretch")
-    st.caption(
-        "HARD fields control eligibility at stage 3 — fail one and the product is "
-        "never scored. SOFT criteria reject nothing; they only rank what survived. "
-        "Neither class is chosen by the language model: both come from a fixed "
-        "table in models.py."
-    )
-
-    if hard_rows_assumed:
-        st.info(
-            "An **ASSUMED** field means the brief was silent and a declared default "
-            "from config.yaml was applied. It is written to the audit log as an "
-            "assumption, never as an instruction."
-        )
+    ui.section("What we understood")
+    ui.chips([
+        (f"{brief.quantity:,} units", theme.ACCENT),
+        (brief.category, None),
+        *[(spec, None) for spec in brief.specs],
+        (f"max ₹{brief.max_price_per_unit_inr:.2f}/unit", None),
+        (f"within {brief.max_delivery_days} days", None),
+    ])
+    st.caption("Any product missing one of these is not considered.")
 
     if ctx.weights:
-        st.markdown("**Stage 2 · the weights, and where each came from**")
-        st.caption(
-            "The model extracts the phrase (\"matters a lot\"); plain Python looks up "
-            "the number. The model is never shown the number."
-        )
-        st.dataframe(
-            [
-                {
-                    "Criterion": criterion,
-                    "Weight": f"{value:.2f}",
-                    "Source": ctx.weights.sources.get(criterion, "-"),
-                }
-                for criterion, value in ctx.weights.values.items()
-            ],
-            hide_index=True,
-            width="stretch",
-        )
+        st.markdown("")
+        ui.section("What you said matters")
+        ui.chips([
+            (f"{criterion} {weight:.0%}", theme.CRITERION_COLOUR.get(criterion))
+            for criterion, weight in ctx.weights.values.items()
+        ])
+        st.caption("These decide the order of the results, never who qualifies.")
+
+    with ui.detail("How this was read"):
+        note = st.session_state["brief_note"]
+        if note:
+            st.caption(note)
+        st.markdown("**Requirements** — pass or fail. A product missing any of these is excluded.")
+        st.json({
+            "category": brief.category,
+            "quantity": brief.quantity,
+            "specs": brief.specs,
+            "max_price_per_unit_inr": brief.max_price_per_unit_inr,
+            "max_delivery_days": brief.max_delivery_days,
+        })
+        if ctx.weights:
+            st.markdown("**Preferences** — ranking only. Never rejects anything.")
+            st.json({
+                criterion: {"weight": weight, "from": ctx.weights.sources.get(criterion, "")}
+                for criterion, weight in ctx.weights.values.items()
+            })
 
 
 # ---------------------------------------------------------------------------
-# Screen 2 — the comparison
+# Screen 2 — Recommendation
 # ---------------------------------------------------------------------------
 
-def render_comparison_tab() -> None:
-    """What both catalogs offered, what survived the gate, and how it scored."""
-    st.subheader("2 · Comparison")
+def render_recommendation() -> None:
+    """The decision first, then the evidence, then the arithmetic on request."""
     ctx = st.session_state["ctx"]
-    if ctx is None or not ctx.filter_results:
-        st.caption("Nothing discovered yet. Send a brief on the first tab.")
-        return
-
-    st.caption(
-        "Two sources with deliberately different schemas — PackHub sends direct "
-        "JSON in rupees, BoxBazaar sends aggregator CSV in paise with a shipping "
-        "range and a score out of 100 — normalised into one Product model."
-    )
-
-    passed = [result for result in ctx.filter_results if result.passed]
-    st.markdown(
-        f"**Stage 3 · hard gate:** {len(ctx.filter_results)} products considered, "
-        f"**{len(passed)} qualified**."
-    )
-
-    if ctx.ranked:
-        st.markdown("**Stage 4 · ranked** — pure Python, same brief in, same order out.")
-        st.dataframe(
-            [
-                {
-                    "#": scored.rank,
-                    "Product · source": scored.product.label,
-                    "Rs/unit": f"{scored.product.price_per_unit_inr:.2f}",
-                    "Days": scored.product.delivery_days,
-                    "Reliab.": scored.product.reliability_rating,
-                    "Replace": f"{scored.product.replacement_window_days} d",
-                    "Score": scored.score,
-                }
-                for scored in ctx.ranked
-            ],
-            hide_index=True,
-            width="stretch",
-        )
-
-        gap = ctx.score_gap()
-        if gap is not None:
-            st.caption(
-                f"#1 leads #2 by **{gap} points**. The substitution threshold is "
-                f"{config.substitution_threshold_points():.0f} — a wider gap means the agent "
-                f"escalates rather than silently swapping if #1 falls through."
-            )
-
-        st.markdown("**Every score term, so nothing is taken on trust**")
-        for scored in ctx.ranked:
-            with st.expander(f"{scored.product.label} — {scored.score}"):
-                st.dataframe(
-                    [
-                        {
-                            "Criterion": term.criterion,
-                            "Weight": f"{term.weight:.2f}",
-                            "Raw": term.raw_value,
-                            "Normalised": f"{term.normalised:.3f}",
-                            "Contribution": f"{term.contribution:.3f}",
-                            "How": term.method,
-                        }
-                        for term in scored.terms
-                    ],
-                    hide_index=True,
-                    width="stretch",
-                )
-                st.caption(
-                    f"Sum of contributions x 100 = **{scored.score}**. "
-                    f"Reliability alone contributed {scored.contribution('reliability'):.3f}."
-                )
-
-    rejected = ctx.rejected
-    if rejected:
-        st.markdown(f"**Rejected ({len(rejected)}) — kept, with reasons**")
-        st.caption(
-            "We keep the failures, not just the survivors. \"We looked at seven and "
-            "three qualified\" is a checkable claim; \"here are three\" is not."
-        )
-        st.dataframe(
-            [
-                {
-                    "Product · source": result.product.label,
-                    "Rs/unit": f"{result.product.price_per_unit_inr:.2f}",
-                    "Days": result.product.delivery_days,
-                    "In stock": f"{result.product.available_quantity:,}",
-                    "Why it failed": " · ".join(result.violations.values()),
-                }
-                for result in rejected
-            ],
-            hide_index=True,
-            width="stretch",
-        )
-
-
-# ---------------------------------------------------------------------------
-# Screen 3 — the decision
-# ---------------------------------------------------------------------------
-
-def render_decision_tab() -> None:
-    """The authorisation gate, and everything that happened after it."""
-    st.subheader("3 · Decision")
-    ctx = st.session_state["ctx"]
-    if ctx is None:
-        st.caption("No transaction yet.")
-        return
-
     stage3 = st.session_state["stage3_escalation"]
+
     if stage3 is not None:
-        _render_escalation(stage3, ctx)
+        _no_match(stage3)
         return
 
-    auth = st.session_state["auth"]
-    if auth is None:
-        st.caption("Stage 5 has not run yet.")
+    if ctx is None or not ctx.ranked:
+        st.caption("Nothing to compare yet. Describe what you need to buy.")
         return
 
-    _render_limit_check(auth)
+    winner = ctx.ranked[0]
+    market = st.session_state["market"]
+    signal = market.for_product(winner) if market else None
+    total = winner.product.order_total_inr(ctx.brief.quantity)
 
-    if ctx.status is TransactionStatus.AWAITING_APPROVAL and auth.escalation is not None:
-        _render_escalation(auth.escalation, ctx)
-        _render_approval_buttons(ctx)
-    else:
-        _render_execution(ctx)
-
-
-def _render_limit_check(auth) -> None:
-    """The one multiplication and the one comparison that make up stage 5."""
-    st.markdown("**Stage 5 · the limit check**")
-    columns = st.columns(4)
-    columns[0].metric("Order total", f"Rs {auth.order_total_inr:,.0f}")
-    columns[1].metric("Authorisation limit", f"Rs {auth.authorisation_limit_inr:,.0f}")
-    columns[2].metric(
-        "Headroom",
-        f"Rs {auth.headroom_inr:,.0f}",
-        delta="within limit" if auth.within_limit else "over limit",
-        delta_color="normal" if auth.within_limit else "inverse",
+    # -- the recommendation -------------------------------------------------
+    ui.hero(
+        "Recommended",
+        f"{winner.product.name} — ₹{total:,.0f}",
+        f"{winner.product.source} · ₹{winner.product.price_per_unit_inr:.2f} per unit · "
+        f"arrives in {winner.product.delivery_days} days",
     )
-    columns[3].metric("Selected", f"{auth.selected.score}", help=auth.selected.product.label)
+
+    runner_up_gap = winner.score - ctx.ranked[1].score if len(ctx.ranked) > 1 else None
+    ui.figures([
+        ("Order total", f"₹{total:,.0f}", f"{ctx.brief.quantity:,} units"),
+        ("Delivery", f"{winner.product.delivery_days} days",
+         f"{ctx.brief.max_delivery_days - winner.product.delivery_days} days inside your deadline"),
+        ("Supplier rating", f"{winner.product.reliability_rating:.1f}",
+         f"best of the {len(ctx.ranked)} that qualified"),
+        ("Match", f"{winner.score:.1f}",
+         f"{runner_up_gap:.1f} ahead of next" if runner_up_gap is not None else ""),
+    ])
+
+    if signal is not None:
+        ui.urgency_chips(signal)
+
+    # -- why it won ---------------------------------------------------------
+    ui.rule()
+    ui.section("Why this one")
     st.caption(
-        f"{auth.quantity:,} x Rs {auth.unit_price_inr:.2f} = Rs {auth.order_total_inr:,.0f}. "
-        "The Rs 22 per-unit cap is a limit on the PRODUCT and was applied at stage 3; "
-        "this is a limit on the AGENT. Being over it escalates — it never rejects."
+        f"Each bar is the score, split by what you told us matters. "
+        f"{len(ctx.filter_results)} products were checked; {len(ctx.ranked)} qualified."
     )
-    if auth.within_limit:
-        st.info(auth.headline)
-    else:
-        st.warning(auth.headline)
+    st.plotly_chart(charts.score_composition(ctx.ranked), width="stretch",
+                    config={"displayModeBar": False})
+    ui.chips([(criterion, colour) for criterion, colour in theme.CRITERION_COLOUR.items()])
+
+    st.markdown("")
+    ui.comparison_table(ctx.ranked, market)
+
+    for scored in ctx.ranked:
+        with ui.detail(f"Score breakdown — {scored.product.name} ({scored.score})"):
+            ui.score_breakdown(scored)
+
+    rejected = [result for result in ctx.filter_results if not result.passed]
+    if rejected:
+        with ui.detail(f"Not considered ({len(rejected)})"):
+            for result in rejected:
+                reasons = " · ".join(result.violations.values())
+                st.markdown(f"**{result.product.name}** — {reasons}")
+
+    # -- market context -----------------------------------------------------
+    _market_section(ctx, market)
 
 
-def _render_escalation(outcome, ctx) -> None:
-    """The shared handler's output, whichever of the four call sites produced it."""
-    st.warning(outcome.headline)
-    st.caption(f"Detected at stage {outcome.stage} · trigger `{outcome.trigger.value}`")
+def _market_section(ctx, market) -> None:
+    """Price and stock over time. Two charts, never one with two axes.
+
+    Overlaying rupees and units on a shared plot would let us imply any
+    correlation we liked by choosing the scales. Two charts cannot lie that way.
+    """
+    products = [scored.product for scored in ctx.ranked]
+    price_fig = charts.price_history(products)
+    stock_fig = charts.stock_burndown(products, ctx.brief.quantity)
+
+    if price_fig is None and stock_fig is None:
+        return
+
+    ui.rule()
+    ui.section("Market context")
+
+    left, right = st.columns(2)
+    if price_fig is not None:
+        with left:
+            st.caption("Price per unit")
+            st.plotly_chart(price_fig, width="stretch", config={"displayModeBar": False})
+    if stock_fig is not None:
+        with right:
+            st.caption("Stock available")
+            st.plotly_chart(stock_fig, width="stretch", config={"displayModeBar": False})
+
+    ui.provenance("Simulated market data — authored for this demo, not a live vendor feed.")
+
+    if market is None:
+        return
+
+    with ui.detail("How the timing was worked out"):
+        st.caption(
+            "Two independent readings per product — how fast stock is leaving, and "
+            "which way the price is moving. Whichever is more urgent is the one "
+            "shown, and it never changes the ranking or the approval limit."
+        )
+        for scored in ctx.ranked:
+            signal = market.for_product(scored)
+            if signal is None:
+                continue
+            st.markdown(f"**{scored.product.name}** — {signal.headline}")
+            if signal.daily_depletion:
+                st.caption(
+                    f"Leaving stock at {signal.daily_depletion:,.0f} units/day · "
+                    f"drops below your {ctx.brief.quantity:,} in "
+                    f"{signal.days_until_short:.1f} days · "
+                    f"price {signal.price_change_pct:+.1f}% over {signal.observed_days} days"
+                )
+
+
+def _no_match(outcome) -> None:
+    """Nothing qualified. Show the near-misses and what it would take to admit them."""
+    ui.hero("No match", outcome.headline, variant="escalated")
 
     if outcome.options:
-        st.markdown("**Alternatives, each with the cost of choosing it**")
-        st.dataframe(
-            [
-                {
-                    "Product · source": option.label,
-                    "Order total": f"Rs {option.order_total_inr:,.0f}",
-                    "Score": option.score if option.score is not None else "-",
-                    "Behind by": f"{option.score_gap} pts" if option.score_gap is not None else "-",
-                    "Note": option.note or " · ".join(option.violations.values()),
-                }
-                for option in outcome.options
-            ],
-            hide_index=True,
-            width="stretch",
-        )
+        ui.section("Closest available")
+        for option in outcome.options:
+            st.markdown(f"**{option.label}** — {option.note}")
+            ui.chips([(text, theme.SERIOUS) for text in option.violations.values()])
 
     if outcome.proposed_relaxations:
-        st.markdown("**What relaxing a negotiable limit would admit**")
+        ui.section("What would need to change")
         for proposal in outcome.proposed_relaxations:
             st.markdown(f"- {proposal}")
-        st.caption(
-            "Proposed, never applied. Category, quantity and specs are never "
-            "relaxed at all — see CLAUDE.md, the non-negotiable tier."
-        )
+        st.caption("Nothing here has been applied. Change your requirements to proceed.")
 
 
-def _render_approval_buttons(ctx) -> None:
-    """The only human-in-the-loop gate in the system. Three ways out, two buy nothing."""
-    st.divider()
-    st.markdown("**Your decision**")
-    log = st.session_state["log"]
+# ---------------------------------------------------------------------------
+# Screen 3 — Approval
+# ---------------------------------------------------------------------------
 
-    if ctx.selected is None:
-        st.caption("Nothing is selected to approve — this escalation is about the search, not a purchase.")
+def render_approval() -> None:
+    """The one gate where a human decides, and everything that followed it."""
+    ctx = st.session_state["ctx"]
+    auth = st.session_state["auth"]
+
+    if ctx is None or auth is None:
+        st.caption("Nothing awaiting a decision.")
         return
 
-    approve, decline, expire = st.columns(3)
+    # The hero writes its own sentence rather than reusing the engine's headline.
+    # The engine writes "Rs" for the log and for systems that cannot be trusted
+    # with a rupee sign; the screen uses the symbol. Showing both in one card was
+    # the kind of small inconsistency that makes a product look unfinished.
+    if auth.within_limit:
+        ui.hero(
+            "Approved automatically",
+            f"₹{auth.order_total_inr:,.0f} — no approval needed",
+            f"Within the ₹{auth.authorisation_limit_inr:,.0f} the agent may commit on its own. "
+            f"You are being told, not asked.",
+        )
+    else:
+        over = auth.order_total_inr - auth.authorisation_limit_inr
+        ui.hero(
+            "Your approval needed",
+            f"₹{auth.order_total_inr:,.0f} — ₹{over:,.0f} over the limit",
+            "Nothing has been ordered. The agent stopped here because this is more "
+            "than it may commit without you.",
+            variant="escalated",
+        )
 
-    if approve.button("Approve", type="primary", width="stretch"):
-        authorisation.approve(ctx, log, approver="Meena (ops manager)")
-        say("user", "Approved.")
-        execute()
-        st.rerun()
+        ui.figures([
+            ("Order total", f"₹{auth.order_total_inr:,.0f}", ""),
+            ("Approval limit", f"₹{auth.authorisation_limit_inr:,.0f}", "set by your finance team"),
+            ("Over by", f"₹{over:,.0f}", f"{over / auth.authorisation_limit_inr:.1%}"),
+        ])
 
-    if decline.button("Decline", width="stretch"):
-        authorisation.decline(ctx, log, reason="over budget this month", decliner="Meena (ops manager)")
-        say("user", "Declined.")
-        st.rerun()
+    _approval_actions(ctx, auth)
+    _outcome_trail(ctx)
 
-    if expire.button("Let it expire", width="stretch"):
-        authorisation.expire(ctx, log)
-        say("agent", "The approval request expired. Silence is not approval, so nothing was bought.")
-        st.rerun()
+
+def _approval_actions(ctx, auth) -> None:
+    """One primary action, and its opposite. Nothing else competes for the eye."""
+    if ctx.status is not TransactionStatus.AWAITING_APPROVAL:
+        return
+
+    st.markdown("")
+    approve, decline = st.columns([1, 1])
+    with approve:
+        if st.button("Approve this order", type="primary", width="stretch"):
+            authorisation.approve(ctx, st.session_state["log"], approver=APPROVER)
+            execute()
+            st.rerun()
+    with decline:
+        if st.button("Decline", width="stretch"):
+            authorisation.decline(ctx, st.session_state["log"],
+                                  reason=st.session_state.get("decline_reason", ""),
+                                  decliner=APPROVER)
+            st.rerun()
 
     st.caption(
-        "Silence is never approval: an unanswered request expires into the same "
-        "no-purchase state as a decline, with the transaction state preserved."
+        "Nothing is ordered until you approve. If this is left unanswered it "
+        "expires rather than going ahead."
     )
 
 
-def _render_execution(ctx) -> None:
-    """Stages 6, 7 and 8 for a run that got past the gate."""
+def _outcome_trail(ctx) -> None:
+    """What happened after approval: the lock, the payment, the receipt."""
     confirmation = st.session_state["confirmation"]
     payment = st.session_state["payment"]
     summary = st.session_state["summary"]
 
     if confirmation is None:
-        if ctx.status is TransactionStatus.DECLINED:
-            st.error("Declined by the requester. No purchase executed.")
-        elif ctx.status is TransactionStatus.EXPIRED:
-            st.error("The request expired without an answer. No purchase executed.")
         return
 
-    st.divider()
-    st.markdown("**Stage 6 · vendor confirmation**")
+    ui.rule()
+    ui.section("Order progress")
+
     if confirmation.confirmed:
-        st.success(confirmation.headline)
-        st.caption(f"Lock reference `{confirmation.lock_reference}`")
+        st.markdown(f"**Supplier confirmed** — {confirmation.headline}")
+        st.caption(f"Held under {confirmation.lock_reference}")
     else:
-        st.warning(confirmation.headline)
-        if confirmation.escalation:
-            _render_escalation(confirmation.escalation, ctx)
-        return
+        st.markdown(f"**Supplier could not confirm** — {confirmation.headline}")
+        if confirmation.escalation is not None:
+            _escalation_options(confirmation.escalation)
 
-    if payment is None:
-        return
+    if payment is not None:
+        st.markdown("")
+        if payment.paid:
+            st.markdown(f"**Payment taken** — ₹{payment.amount_inr:,.0f}")
+        else:
+            st.markdown(f"**Payment failed** — {payment.headline}")
 
-    st.markdown("**Stage 7 · payment**")
-    st.dataframe(
-        [
-            {
-                "Attempt": attempt.attempt,
-                "Product": attempt.product_label,
-                "Amount": f"Rs {attempt.amount_inr:,.0f}",
-                "Reference": attempt.payment_reference,
-                "Outcome": attempt.outcome.value.upper(),
-                "Reason": attempt.reason or "-",
-            }
-            for attempt in payment.attempts
-        ],
-        hide_index=True,
-        width="stretch",
-    )
-    if payment.paid:
-        st.success(payment.headline)
-        st.caption(
-            "A retry is a retry, not a new decision: same lock, same amount, same "
-            "product. Two declines and the option is treated as unbuyable."
-        )
-    else:
-        st.warning(payment.headline)
-        if payment.escalation:
-            _render_escalation(payment.escalation, ctx)
-        return
+        # Retries are worth showing: a first decline followed by a success is the
+        # system recovering, and hiding it would make the log look nicer than the
+        # run actually was.
+        if payment.declines:
+            for attempt in payment.attempts:
+                st.caption(f"Attempt {attempt.attempt}: {attempt.outcome.value} — {attempt.reason}")
+        if payment.escalation is not None:
+            _escalation_options(payment.escalation)
 
     if summary is not None:
-        st.divider()
-        st.markdown("**Stage 8 · closed**")
-        st.success(summary.headline)
-        columns = st.columns(3)
-        columns[0].metric("Paid", f"Rs {summary.amount_inr:,.0f}")
-        columns[1].metric("Score", summary.score)
-        columns[2].metric("Human approval", "required" if summary.approved_by_human else "not needed")
+        st.markdown("")
+        ui.hero("Order placed",
+                f"{summary.product_label} — ₹{summary.amount_inr:,.0f}",
+                f"{summary.quantity:,} units · payment {summary.payment_reference}",
+                variant="done")
+
+
+def _escalation_options(outcome) -> None:
+    """Alternatives after a failure, each with the cost of choosing it."""
+    if not outcome.options:
+        return
+    st.caption("Alternatives:")
+    for option in outcome.options:
+        gap = f" · {option.score_gap:.1f} points behind" if option.score_gap else ""
+        st.markdown(f"- **{option.label}** — ₹{option.order_total_inr:,.0f}{gap}. {option.note}")
 
 
 # ---------------------------------------------------------------------------
-# Screen 4 — the audit trail
+# Screen 4 — Activity
 # ---------------------------------------------------------------------------
 
-def render_audit_tab() -> None:
-    """One record, exported twice: JSONL for systems, a rendered page for a human."""
-    st.subheader("4 · Audit trail")
+# What each event type is called on screen. The internal names are for the
+# JSONL export and for finance systems; a person reading the page gets English.
+_EVENT_WORDS = {
+    "DECISION": "Decided",
+    "ASSUMPTION": "Assumed",
+    "ESCALATION": "Asked you",
+    "FALLBACK": "Switched",
+    "ACTION": "Did",
+    "MARKET_SIGNAL": "Noticed",
+}
+
+
+def render_activity() -> None:
+    """Everything that happened to this order, in the order it happened."""
     ctx = st.session_state["ctx"]
     log = st.session_state["log"]
-    if ctx is None or log is None or not ctx.audit:
-        st.caption("Nothing logged yet. Send a brief on the first tab.")
+
+    if ctx is None or not ctx.audit:
+        st.caption("Nothing has happened yet.")
         return
 
-    st.caption(
-        "Written at the moment of each event, not assembled afterwards. One "
-        "transaction id replays the whole order in sequence."
-    )
+    ui.section(f"Order {ctx.transaction_id}")
+    st.caption(f"{len(ctx.audit)} events · notifying {', '.join(log.notify_list())}")
 
-    st.dataframe(
-        [
-            {
-                "Entry": entry.entry_id,
-                "Time": entry.timestamp.strftime("%H:%M:%S"),
-                "Stage": entry.stage,
-                "What": entry.event_type.value,
-                "Who": entry.actor.value,
-                "Why": entry.reasoning,
-                "Notify": ", ".join(entry.notify),
-            }
-            for entry in ctx.audit
-        ],
-        hide_index=True,
-        width="stretch",
-    )
+    for entry in log.entries():
+        word = _EVENT_WORDS.get(entry.event_type.value, entry.event_type.value)
+        st.markdown(f"**{word}** · {entry.timestamp.strftime('%H:%M:%S')} — {entry.reasoning}")
 
-    st.markdown(f"**Finance is notified:** {', '.join(log.notify_list())}")
+    ui.rule()
 
-    with st.expander("The one-page auditor view"):
-        st.code(log.finance_view(), language=None)
+    with ui.detail("The finance record"):
+        st.code(log.finance_view(), language="text")
 
-    left, right = st.columns(2)
-    left.download_button(
-        "Download JSONL (for systems)",
-        data=log.path.read_text(encoding="utf-8") if log.path.exists() else "",
-        file_name=log.path.name,
-        mime="application/x-ndjson",
-        width="stretch",
-    )
-    right.download_button(
-        "Download the auditor view (for humans)",
-        data=log.finance_view(),
-        file_name=f"{ctx.transaction_id}-audit.txt",
-        mime="text/plain",
-        width="stretch",
-    )
-
-    with st.expander("Replay it from disk instead of from memory"):
+    with ui.detail("Read it back from disk"):
         st.caption(
-            "This re-reads the .jsonl file rather than the objects in memory, which "
-            "is the proof that the trail survives the app being closed."
+            "Re-read from the exported file rather than from memory — the log on "
+            "disk is what a finance system would receive."
         )
         replayed = audit_module.replay(ctx.transaction_id)
-        st.write(f"{len(replayed)} entries read back from `{log.path.name}`.")
+        st.caption(f"{len(replayed)} entries read back from {log.jsonl_path().name}")
         for entry in replayed:
             st.markdown(f"- `{entry.entry_id}` **{entry.event_type.value}** — {entry.reasoning}")
+
+    st.download_button(
+        "Download audit trail",
+        data=log.jsonl_path().read_text(encoding="utf-8"),
+        file_name=log.jsonl_path().name,
+        mime="application/x-ndjson",
+    )
 
 
 # ---------------------------------------------------------------------------
 # Page
 # ---------------------------------------------------------------------------
 
-st.set_page_config(page_title="Autonomous Commerce Agent", page_icon="📦", layout="wide")
+st.set_page_config(page_title="Procurement", page_icon="📦", layout="wide")
+theme.inject()
 init_state()
 
-st.title("Autonomous Commerce Engineering Agent")
-st.caption(
-    "One sentence in, an audited purchase decision out — and the agent knows "
-    "exactly where its own authority ends. **Autonomy the user can audit.**"
-)
+st.markdown("# Procurement")
 
 render_sidebar()
 
-brief_tab, comparison_tab, decision_tab, audit_tab = st.tabs(
-    ["1 · Brief", "2 · Comparison", "3 · Decision", "4 · Audit trail"]
+request_tab, recommendation_tab, approval_tab, activity_tab = st.tabs(
+    ["Request", "Recommendation", "Approval", "Activity"]
 )
 
-with brief_tab:
-    render_brief_tab()
-with comparison_tab:
-    render_comparison_tab()
-with decision_tab:
-    render_decision_tab()
-with audit_tab:
-    render_audit_tab()
+with request_tab:
+    render_request()
+with recommendation_tab:
+    render_recommendation()
+with approval_tab:
+    render_approval()
+with activity_tab:
+    render_activity()
 
-# The chat box sits outside the tabs so it is reachable from any screen — a judge
-# who is looking at the audit trail can type the next brief without navigating back.
+# The chat box sits outside the tabs so it is reachable from any screen.
 if prompt := st.chat_input("Describe what you need to buy…"):
     handle_message(prompt)
     st.rerun()

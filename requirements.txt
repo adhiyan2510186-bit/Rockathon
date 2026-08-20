@@ -2,7 +2,7 @@
 #
 # Install with:   python -m pip install -r requirements.txt
 #
-# Five libraries. We can defend each one to a judge in a sentence, which is the
+# Seven libraries. We can defend each one to a judge in a sentence, which is the
 # point — no dependency is here "just in case".
 
 # The four screens (chat intake, comparison, approval, audit) are one Streamlit app.
@@ -26,3 +26,12 @@ google-genai>=1.0
 
 # Runs the golden ranker test that asserts 58.0 / 48.7 / 33.7.
 pytest>=8.0
+
+# The three charts: score composition, price history, stock burn-down. Plotly
+# rather than st.bar_chart because a hover tooltip, a direct label and a
+# reference line are the difference between a notebook and a product.
+plotly>=5.20
+
+# Streamlit's dataframe already depends on it; we name it because we build the
+# comparison table with it directly rather than by accident.
+pandas>=2.0
