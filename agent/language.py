@@ -308,12 +308,19 @@ def _normalise_category(stated: str, raw_text: str) -> str:
     Done in Python, not by the model, because this string chooses which default
     weights and which default price cap apply. That is a decision with numbers
     attached, so it does not belong on the model's side of the line.
+
+    When nothing matches, we keep the USER'S OWN WORDS rather than replacing them
+    with the string "default". Both config lookups already fall back on their own
+    (`table.get(category, table["default"])`), so nothing needed the placeholder —
+    and writing it into the Brief threw away the one fact the refusal has to state.
+    An agent that answers an office-chairs brief with "no vendor stocks default"
+    has lost the question, which is worse than being unable to answer it.
     """
     haystack = f"{stated} {raw_text}".lower()
     for category, keywords in _CATEGORY_KEYWORDS.items():
         if any(word in haystack for word in keywords):
             return category
-    return "default"
+    return stated.strip().lower() or "unspecified"
 
 
 # ---------------------------------------------------------------------------

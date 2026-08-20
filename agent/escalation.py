@@ -242,6 +242,15 @@ def _no_eligible_match(context: TransactionContext, audit: AuditLogger) -> Escal
     brief = context.brief
     assert brief is not None  # handle() already checked; this keeps type checkers quiet
 
+    # "Nothing qualified" and "nothing was even looked at" are two different facts,
+    # and only one of them is about the products. Telling a furniture buyer that the
+    # gaps were on category, quantity or specification implies we weighed products
+    # and turned them down; we searched a catalog that has never contained a chair.
+    # A refusal that overstates what the agent did is exactly the kind of thing the
+    # audit trail exists to prevent, so this case gets its own branch.
+    if not context.filter_results:
+        return _no_vendor_coverage(context, audit)
+
     near_misses = _near_misses(brief, context.rejected)
     options = [
         SurfacedOption(
@@ -294,6 +303,65 @@ def _no_eligible_match(context: TransactionContext, audit: AuditLogger) -> Escal
         headline=headline,
         options=options,
         proposed_relaxations=relaxations,
+        detail=detail,
+    )
+
+
+def _no_vendor_coverage(context: TransactionContext, audit: AuditLogger) -> EscalationOutcome:
+    """No source stocks this category at all. Say that, and say what we do stock.
+
+    This is the honest version of our narrowest limit. The brief was understood
+    perfectly — quantity, cap, deadline and priorities all parsed — and then the
+    search found nothing to check, because our two catalogs cover packaging and
+    nothing else. CLAUDE.md, "Known limits": mock catalogs, one product line. We
+    name it rather than dressing it up as a filtering result.
+
+    Nothing is surfaced and nothing is proposed, deliberately. There are no
+    near-misses to show when there were no products, and no relaxation would help:
+    moving the price cap does not make a vendor start selling chairs. Category is
+    non-negotiable, so this is a wall rather than a limit to be argued with.
+    """
+    brief = context.brief
+    assert brief is not None
+
+    stocked = discovery.available_categories()
+    stocked_text = ", ".join(stocked) if stocked else "nothing"
+
+    headline = (
+        f"I understood the brief - {brief.quantity:,} units of {brief.category}, up to Rs "
+        f"{brief.max_price_per_unit_inr:,.2f} a unit, within {brief.max_delivery_days} days - "
+        f"but no vendor source stocks {brief.category}. My catalogs cover {stocked_text}. "
+        f"Nothing was searched and nothing was bought."
+    )
+
+    detail = {
+        "requested_category": brief.category,
+        "categories_stocked_by_our_sources": stocked,
+        "products_considered": 0,
+        "products_eligible": 0,
+        "why_nothing_surfaced": (
+            "no products exist in this category to compare, so there are no near-misses"
+        ),
+        "why_no_relaxation_proposed": (
+            "category is a non-negotiable constraint; moving the price cap or the "
+            "delivery window would not make a source stock it"
+        ),
+        "action_taken": "no purchase executed",
+    }
+
+    audit.escalation(
+        STAGE_DISCOVERY,
+        f"The brief parsed cleanly but no vendor source stocks '{brief.category}' - our "
+        f"catalogs cover {stocked_text}. Nothing was searched and no purchase was executed.",
+        detail,
+    )
+    context.status = TransactionStatus.AWAITING_APPROVAL
+
+    return EscalationOutcome(
+        resolved=False,
+        trigger=Trigger.NO_ELIGIBLE_MATCH,
+        stage=STAGE_DISCOVERY,
+        headline=headline,
         detail=detail,
     )
 

@@ -179,6 +179,23 @@ def discover(category: str) -> list[Product]:
     return [product for product in everything if product.category == category]
 
 
+def available_categories() -> list[str]:
+    """What our sources actually stock, read from the catalogs themselves.
+
+    Deliberately derived from the data rather than listed in config.yaml. The two
+    are not the same question and they currently disagree: config.yaml knows
+    default weights and a price cap for `labels`, but no vendor stocks a single
+    labels product. Reading the answer from the catalogs means the agent tells a
+    user what it can really buy, not what it has opinions about.
+
+    Used when a brief parses perfectly and then finds nothing at all — see
+    escalation._no_eligible_match. CLAUDE.md's known limits say the narrowness is
+    in the data, and this is the function that lets the agent say so out loud.
+    """
+    everything = load_packhub() + load_boxbazaar()
+    return sorted({product.category for product in everything})
+
+
 # ---------------------------------------------------------------------------
 # The hard-constraint gate
 # ---------------------------------------------------------------------------

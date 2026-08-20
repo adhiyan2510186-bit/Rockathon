@@ -568,7 +568,7 @@ degradation we are accepting.
 ### The real narrowness is the DATA, not the language
 
 An "office chairs" brief parsed perfectly - 300 units, Rs 8000 cap, 21 days,
-warranty matters - and would then find zero vendors, because our catalogs are
+warranty matters - and then finds zero vendors, because our catalogs are
 packaging only. The bottleneck is not phrasing:
 
 1. Mock catalogs contain packaging only.
@@ -579,11 +579,62 @@ packaging only. The bottleneck is not phrasing:
 4. One brief = one product line. "500 boxes and 2000 labels" is not supported
    (that is the "designed, not demoed" line in CLAUDE.md).
 
+### The agent now says this out loud (fixed 2026-08-20)
+
+The narrowness was always going to be visible the moment a judge typed something
+off-catalog. What was wrong was the SENTENCE they got. Stage 3's escalation used
+to answer an empty search with:
+
+> "No product met every requirement, and none of the misses were on a negotiable
+> limit - the gaps are on category, quantity or specification."
+
+That implies the agent weighed products and turned them down. It searched a
+catalog that has never contained a chair. **A refusal that overstates what the
+agent did is exactly what the audit trail exists to prevent**, so "nothing
+qualified" and "nothing was even looked at" now get separate answers:
+
+| Case | products considered | What the user reads |
+|---|---|---|
+| no vendor stocks the category | 0 | "I understood the brief - 300 units of furniture, up to Rs 8,000.00 a unit, within 21 days - but no vendor source stocks furniture. My catalogs cover packaging. Nothing was searched and nothing was bought." |
+| products exist, none passed | 7 | "No product met every requirement. 3 came close - each would need one negotiable limit moved, which only you can authorise." |
+
+**One handler, one extra branch — not a second code path.** It is still
+`_no_eligible_match`, still trigger 1, still `NO_ELIGIBLE_MATCH` in the log. The
+branch reports a different FACT; it does not draw the boundary a second time.
+
+**Nothing is surfaced and no relaxation is proposed**, deliberately. There are no
+near-misses when there were no products, and moving a price cap does not make a
+vendor start selling chairs. Category is non-negotiable, so this is a wall, not a
+limit to argue with — and the audit entry says so in those words.
+
+**`discovery.available_categories()` reads the answer from the catalogs**, not
+from config.yaml. The two disagree on purpose: config knows default weights and a
+Rs 3 cap for `labels`, but no vendor stocks a single labels product. Asking the
+catalogs means the agent tells a user what it can really buy rather than what it
+has opinions about. Today that answer is `['packaging']`.
+
+**A second bug fell out of testing the first.** `_normalise_category()` mapped any
+unrecognised category onto the literal string `"default"` — so the new sentence
+first read *"no vendor source stocks default"*, which loses the question
+entirely. The placeholder was never needed: both config lookups already fall back
+on their own (`table.get(category, table["default"])`). The Brief now keeps the
+user's own words, and an unrecognised category still gets the generic Rs 50 cap
+and four equal weights, because that fallback lives in config.py where it always
+did. Verified live: the brief comes back as `ergonomic office chairs`.
+
+This turns the weakest moment into the best one: **the language step handled a
+category it had never seen, and the agent named its own data limit.** Verified
+through the real app on the live Gemini parser - the brief comes back as
+`ergonomic office chairs`, 300 units, Rs 8,000, 21 days; it lands in
+`awaiting_approval`, shows the coverage sentence, and correctly offers NO
+approve/decline buttons, because there is nothing to approve.
+
 ### The sentence to say out loud
 
 > "Wording - we handle a lot of it, because that is the one job the LLM does.
 > Scope - we are deliberately narrow: one product line, packaging category, mock
-> catalogs. The narrowness is in the data, not the language."
+> catalogs. The narrowness is in the data, not the language - and the agent
+> says which one it is instead of pretending it searched."
 
 ### Looked like a bug, is not
 
