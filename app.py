@@ -53,7 +53,7 @@ from agent import (
     vendor,
     weights as weights_module,
 )
-from agent.models import TransactionContext, TransactionStatus
+from agent.models import SOFT_CRITERIA, TransactionContext, TransactionStatus
 
 DEMO_BRIEF = (
     "5,000 kraft mailer boxes, double-wall, 200x150x80 mm, max Rs 22 per unit, "
@@ -367,9 +367,47 @@ def render_brief_tab() -> None:
                 "Provenance": status.value.upper() if status else "-",
             }
         )
-    st.dataframe(rows, hide_index=True, width="stretch")
 
-    if any(row["Provenance"] == "ASSUMED" for row in rows):
+    # Whether to show the ASSUMED note is decided on the HARD rows alone. The
+    # soft rows below nearly always carry a category default, so counting them
+    # would make the note permanent furniture and it would stop meaning what it
+    # is there to mean: the brief was silent about a gate, so we filled it in.
+    hard_rows_assumed = any(row["Provenance"] == "ASSUMED" for row in rows)
+
+    # The SOFT criteria go in the SAME table, so the difference between the two
+    # classes is something a judge can see rather than something we have to say.
+    # A hard field is a pass/fail gate at stage 3 — fail it and the product is
+    # never scored. A soft criterion cannot reject anything; it only decides how
+    # much we prefer one survivor over another at stage 4.
+    #
+    # price and delivery appear in both halves on purpose. That is the reuse
+    # CLAUDE.md describes, not double counting: "does it qualify?" and "how far
+    # under the cap did it land?" are two different questions about one number.
+    if ctx.weights:
+        for criterion in SOFT_CRITERIA:
+            weight = ctx.weights.values.get(criterion, 0.0)
+            source = ctx.weights.sources.get(criterion, "")
+            rows.append(
+                {
+                    "Field": criterion,
+                    "Value": f"weight {weight:.2f}",
+                    "Class": brief.classification(criterion).value.upper(),
+                    # Same two meanings the hard rows use: a weight the user's own
+                    # words produced is CONFIRMED, one taken from the category
+                    # defaults in config.yaml is ASSUMED.
+                    "Provenance": "CONFIRMED" if source.startswith("user-stated") else "ASSUMED",
+                }
+            )
+
+    st.dataframe(rows, hide_index=True, width="stretch")
+    st.caption(
+        "HARD fields control eligibility at stage 3 — fail one and the product is "
+        "never scored. SOFT criteria reject nothing; they only rank what survived. "
+        "Neither class is chosen by the language model: both come from a fixed "
+        "table in models.py."
+    )
+
+    if hard_rows_assumed:
         st.info(
             "An **ASSUMED** field means the brief was silent and a declared default "
             "from config.yaml was applied. It is written to the audit log as an "
