@@ -245,6 +245,73 @@ SECTION 3 - RANKING: WHERE THE JUDGEMENT LIVES
                  so we show them to you instead. The difference between those two
                  is the entire project."
 
+3.1d WE ASK WHAT THESE ARE FOR - AND ONLY WHEN WE HAVE NO ANSWER
+     ** the interactive moment - this is the one to demo live **
+    The setup:  "25 wireless noise-cancelling headsets, over-ear, under Rs 4,000,
+                within 12 days." Complete brief. Every hard constraint stated.
+                The scope gate has nothing to ask for. And it still does not say
+                whether a dead headset costs a sales call or an afternoon of
+                background music - which is the thing that decides the answer.
+    The trap:   Two opposite failures, and most builds pick one. Either you
+                never ask and quietly rank on your own house opinion, or you ask
+                about everything and the agent becomes a form.
+    Naive:      A wizard. Four questions before anything happens.
+    We do:      ONE question, at stage 2, under two conditions that both have to
+                hold: the category declares usage contexts in config.yaml, AND
+                the user stated no priority in their own words. Three radio
+                options, each with a line saying why it changes the answer.
+    Why it is  The tag maps to a weight set in config.yaml. Python looks it up,
+    still ours: exactly the way it looks up matters_a_lot -> 0.45. The LLM never
+                sees a context, a weight, or this question.
+    THE LINE:   "It asked because it did not know, not because it wanted to look
+                 attentive. Watch: I pick 'kitting out new joiners' and the
+                 runner-up changes - the boAt overtakes the AudioPro because it
+                 arrives in three days instead of eight, and a new starter has a
+                 start date. Same catalog, same sixty lines, different answer."
+
+3.1e THE USER'S OWN WORDS ALWAYS BEAT OUR MENU
+    The trap:   Now that we have a nice context dropdown, it is tempting to show
+                it on every brief. More signal, better weights.
+    Naive:      Always ask. The dropdown quietly overrides "reliability matters
+                a lot" with whichever tag the user clicked.
+    We do:      `context_needed()` returns None the moment a priority was stated.
+                The menu exists for silence, not for disagreement.
+    Why:        A buyer who typed what mattered has already answered. Replacing
+                their sentence with our taxonomy is the same failure as letting
+                the model decide - it is just wearing a nicer widget.
+    THE LINE:   "If she told us what mattered, we never ask. Her words are a
+                 better answer than our three buttons, and there is a test that
+                 fails if the menu ever appears in front of a stated priority."
+
+3.1f "NOT SURE" IS AN ANSWER, AND IT IS LOGGED AS AN ASSUMPTION
+    The trap:   The question is now blocking. Nothing ranks until it is answered.
+    Naive:      Force a choice. The agent sulks until you classify your own
+                purchase, which is worse than having a default.
+    We do:      A "Not sure - use your default" button. It applies the
+                documented category weights and writes an ASSUMPTION to the
+                audit log naming the question we asked and the options offered.
+    Why:        Silence is never quietly converted into a preference. Same rule
+                as every other unstated field: a declared default, logged as
+                ASSUMED, never as CONFIRMED.
+    THE LINE:   "Declining is a first-class answer. The log then says we asked,
+                 she did not choose, and these are the weights we applied
+                 instead. That is a different sentence from 'the buyer wanted
+                 this', and the record has to be able to tell them apart."
+
+3.1g WE STOP BEFORE RANKING, NOT AFTER
+    The trap:   It is easier to rank with defaults, show the result, and offer a
+                "refine" control underneath. Nothing blocks, nothing feels slow.
+    Naive:      Rank first, re-rank on request.
+    We do:      Stop at stage 2. Nothing is scored until the question is settled.
+    Why:        This order is a correctness requirement, not a design taste. The
+                headsets order is Rs 97,250 against a Rs 1,05,000 limit - INSIDE
+                the agent's authority. Rank-then-ask means it would already have
+                been confirmed and paid by the time the question appeared, and
+                an agent cannot un-buy something because the buyer clarified
+                their preference afterwards.
+    THE LINE:   "We stop before we rank because this order is inside our spending
+                 limit. If we had ranked first, we would have bought it first."
+
 3.2  THE SQUARE ROOT
     The trap:   Score price by raw margin under the cap, and a deep discount
                 dominates everything the buyer actually said.

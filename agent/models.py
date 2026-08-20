@@ -182,6 +182,15 @@ class Brief(BaseModel):
         "{'reliability': 'matters_a_lot'}. Labels, never numbers: config.py turns "
         "'matters_a_lot' into 0.45. The model never sees 0.45.",
     )
+    context_tag: str | None = Field(
+        default=None,
+        description="Which usage context the user picked at stage 2, e.g. "
+        "'office_calls'. A TAG, never a weight set: config.py turns the tag into "
+        "four numbers, exactly as it turns 'matters_a_lot' into 0.45. None means "
+        "the category default weights applied. Only ever set by a human choosing "
+        "from the menu their own category declared — never inferred from the "
+        "brief, because guessing the context is the thing we built this to stop.",
+    )
 
     # --- Provenance and escalation inputs -------------------------------------
     field_status: dict[str, FieldStatus] = Field(

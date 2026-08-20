@@ -56,6 +56,31 @@ substitution_threshold_points: 5
 #                    the aggregator writes "DW", the user writes "double-wall",
 #                    the parser sometimes returns "double wall".
 #
+# OPTIONAL, and only for categories where the same product suits different jobs:
+#   context_question ONE question, asked at stage 2 and only when the user
+#                    stated no priority of their own. Their words always win —
+#                    a menu that could override "reliability matters a lot"
+#                    would be us replacing what they said with our taxonomy.
+#   contexts         tag -> {label, note, weights}. Each weight set is a
+#                    complete replacement for default_weights and obeys the same
+#                    rule: exactly the four soft criteria, summing to 1.0,
+#                    validated at startup by agent/config.py.
+#
+# A CONTEXT CHANGES WEIGHTS AND NOTHING ELSE. It cannot add a spec, move a price
+# cap, or touch the authorisation limit. Those decide who QUALIFIES; a context is
+# a statement about what the buyer prefers among the ones that already do. The
+# same split as everywhere else in this file: eligibility is not preference.
+#
+# Note also what a context CANNOT weight. "Mic quality" and "comfort" are specs,
+# not criteria — the four soft criteria are the universal commercial questions
+# and are deliberately not configurable (see the note below). So "these are for
+# all-day calls" moves reliability and the replacement window up and price down;
+# it does not invent a fifth scoring column.
+#
+# Packaging and laptops have no contexts on purpose. A box is a box, and a laptop
+# brief already carries its own spec list. Contexts are opt-in data, not a
+# feature every category has to grow.
+#
 # The four SOFT criteria (reliability, price, replacement, delivery) are the
 # same in every category and are deliberately NOT configurable. They are the
 # universal commercial questions — a replacement window IS a warranty on a chair
@@ -107,6 +132,20 @@ categories:
     spec_words: [mesh back, adjustable height, fixed height, lumbar support,
                  fabric, leather, wheeled, stackable]
     spec_synonyms: {}
+    context_question: Who will be sitting in these day to day?
+    contexts:
+      all_day_desk:
+        label: Assigned desks, used all day
+        note: One named person, eight hours a day, for years.
+        weights: {reliability: 0.35, price: 0.20, replacement: 0.30, delivery: 0.15}
+      meeting_rooms:
+        label: Meeting and breakout rooms
+        note: Occasional use by whoever is in the room.
+        weights: {reliability: 0.25, price: 0.35, replacement: 0.20, delivery: 0.20}
+      new_office:
+        label: Fitting out a new office
+        note: There is a date the floor has to be usable.
+        weights: {reliability: 0.25, price: 0.25, replacement: 0.15, delivery: 0.35}
 
   laptops:
     unit_noun: laptops
@@ -144,6 +183,23 @@ categories:
     # "ANC" is this category's "DW": the marketplace spec sheet writes the trade
     # shorthand and the buyer writes the words. One product, one spelling.
     spec_synonyms: {anc: noisecancelling}
+    # The clearest case for asking. "40 headsets" is a complete, buyable brief
+    # and it still does not say whether a dead one costs a sales call or an
+    # afternoon of background music. Those are different purchases.
+    context_question: What will these mainly be used for?
+    contexts:
+      office_calls:
+        label: All-day calls at a desk
+        note: A headset that dies is a person off the phone.
+        weights: {reliability: 0.40, price: 0.15, replacement: 0.30, delivery: 0.15}
+      new_starters:
+        label: Kitting out new joiners
+        note: They start on a date, so late is a real cost.
+        weights: {reliability: 0.30, price: 0.20, replacement: 0.15, delivery: 0.35}
+      shared_pool:
+        label: Shared pool, handed around
+        note: They get lost and broken; we expect to rebuy.
+        weights: {reliability: 0.20, price: 0.40, replacement: 0.30, delivery: 0.10}
 
   # Fallback for any category without a block of its own. Even weights, because
   # with nothing known about the purchase we have no honest reason to prefer one

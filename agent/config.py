@@ -205,6 +205,10 @@ def _validate_categories(categories: dict[str, Any]) -> None:
                 f"Weights are proportions of one decision; they must total exactly 1."
             )
 
+        _validate_contexts(name, block)
+
+    _validate_context_pairing(categories)
+
     # A keyword may belong to exactly one category. _normalise_category takes the
     # FIRST match, so a word listed under two categories would route a brief by
     # dictionary order — invisible on screen, and wrong in a way nobody would
@@ -221,6 +225,98 @@ def _validate_categories(categories: dict[str, Any]) -> None:
                     f"weights apply, so it must belong to exactly one."
                 )
             seen[word] = name
+
+
+def _validate_contexts(name: str, block: dict[str, Any]) -> None:
+    """Check one category's usage contexts, if it declares any.
+
+    Contexts are optional, so a category without them is not an error — but a
+    MALFORMED one has to be. This block is meant to be edited by whoever knows
+    the buying, not whoever knows Python, and the failure it invites is a weight
+    set that sums to 0.9. That would silently shrink every score in the category
+    and look like nothing had happened.
+
+    So the rule is the same one default_weights obeys, applied to every context:
+    exactly the four soft criteria, summing to exactly 1.0. A context is a
+    COMPLETE replacement for the defaults, not an adjustment to them, which is
+    why it is held to the identical standard.
+    """
+    contexts = block.get("contexts")
+    question = block.get("context_question")
+
+    if contexts is None and not question:
+        return  # declares no contexts, which is the normal case
+
+    if not question:
+        raise ConfigError(
+            f"categories['{name}'] defines contexts but no 'context_question'. "
+            f"The whole point is that we ask before assuming a preference; a menu "
+            f"with no question is a menu nobody can answer."
+        )
+    if not isinstance(contexts, dict) or not contexts:
+        raise ConfigError(
+            f"categories['{name}'] has a 'context_question' but no contexts to "
+            f"choose from, so the question would be a dead end."
+        )
+    if len(contexts) < 2:
+        raise ConfigError(
+            f"categories['{name}'] offers {len(contexts)} usage context. Asking a "
+            f"question with one answer is a form field, not a choice — either add "
+            f"a second context or drop the question and use default_weights."
+        )
+
+    for tag, context in contexts.items():
+        if not isinstance(context, dict):
+            raise ConfigError(f"categories['{name}']['contexts']['{tag}'] must be a mapping")
+
+        for key in ("label", "weights"):
+            if key not in context:
+                raise ConfigError(
+                    f"categories['{name}']['contexts']['{tag}'] is missing '{key}'"
+                )
+
+        weights = context["weights"]
+        expected = set(block["default_weights"])
+        if set(weights) != expected:
+            missing = ", ".join(sorted(expected - set(weights))) or "none"
+            extra = ", ".join(sorted(set(weights) - expected)) or "none"
+            raise ConfigError(
+                f"categories['{name}']['contexts']['{tag}']['weights'] must name "
+                f"exactly the same criteria as default_weights. Missing: {missing}. "
+                f"Unexpected: {extra}. A context changes how much each criterion "
+                f"counts; it cannot invent a new one to count."
+            )
+
+        total = sum(weights.values())
+        if abs(total - 1.0) > _WEIGHT_SUM_TOLERANCE:
+            raise ConfigError(
+                f"categories['{name}']['contexts']['{tag}']['weights'] sums to "
+                f"{total}, not 1.0. A context replaces the defaults outright, so it "
+                f"is held to the same rule they are."
+            )
+
+
+def _validate_context_pairing(categories: dict[str, Any]) -> None:
+    """A context tag may not mean two different things in two categories.
+
+    Not a correctness requirement — nothing looks a tag up without its category —
+    but a readability one. An audit line saying `context: new_starters` should
+    mean one thing to whoever reads it six months from now, and a tag that means
+    "kitting out new joiners" under headphones and something else under furniture
+    would make the log ambiguous exactly where it is meant to be evidence.
+    """
+    seen: dict[str, tuple[str, str]] = {}
+    for name, block in categories.items():
+        for tag, context in (block.get("contexts") or {}).items():
+            label = str(context.get("label", ""))
+            if tag in seen and seen[tag][1] != label:
+                raise ConfigError(
+                    f"context tag '{tag}' means '{seen[tag][1]}' under "
+                    f"'{seen[tag][0]}' and '{label}' under '{name}'. One tag ends "
+                    f"up in the audit log with no category next to it; give them "
+                    f"different names."
+                )
+            seen[tag] = (name, label)
 
 
 # ---------------------------------------------------------------------------
@@ -380,6 +476,62 @@ def category_default_weights(category: str) -> dict[str, float]:
     and change the behaviour of every later stage in the same run.
     """
     return dict(_category(category)["default_weights"])
+
+
+# ---------------------------------------------------------------------------
+# Stage 2 — usage contexts
+# ---------------------------------------------------------------------------
+# A category may declare that the same product suits several different jobs, and
+# that the job changes what the buyer prefers. "40 headsets" is a complete,
+# buyable brief that still does not say whether a dead one costs a sales call or
+# an afternoon of background music.
+#
+# Everything below reads that block and nothing more. A context supplies a
+# COMPLETE replacement weight set — never a nudge, never a multiplier — for the
+# same reason the phrase weights are looked up rather than computed: a number a
+# judge can point at beats a number we derived on the way past.
+
+def category_context_question(category: str) -> str:
+    """The ONE question this category asks when the user stated no priority.
+
+    Empty string means this category never asks. Packaging and laptops do not:
+    a box is a box, and a laptop brief already carries its own spec list.
+    """
+    return str(_category(category).get("context_question", ""))
+
+
+def category_contexts(category: str) -> dict[str, dict[str, Any]]:
+    """tag -> {label, note, weights} for every usage context this category offers.
+
+    An empty dict for a category that declares none, so callers can ask without
+    knowing which categories have opinions about usage.
+    """
+    return dict(_category(category).get("contexts") or {})
+
+
+def context_weights(category: str, tag: str) -> dict[str, float] | None:
+    """The weight set for one context tag, or None if we do not recognise it.
+
+    None rather than a raise, and rather than a silent fallback that pretends
+    nothing happened. An unknown tag means something upstream is out of step with
+    config.yaml — a stale UI, a hand-edited audit replay — and the caller's job is
+    to fall back to the documented category default AND log that it did. Raising
+    would kill a demo over a preference; guessing quietly would hide it.
+    """
+    context = category_contexts(category).get(tag)
+    if not context:
+        return None
+    return dict(context["weights"])
+
+
+def context_label(category: str, tag: str) -> str:
+    """'All-day calls at a desk' — what the user actually clicked on.
+
+    Falls back to the raw tag so an audit entry written against an older config
+    still reads as something rather than as an empty string.
+    """
+    context = category_contexts(category).get(tag)
+    return str(context["label"]) if context else tag
 
 
 def priority_phrase_weight(phrase: str) -> float | None:

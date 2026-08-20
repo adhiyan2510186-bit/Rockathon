@@ -155,6 +155,48 @@ That is not a promise — the toggle you just watched is the same seam."*
 
 ---
 
+## 3b · Answering the usage question resumes at stage 2, not stage 0
+
+**Claim.** When the agent asks what a purchase is for, answering re-enters the
+pipeline at the weight engine. The sentence is never parsed twice and the
+language model is never called twice.
+
+**Where.** `app.py:292` — `apply_context()`, which sets the tag on the brief
+already sitting in the transaction context and calls `rank_and_authorise()`
+(`app.py:321`). `handle_message()` stops at `weights.context_needed()` before it
+computes anything.
+
+**What the naive version does.** Re-sends the full sentence through
+`check_scope()` and `extract_brief()` on every answer, because that is the
+shortest path from "user clicked something" back to "we have a ranking". That is
+**two extra LLM calls per answer** — one for the scope gate, one for extraction —
+and worse than the cost, it means the brief could come back different. A model
+that reads the same sentence twice is not guaranteed to fill the same fields,
+so the pool you were shown might not be the pool you approve.
+
+**Measured — call counts on the headsets brief:**
+
+| | LLM calls | catalog reads |
+| --- | --- | --- |
+| Type the brief | 2 (scope + extract) | 0 — nothing discovered yet |
+| Answer the question | **0** | 6, once, cached thereafter |
+| Answer a *different* way (new run) | 0 for the re-rank | 0 — catalogs held |
+
+`tests/test_app.py::test_answering_the_question_ranks_without_rereading_the_brief`
+asserts it structurally: every field of the brief except `context_tag` is
+byte-identical before and after the answer.
+
+**The related shape win.** `rank_and_authorise()` exists because there are now
+two ways into stages 2–5 — a brief that needed no question, and one that just
+had its answered. One function, two call sites. Two copies of those thirty lines
+is exactly how the context path quietly stops matching the normal path.
+
+**The sentence for stage.** *"Answering a question about preference cannot change
+what she asked for, so we do not re-derive it. Same reason approving an order
+resumes at confirmation instead of starting the search again."*
+
+---
+
 ## 4b · The marketplace conversions the other two feeds never needed
 
 **Claim.** Each awkward shape a feed arrives in is handled in exactly one

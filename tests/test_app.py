@@ -168,6 +168,101 @@ def test_an_order_far_over_the_limit_stops_and_offers_nothing_it_cannot_afford()
     )
 
 
+def _answer_context(app: AppTest, label: str | None) -> AppTest:
+    """Answer the one usage question the headsets brief triggers.
+
+    `label=None` takes the "not sure" path. Anything else selects that radio
+    option first, because Continue is disabled until something is chosen.
+    """
+    if label is None:
+        return _click(app, "context_skip")
+    app.radio(key="context_choice").set_value(label).run()
+    return _click(app, "context_apply")
+
+
+def test_a_brief_that_does_not_say_what_matters_gets_one_question_back():
+    """The headsets shortcut is complete and still worth asking about.
+
+    Quantity, spec, cap and deadline are all stated - the scope gate has nothing
+    to ask for. What is missing is not a fact, it is a preference, and guessing
+    at it would silently pick a winner on our opinion rather than the buyer's.
+
+    Nothing is ranked while the question is open. That ordering is the point: if
+    we scored first and offered to re-score afterwards, this order (Rs 97,250,
+    inside the limit) would already have been PAID by the time the question
+    appeared, and an agent cannot un-buy something.
+    """
+    app = _click(_fresh(), "start_recent_headsets")
+    assert not app.exception
+
+    state = app.session_state
+    request = state["pending_context"]
+
+    assert request is not None
+    assert request.question == "What will these mainly be used for?"
+    assert state["ctx"].brief is not None, "the brief is parsed and kept"
+    assert not state["ctx"].ranked, "nothing is scored on a guessed preference"
+    assert state["auth"] is None, "and nothing is bought"
+
+
+def test_answering_the_question_ranks_without_rereading_the_brief():
+    """Answering resumes at stage 2. The sentence is never parsed twice.
+
+    Same claim as "approval resumes at stage 6": a preference cannot change what
+    was asked for, so re-deriving the brief would be work with a known answer.
+    """
+    app = _click(_fresh(), "start_recent_headsets")
+    brief_before = app.session_state["ctx"].brief
+
+    app = _answer_context(app, "Shared pool, handed around")
+    assert not app.exception
+
+    state = app.session_state
+    assert state["pending_context"] is None
+    assert state["ctx"].brief.context_tag == "shared_pool"
+    assert state["ctx"].ranked
+
+    # Everything except the tag came through untouched - not re-parsed into an
+    # equal-looking copy, but the same values the first pass produced.
+    assert state["ctx"].brief.model_dump(exclude={"context_tag"}) == (
+        brief_before.model_dump(exclude={"context_tag"})
+    )
+
+
+def test_two_different_answers_give_two_different_rankings():
+    """The widget has to change the answer, or it is theatre.
+
+    Under "all-day calls" the AudioPro is runner-up on its 21-day replacement
+    window. Under "kitting out new joiners" the boAt overtakes it, because it
+    arrives in three days and a new starter has a start date.
+    """
+    calls = _answer_context(_click(_fresh(), "start_recent_headsets"),
+                            "All-day calls at a desk")
+    starters = _answer_context(_click(_fresh(), "start_recent_headsets"),
+                               "Kitting out new joiners")
+
+    assert not calls.exception and not starters.exception
+
+    order = lambda app: [s.product.product_id for s in app.session_state["ctx"].ranked]
+    assert order(calls)[:3] == ["AMZ-HPH-1302", "OS-AUDIOPRO-OE", "AMZ-HPH-1301"]
+    assert order(starters)[:3] == ["AMZ-HPH-1302", "AMZ-HPH-1301", "OS-AUDIOPRO-OE"]
+
+
+def test_declining_the_question_still_produces_a_decision():
+    """"Not sure" is an answer, not a dead end.
+
+    An agent that will not move until you classify your own purchase is worse
+    than one with a documented default it admits to using.
+    """
+    app = _answer_context(_click(_fresh(), "start_recent_headsets"), None)
+    assert not app.exception
+
+    state = app.session_state
+    assert state["ctx"].brief.context_tag is None
+    assert state["ctx"].ranked
+    assert state["auth"] is not None
+
+
 def test_the_cheap_badly_reviewed_option_is_shown_and_is_not_recommended():
     """The headsets brief, and the case the other three shortcuts never reach.
 
@@ -178,9 +273,13 @@ def test_the_cheap_badly_reviewed_option_is_shown_and_is_not_recommended():
     right cup died in a fortnight - and it comes last, on screen, with its price
     advantage intact and visible.
 
+    Asserted under "shared pool", the context that most favours it: price
+    weighted 0.40, reliability dropped to 0.20, and it still loses.
+
     We do not hide it and we do not let it win. That is the whole argument.
     """
-    app = _click(_fresh(), "start_recent_headsets")
+    app = _answer_context(_click(_fresh(), "start_recent_headsets"),
+                          "Shared pool, handed around")
     assert not app.exception
 
     state = app.session_state

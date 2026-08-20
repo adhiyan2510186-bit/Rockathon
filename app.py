@@ -86,10 +86,10 @@ DEMO_BRIEF = (
 # purchase is a script, and because these four land in different places: the
 # chairs and the headsets are inside the agent's spending authority and the
 # laptops are far outside it, so the same engine visibly decides alone and
-# visibly stops. The headsets add the case none of the others cover — the cheap,
+# visibly stops. The headsets add two cases none of the others cover — the cheap,
 # badly reviewed option that passes every hard gate and loses on the ranking
-# anyway, which is where "reliability never rejects, it only orders" stops being
-# a sentence in a docstring and becomes something on screen.
+# anyway, and the brief that is complete but does not say what matters, so the
+# agent asks one question back before it ranks anything.
 # (button key, one-line gist, the sentence the button actually sends). The key is
 # part of the entry rather than the loop index because the tests select on keys -
 # a fourth shortcut inserted at the top must not silently repoint them.
@@ -114,8 +114,11 @@ RECENT_REQUESTS: tuple[tuple[str, str, str], ...] = (
     (
         "start_recent_headsets",
         "25 noise-cancelling headsets  ·  max Rs 4,000 each  ·  within 12 days",
+        # Deliberately says nothing about what matters. It is a complete,
+        # buyable brief that still leaves the most important question open, and
+        # it is the one shortcut that makes the agent ask something back.
         "25 wireless noise-cancelling headsets, over-ear, max Rs 4,000 each, "
-        "delivered within 12 days. Reliability matters a lot.",
+        "delivered within 12 days.",
     ),
 )
 
@@ -162,6 +165,7 @@ def init_state() -> None:
         "brief_note": "",
         "scope_note": "",
         "pending_brief": "",
+        "pending_context": None,    # ContextRequest - the one stage-2 question
         "market": None,             # MarketRead - stage 4.5, advisory only
         "auth": None,
         "stage3_escalation": None,
@@ -184,7 +188,7 @@ def reset() -> None:
     st.session_state["scope_note"] = ""
     st.session_state["pending_brief"] = ""
     for key in ("ctx", "log", "market", "auth", "stage3_escalation",
-                "confirmation", "payment", "summary"):
+                "confirmation", "payment", "summary", "pending_context"):
         st.session_state[key] = None
 
 
@@ -241,7 +245,8 @@ def handle_message(text: str) -> None:
         st.session_state["ctx"] = transaction
         st.session_state["log"] = audit_module.AuditLogger(transaction)
         st.session_state["pending_brief"] = ""
-        for key in ("market", "auth", "stage3_escalation", "confirmation", "payment", "summary"):
+        for key in ("market", "auth", "stage3_escalation", "confirmation",
+                    "payment", "summary", "pending_context"):
             st.session_state[key] = None
 
     ctx = st.session_state["ctx"]
@@ -269,11 +274,67 @@ def handle_message(text: str) -> None:
     parsed = language.extract_brief(brief_text, log)
     st.session_state["brief_note"] = parsed.note
     ctx.brief = parsed.brief
-    ctx.weights = weights_module.compute(parsed.brief, log)
 
-    # -- two catalogs, one shape, one gate ---------------------------------
+    # -- one question about what these are FOR, if the category asks one ----
+    # Stopping here rather than after ranking is the whole point. If we scored
+    # first and offered to re-score afterwards, an order inside the spending
+    # limit would already have been PAID by the time the question appeared. An
+    # agent cannot un-buy something because the buyer clarified their preference.
+    request = weights_module.context_needed(parsed.brief)
+    if request is not None:
+        st.session_state["pending_context"] = request
+        say("agent", request.question)
+        return
+
+    rank_and_authorise()
+
+
+def apply_context(tag: str | None) -> None:
+    """The user answered the usage question (or declined). Carry on from stage 2.
+
+    `tag=None` is the "not sure" path, and it is a first-class answer rather than
+    a dead end: the documented category default applies and the audit log records
+    it as an ASSUMPTION. Silence is never quietly converted into a preference.
+
+    Note what this function does NOT do. It does not re-read the sentence, does
+    not call the language model, and does not re-run the scope gate. The brief
+    was parsed once and is sitting in the transaction context; answering a
+    question about preference cannot change what was asked for, so re-deriving it
+    would be work with a known answer. Same reason approving an order resumes at
+    stage 6 instead of starting over.
+    """
+    ctx = st.session_state["ctx"]
+    if ctx is None or ctx.brief is None:
+        return
+
+    ctx.brief = ctx.brief.model_copy(update={"context_tag": tag})
+    st.session_state["pending_context"] = None
+
+    if tag:
+        say("user", config.context_label(ctx.brief.category, tag))
+    else:
+        say("user", "Not sure — use your default.")
+
+    rank_and_authorise()
+
+
+def rank_and_authorise() -> None:
+    """Stages 2 through 5, from a brief that is already parsed and settled.
+
+    Split out of handle_message because there are now two ways in — a brief that
+    needed no question, and one that just had its question answered — and they
+    must run the identical pipeline. Two copies of these thirty lines is how the
+    context path quietly stops matching the normal path.
+    """
+    ctx = st.session_state["ctx"]
+    log = st.session_state["log"]
+    brief = ctx.brief
+
+    ctx.weights = weights_module.compute(brief, log)
+
+    # -- catalogs, one shape, one gate -------------------------------------
     ctx.status = TransactionStatus.DISCOVERING
-    ctx.filter_results = discovery.run(parsed.brief, log, st.session_state["source_keys"])
+    ctx.filter_results = discovery.run(brief, log, st.session_state["source_keys"])
 
     if not ctx.eligible:
         outcome = escalation.handle(ctx, escalation.Trigger.NO_ELIGIBLE_MATCH, log)
@@ -285,8 +346,8 @@ def handle_message(text: str) -> None:
     ctx.ranked = ranking.rank(
         ctx.eligible,
         ctx.weights,
-        parsed.brief.max_price_per_unit_inr,
-        parsed.brief.max_delivery_days,
+        brief.max_price_per_unit_inr,
+        brief.max_delivery_days,
         log,
     )
     ctx.status = TransactionStatus.RANKED
@@ -294,7 +355,7 @@ def handle_message(text: str) -> None:
     # -- timing: advisory only, and it runs AFTER the ranking is final ------
     # Placed here deliberately. Nothing below reads it, so it cannot influence
     # the authorisation decision that follows. See CLAUDE.md, stage 4.5.
-    st.session_state["market"] = signals.read(ctx.ranked, parsed.brief, log)
+    st.session_state["market"] = signals.read(ctx.ranked, brief, log)
 
     # -- may the agent sign for this? --------------------------------------
     auth = authorisation.authorise(ctx, log)
@@ -411,8 +472,57 @@ def render_request() -> None:
     if ctx is None or ctx.brief is None:
         return
 
+    request = st.session_state["pending_context"]
+    if request is not None:
+        # The question first, because it is the only action on this screen — but
+        # the read-back stays underneath it. Someone answering "what are these
+        # for?" should be able to see what we understood them to be buying
+        # without scrolling back through the conversation to check.
+        ui.rule()
+        _context_picker(request)
+
     ui.rule()
     _brief_readback(ctx)
+
+
+def _context_picker(request) -> None:
+    """The one usage question, as a choice rather than a form field.
+
+    Radio buttons rather than a dropdown, because there are three answers and a
+    buyer should be able to read all of them at once — the note under each option
+    is doing as much work as the label. A dropdown hides two thirds of a decision
+    behind a click.
+
+    "Not sure" is deliberately present and deliberately not the default. Present,
+    because an agent that will not proceed until you classify your own purchase
+    is worse than one with a documented default. Not the default, because the
+    whole reason we stopped here is that the answer changes the result.
+    """
+    labels = [option.label for option in request.options]
+    notes = {option.label: option.note for option in request.options}
+    tags = {option.label: option.tag for option in request.options}
+
+    ui.section(request.question)
+    st.caption("This changes the order of the results, never who qualifies.")
+
+    chosen = st.radio(
+        request.question,
+        labels,
+        index=None,
+        key="context_choice",
+        label_visibility="collapsed",
+        captions=[notes[label] for label in labels],
+    )
+
+    left, right = st.columns([1, 3])
+    with left:
+        if st.button("Continue", type="primary", key="context_apply", disabled=chosen is None):
+            apply_context(tags[chosen])
+            st.rerun()
+    with right:
+        if st.button("Not sure — use your default", key="context_skip"):
+            apply_context(None)
+            st.rerun()
 
 
 def _empty_request_state() -> None:
@@ -478,7 +588,16 @@ def _brief_readback(ctx) -> None:
             (f"{criterion} {weight:.0%}", palette.criterion_colour.get(criterion))
             for criterion, weight in ctx.weights.values.items()
         ])
-        st.caption("These decide the order of the results, never who qualifies.")
+        # Where these four numbers came from, in one line. Without it the weights
+        # look like a house opinion; with it they are traceable to something the
+        # buyer either said or clicked.
+        if brief.context_tag:
+            st.caption(
+                f"Weighted for **{config.context_label(brief.category, brief.context_tag).lower()}**. "
+                f"These decide the order of the results, never who qualifies."
+            )
+        else:
+            st.caption("These decide the order of the results, never who qualifies.")
 
     with ui.detail("How this was read"):
         note = st.session_state["brief_note"]
@@ -495,8 +614,11 @@ def _brief_readback(ctx) -> None:
         if ctx.weights:
             st.markdown("**Preferences** — ranking only. Never rejects anything.")
             st.json({
-                criterion: {"weight": weight, "from": ctx.weights.sources.get(criterion, "")}
-                for criterion, weight in ctx.weights.values.items()
+                "usage_context": brief.context_tag or "none chosen — category default applied",
+                **{
+                    criterion: {"weight": weight, "from": ctx.weights.sources.get(criterion, "")}
+                    for criterion, weight in ctx.weights.values.items()
+                },
             })
 
 
@@ -514,7 +636,13 @@ def render_recommendation() -> None:
         return
 
     if ctx is None or not ctx.ranked:
-        st.caption("Nothing to compare yet. Describe what you need to buy.")
+        if st.session_state["pending_context"] is not None:
+            st.caption(
+                "Waiting on one answer — tell us what these are for and the "
+                "comparison appears here."
+            )
+        else:
+            st.caption("Nothing to compare yet. Describe what you need to buy.")
         return
 
     winner = ctx.ranked[0]
