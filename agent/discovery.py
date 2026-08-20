@@ -41,28 +41,34 @@ import re
 from collections.abc import Sequence
 from functools import lru_cache
 
-from agent import sources
+from agent import config, sources
 from agent.audit import STAGE_DISCOVERY, AuditLogger
 from agent.models import Brief, FilterResult, Product
 
 # ---------------------------------------------------------------------------
 # Spec vocabulary
-# ---------------------------------------------------------------------------
-# Trade shorthand, expanded so the two catalogs can be compared with the brief.
-# The aggregator writes "DW"; the user writes "double-wall"; the parser sometimes
-# returns "double wall". All three have to mean one thing or an identical box
-# fails a hard gate over punctuation.
-_SPEC_SYNONYMS: dict[str, str] = {
-    "dw": "doublewall",
-    "doublewall": "doublewall",
-    "sw": "singlewall",
-    "singlewall": "singlewall",
-}
-
+# Trade shorthand lives in config.yaml, one table per category, merged into one
+# lookup here. The aggregator writes "DW"; the user writes "double-wall"; the
+# parser sometimes returns "double wall". All three have to mean one thing or an
+# identical box fails a hard gate over punctuation. Every category brings its
+# own shorthand the same way, which is why this file names none of them.
 _SPEC_NOISE = re.compile(r"[\s\-_.,]")
 
 
 @lru_cache(maxsize=512)
+def _spec_key(text: str, generation: int) -> str:
+    """The cached half of spec_key. See spec_key for what and why.
+
+    `generation` is not used in the body — it is here to be part of the cache
+    key. config.generation() changes when config.yaml is re-read, which
+    invalidates every entry computed from the old synonym table rather than
+    leaving stale keys behind.
+    """
+    cleaned = text.lower().strip().replace("×", "x")
+    cleaned = _SPEC_NOISE.sub("", cleaned)
+    return config.spec_synonyms().get(cleaned, cleaned)
+
+
 def spec_key(text: str) -> str:
     """Reduce a spec to a comparable key: lowercase, no spaces, no punctuation.
 
@@ -77,9 +83,7 @@ def spec_key(text: str) -> str:
     and fixed, so after the first pass this is a dictionary lookup instead of a
     regex substitution.
     """
-    cleaned = text.lower().strip().replace("×", "x")
-    cleaned = _SPEC_NOISE.sub("", cleaned)
-    return _SPEC_SYNONYMS.get(cleaned, cleaned)
+    return _spec_key(text, config.generation())
 
 
 # ---------------------------------------------------------------------------

@@ -41,6 +41,13 @@ CONFIG_PATH = Path(__file__).resolve().parent.parent / "config.yaml"
 # but pointless, and caching makes it obvious there is a single source of truth.
 _cache: dict[str, Any] | None = None
 
+# Bumped every time the config is re-read. Anything that caches a value DERIVED
+# from config (agent/discovery.py caches normalised spec keys) takes this as part
+# of its cache key, so a reload cannot leave a stale answer behind. Without it,
+# the "tweak a weight live in front of judges" affordance in load() would be a
+# quiet lie for any derived cache.
+_generation: int = 0
+
 # How close a set of weights must sum to 1.0 before we accept it. Floating point
 # means 0.25 + 0.30 + 0.25 + 0.20 may land on 0.9999999999999999, which is fine.
 _WEIGHT_SUM_TOLERANCE = 1e-6
@@ -64,7 +71,7 @@ def load(reload: bool = False) -> dict[str, Any]:
     Pass reload=True to pick up edits without restarting — handy when we tweak a
     weight live in front of judges to show the ranking move.
     """
-    global _cache
+    global _cache, _generation
     if _cache is not None and not reload:
         return _cache
 
@@ -81,7 +88,14 @@ def load(reload: bool = False) -> dict[str, Any]:
 
     _validate(raw)
     _cache = raw
+    _generation += 1
     return _cache
+
+
+def generation() -> int:
+    """How many times the config has been loaded, for derived caches to key on."""
+    load()
+    return _generation
 
 
 def _validate(raw: dict[str, Any]) -> None:

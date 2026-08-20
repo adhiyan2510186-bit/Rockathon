@@ -294,14 +294,6 @@ def _to_brief(raw_text: str, extraction: _Extraction, audit: AuditLogger | None)
     )
 
 
-# The categories config.yaml has entries for. The model may answer "kraft mailer
-# boxes"; Python maps that onto "packaging" so the config lookup cannot miss.
-_CATEGORY_KEYWORDS: dict[str, tuple[str, ...]] = {
-    "packaging": ("box", "boxes", "mailer", "carton", "packag", "void fill", "tape", "bubble", "corrugat"),
-    "labels": ("label", "sticker", "tag", "decal"),
-}
-
-
 def _normalise_category(stated: str, raw_text: str) -> str:
     """Map whatever words came back onto a category config.yaml knows about.
 
@@ -310,14 +302,15 @@ def _normalise_category(stated: str, raw_text: str) -> str:
     attached, so it does not belong on the model's side of the line.
 
     When nothing matches, we keep the USER'S OWN WORDS rather than replacing them
-    with the string "default". Both config lookups already fall back on their own
-    (`table.get(category, table["default"])`), so nothing needed the placeholder —
-    and writing it into the Brief threw away the one fact the refusal has to state.
-    An agent that answers an office-chairs brief with "no vendor stocks default"
-    has lost the question, which is worse than being unable to answer it.
+    with the string "default". Every config lookup already falls back to the
+    `default` block on its own (agent/config.py, `_category`), so nothing needed
+    the placeholder — and writing it into the Brief threw away the one fact the
+    refusal has to state. An agent that answers a cement brief with "no vendor
+    stocks default" has lost the question, which is worse than being unable to
+    answer it.
     """
     haystack = f"{stated} {raw_text}".lower()
-    for category, keywords in _CATEGORY_KEYWORDS.items():
+    for category, keywords in config.category_keywords().items():
         if any(word in haystack for word in keywords):
             return category
     return stated.strip().lower() or "unspecified"
@@ -411,8 +404,8 @@ def _extraction_task() -> str:
         "it. 'Reliability matters a lot' is a stated priority; simply mentioning a "
         "price ceiling is not.\n\n"
         "Leave a numeric field null if the user did not state it. Never guess a "
-        "number. Put physical requirements such as wall thickness or dimensions in "
-        "specs."
+        "number. Put physical or technical requirements - materials, "
+        "dimensions, sizes, capacities - in specs."
     )
 
 
@@ -485,13 +478,6 @@ _PHRASE_PATTERNS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("nice_to_have", ("nice to have", "would be nice", "bonus", "if possible", "ideally")),
 )
 
-_SPEC_WORDS = (
-    "double-wall", "double wall", "single-wall", "single wall", "corrugated",
-    "kraft", "waterproof", "food-grade", "food grade", "matte", "glossy",
-    "recycled", "printed", "unprinted",
-)
-
-
 def _offline_scope(text: str) -> _ScopeCheck:
     """Decide scope by looking for buying words and the three required fields."""
     lowered = text.lower()
@@ -544,11 +530,23 @@ def _offline_extract(text: str) -> _Extraction:
         days = int(days_match.group(1))
         working = working.replace(days_match.group(0), " ", 1)
 
+    # --- category ----------------------------------------------------------
+    # Found BEFORE specs, because which words count as a physical requirement
+    # depends on what is being bought. "recycled" is a real packaging spec and
+    # noise in a chair brief; extracted from the wrong category it would become
+    # a hard constraint the user never stated and empty the pool on stage.
+    category = ""
+    for name, keywords in config.category_keywords().items():
+        if any(word in lowered for word in keywords):
+            category = name
+            break
+
     # --- specs -------------------------------------------------------------
     # Whole words only. A plain substring test finds "matte" inside "matters a
     # lot" and quietly adds a finish nobody asked for, which would then be
     # enforced as a hard constraint at stage 3.
-    specs = [word for word in _SPEC_WORDS if re.search(rf"\b{re.escape(word)}\b", lowered)]
+    spec_words = config.category_spec_words(category) if category else config.all_spec_words()
+    specs = [word for word in spec_words if re.search(rf"\b{re.escape(word)}\b", lowered)]
     dimensions = re.search(r"\d+\s*[x×]\s*\d+\s*[x×]\s*\d+\s*(?:mm|cm)?", lowered)
     if dimensions:
         specs.append(dimensions.group(0).replace(" ", ""))
@@ -561,13 +559,6 @@ def _offline_extract(text: str) -> _Extraction:
     quantity_match = re.search(r"(\d[\d,]*)", working)
     if quantity_match:
         quantity = int(quantity_match.group(1).replace(",", ""))
-
-    # --- category ----------------------------------------------------------
-    category = ""
-    for name, keywords in _CATEGORY_KEYWORDS.items():
-        if any(word in lowered for word in keywords):
-            category = name
-            break
 
     # --- stated priorities -------------------------------------------------
     # We look clause by clause, so "reliability matters a lot" attaches the
