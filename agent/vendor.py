@@ -420,7 +420,7 @@ def _live_record(product: Product) -> Product:
     longer lists it" and "the vendor has none" are the same fact for a buyer, and
     routing both through the stock gate means one failure path instead of two.
     """
-    for candidate in discovery.discover(product.category):
+    for candidate in discovery.discover(product.category, fresh=True):
         if candidate.product_id == product.product_id:
             return candidate
     return product.model_copy(update={"available_quantity": 0})
