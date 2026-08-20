@@ -82,8 +82,32 @@ def test_unknown_source_raises_rather_than_silently_shrinking_the_pool():
 
 
 def test_audit_labels_follow_the_sources_actually_used():
-    assert sources.labels() == ["PackHub (direct JSON)", "BoxBazaar (aggregator CSV)"]
+    assert sources.labels() == [
+        "PackHub (direct JSON)",
+        "BoxBazaar (aggregator CSV)",
+        "OfficeStock (direct JSON)",
+        "TradeBridge (aggregator CSV)",
+    ]
     assert sources.labels(["boxbazaar"]) == ["BoxBazaar (aggregator CSV)"]
+
+
+def test_a_second_vendor_on_a_known_format_costs_no_new_parsing():
+    """OfficeStock and TradeBridge add no read() of their own, and that is the claim.
+
+    The adapter layer is supposed to mean "a new source is one small file". Here
+    it is smaller than that: two vendors publish in shapes we already speak, so
+    each one is a key, a display name and a path, and the normalising code is
+    shared with the vendor that arrived first. The test asserts the sharing
+    rather than the file length, because the file length is not the point.
+    """
+    assert sources.OfficeStockAdapter.read is sources.DirectJsonAdapter.read
+    assert sources.PackHubAdapter.read is sources.DirectJsonAdapter.read
+    assert sources.TradeBridgeAdapter.read is sources.AggregatorCsvAdapter.read
+    assert sources.BoxBazaarAdapter.read is sources.AggregatorCsvAdapter.read
+
+    # ...and they really are different vendors selling different things.
+    assert sources.OfficeStockAdapter().path != sources.PackHubAdapter().path
+    assert {p.category for p in sources.OfficeStockAdapter().fetch()} == {"furniture", "laptops"}
 
 
 # ---------------------------------------------------------------------------

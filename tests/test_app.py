@@ -119,6 +119,84 @@ def test_off_topic_mid_order_is_refused_without_disturbing_the_order():
     assert after.status.value == "awaiting_approval", "still waiting on the same decision"
 
 
+def test_a_within_limit_order_proceeds_without_asking_anyone():
+    """The other half of the authorisation boundary, on screen.
+
+    Every other test in this file drives the packaging brief, which is over the
+    limit and therefore always stops for approval. That demonstrates the agent
+    refusing to act - but an agent that ALWAYS stops has not demonstrated
+    authority, only caution. The furniture brief costs Rs 78,000 against a
+    Rs 1,05,000 limit, so the agent buys it and tells the buyer afterwards.
+
+    Same engine, same screen, opposite branch, and no approval button rendered.
+    """
+    app = _click(_fresh(), "start_recent_furniture")
+    assert not app.exception
+
+    state = app.session_state
+    assert [(s.product.name, s.score) for s in state["ctx"].ranked] == [
+        ("ErgoFlex Task", 62.4), ("Postura Pro", 58.5), ("MeshLite Task", 27.9)
+    ]
+
+    outcome = state["auth"]
+    assert outcome.within_limit, "Rs 78,000 is inside the limit; nothing should be asked"
+    assert outcome.escalation is None
+    assert state["ctx"].status.value != "awaiting_approval"
+
+
+def test_an_order_far_over_the_limit_stops_and_offers_nothing_it_cannot_afford():
+    """Eight laptops at Rs 4,64,000 against a Rs 1,05,000 limit.
+
+    The interesting part is not that it escalates - packaging does that too. It
+    is that there is no in-limit alternative to fall back on, and the screen has
+    to say so rather than showing the cheapest option and letting a reader
+    assume it fits. It does not fit: the cheapest is still four times the limit.
+    """
+    app = _click(_fresh(), "start_recent_laptops")
+    assert not app.exception
+
+    state = app.session_state
+    assert [(s.product.name, s.score) for s in state["ctx"].ranked] == [
+        ("DevBook 14", 70.2), ("CoreStation 15", 58.4), ("ProBook X1", 7.9)
+    ]
+
+    outcome = state["auth"]
+    assert not outcome.within_limit
+    assert outcome.escalation.detail["action_taken"] == "no purchase executed"
+    assert outcome.escalation.detail["best_within_limit"] == (
+        "none - every eligible option is over the limit"
+    )
+
+
+def test_the_unit_noun_follows_the_category():
+    """"12 chairs", not "12 units". The screen says what is being bought."""
+    surface = _surface_text(_click(_fresh(), "start_recent_furniture"))
+    assert "12 chairs" in surface
+
+    surface = _surface_text(_click(_fresh(), "start_recent_laptops"))
+    assert "8 laptops" in surface
+
+
+def test_a_category_we_do_not_stock_is_declined_by_name():
+    """A real buying request for something no vendor sells.
+
+    This is not the off-topic path - "200 bags of cement" IS a purchase, and the
+    scope gate correctly lets it through. It fails later, at discovery, and the
+    honest answer names what we can actually source. An agent that answers this
+    with an empty table has told the user nothing.
+    """
+    app = _fresh()
+    app.chat_input[0].set_value(
+        "200 bags of cement, max Rs 400 each, delivered within 7 days"
+    ).run()
+
+    assert not app.exception
+    assert app.session_state["ctx"].ranked == [], "nothing should be ranked"
+
+    surface = _surface_text(app)
+    assert "packaging" in surface and "furniture" in surface and "laptops" in surface
+
+
 def test_the_whole_demo_path_runs_without_an_exception():
     """Brief in, ranked, over the limit, approved, payment declines once, closes."""
     app = _click(_fresh(), "start_recent")

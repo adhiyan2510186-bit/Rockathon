@@ -1,0 +1,471 @@
+{
+  "_comment": "OfficeStock - a second DIRECT vendor feed, in the SAME shape as packhub_direct.json: rupees are rupees, lead time is already in days, the rating is out of 5, the specs are a clean list. Identical schema on purpose - agent/sources.py already speaks this format, so this whole vendor integration is four lines (OfficeStockAdapter: a key, a display name, a path). What differs is what it sells - office furniture and laptops - and nothing downstream of discovery notices. Price and stock histories are authored demo data, labelled as such in the UI.",
+  "vendor": "OfficeStock",
+  "vendor_type": "direct",
+  "currency": "INR",
+  "catalog": [
+    {
+      "sku": "OS-ERGOFLEX-TASK",
+      "title": "ErgoFlex Task",
+      "category": "furniture",
+      "unit_price_inr": 6500,
+      "lead_time_days": 5,
+      "seller_rating": 4.7,
+      "replacement_window_days": 21,
+      "stock_qty": 400,
+      "attributes": [
+        "mesh back",
+        "adjustable height"
+      ],
+      "price_history": [
+        {
+          "date": "2026-08-11",
+          "unit_price_inr": 6300
+        },
+        {
+          "date": "2026-08-13",
+          "unit_price_inr": 6350
+        },
+        {
+          "date": "2026-08-15",
+          "unit_price_inr": 6400
+        },
+        {
+          "date": "2026-08-17",
+          "unit_price_inr": 6450
+        },
+        {
+          "date": "2026-08-19",
+          "unit_price_inr": 6500
+        }
+      ],
+      "stock_history": [
+        {
+          "date": "2026-08-11",
+          "stock_qty": 480
+        },
+        {
+          "date": "2026-08-13",
+          "stock_qty": 460
+        },
+        {
+          "date": "2026-08-15",
+          "stock_qty": 440
+        },
+        {
+          "date": "2026-08-17",
+          "stock_qty": 420
+        },
+        {
+          "date": "2026-08-19",
+          "stock_qty": 400
+        }
+      ]
+    },
+    {
+      "sku": "OS-POSTURA-PRO",
+      "title": "Postura Pro",
+      "category": "furniture",
+      "unit_price_inr": 6950,
+      "lead_time_days": 8,
+      "seller_rating": 4.5,
+      "replacement_window_days": 30,
+      "stock_qty": 250,
+      "attributes": [
+        "mesh back",
+        "adjustable height"
+      ],
+      "price_history": [
+        {
+          "date": "2026-08-11",
+          "unit_price_inr": 6900
+        },
+        {
+          "date": "2026-08-13",
+          "unit_price_inr": 6920
+        },
+        {
+          "date": "2026-08-15",
+          "unit_price_inr": 6930
+        },
+        {
+          "date": "2026-08-17",
+          "unit_price_inr": 6940
+        },
+        {
+          "date": "2026-08-19",
+          "unit_price_inr": 6950
+        }
+      ],
+      "stock_history": [
+        {
+          "date": "2026-08-11",
+          "stock_qty": 290
+        },
+        {
+          "date": "2026-08-13",
+          "stock_qty": 280
+        },
+        {
+          "date": "2026-08-15",
+          "stock_qty": 270
+        },
+        {
+          "date": "2026-08-17",
+          "stock_qty": 260
+        },
+        {
+          "date": "2026-08-19",
+          "stock_qty": 250
+        }
+      ]
+    },
+    {
+      "sku": "OS-BUDGET-STOOL",
+      "title": "Budget Stool",
+      "category": "furniture",
+      "unit_price_inr": 2400,
+      "lead_time_days": 4,
+      "seller_rating": 4.2,
+      "replacement_window_days": 7,
+      "stock_qty": 900,
+      "attributes": [
+        "fixed height"
+      ],
+      "price_history": [
+        {
+          "date": "2026-08-11",
+          "unit_price_inr": 2450
+        },
+        {
+          "date": "2026-08-13",
+          "unit_price_inr": 2440
+        },
+        {
+          "date": "2026-08-15",
+          "unit_price_inr": 2420
+        },
+        {
+          "date": "2026-08-17",
+          "unit_price_inr": 2410
+        },
+        {
+          "date": "2026-08-19",
+          "unit_price_inr": 2400
+        }
+      ],
+      "stock_history": [
+        {
+          "date": "2026-08-11",
+          "stock_qty": 980
+        },
+        {
+          "date": "2026-08-13",
+          "stock_qty": 960
+        },
+        {
+          "date": "2026-08-15",
+          "stock_qty": 940
+        },
+        {
+          "date": "2026-08-17",
+          "stock_qty": 920
+        },
+        {
+          "date": "2026-08-19",
+          "stock_qty": 900
+        }
+      ]
+    },
+    {
+      "sku": "OS-EXECUCHAIR-LX",
+      "title": "ExecuChair LX",
+      "category": "furniture",
+      "unit_price_inr": 9800,
+      "lead_time_days": 6,
+      "seller_rating": 4.9,
+      "replacement_window_days": 45,
+      "stock_qty": 120,
+      "attributes": [
+        "mesh back",
+        "adjustable height"
+      ],
+      "price_history": [
+        {
+          "date": "2026-08-11",
+          "unit_price_inr": 9600
+        },
+        {
+          "date": "2026-08-13",
+          "unit_price_inr": 9650
+        },
+        {
+          "date": "2026-08-15",
+          "unit_price_inr": 9700
+        },
+        {
+          "date": "2026-08-17",
+          "unit_price_inr": 9750
+        },
+        {
+          "date": "2026-08-19",
+          "unit_price_inr": 9800
+        }
+      ],
+      "stock_history": [
+        {
+          "date": "2026-08-11",
+          "stock_qty": 160
+        },
+        {
+          "date": "2026-08-13",
+          "stock_qty": 150
+        },
+        {
+          "date": "2026-08-15",
+          "stock_qty": 140
+        },
+        {
+          "date": "2026-08-17",
+          "stock_qty": 130
+        },
+        {
+          "date": "2026-08-19",
+          "stock_qty": 120
+        }
+      ]
+    },
+    {
+      "sku": "OS-DEVBOOK-14",
+      "title": "DevBook 14",
+      "category": "laptops",
+      "unit_price_inr": 58000,
+      "lead_time_days": 6,
+      "seller_rating": 4.8,
+      "replacement_window_days": 30,
+      "stock_qty": 90,
+      "attributes": [
+        "16GB RAM",
+        "512GB SSD"
+      ],
+      "price_history": [
+        {
+          "date": "2026-08-11",
+          "unit_price_inr": 57000
+        },
+        {
+          "date": "2026-08-13",
+          "unit_price_inr": 57200
+        },
+        {
+          "date": "2026-08-15",
+          "unit_price_inr": 57500
+        },
+        {
+          "date": "2026-08-17",
+          "unit_price_inr": 57800
+        },
+        {
+          "date": "2026-08-19",
+          "unit_price_inr": 58000
+        }
+      ],
+      "stock_history": [
+        {
+          "date": "2026-08-11",
+          "stock_qty": 130
+        },
+        {
+          "date": "2026-08-13",
+          "stock_qty": 120
+        },
+        {
+          "date": "2026-08-15",
+          "stock_qty": 110
+        },
+        {
+          "date": "2026-08-17",
+          "stock_qty": 100
+        },
+        {
+          "date": "2026-08-19",
+          "stock_qty": 90
+        }
+      ]
+    },
+    {
+      "sku": "OS-CORESTATION-15",
+      "title": "CoreStation 15",
+      "category": "laptops",
+      "unit_price_inr": 62500,
+      "lead_time_days": 9,
+      "seller_rating": 4.6,
+      "replacement_window_days": 45,
+      "stock_qty": 60,
+      "attributes": [
+        "16GB RAM",
+        "512GB SSD"
+      ],
+      "price_history": [
+        {
+          "date": "2026-08-11",
+          "unit_price_inr": 62000
+        },
+        {
+          "date": "2026-08-13",
+          "unit_price_inr": 62100
+        },
+        {
+          "date": "2026-08-15",
+          "unit_price_inr": 62300
+        },
+        {
+          "date": "2026-08-17",
+          "unit_price_inr": 62400
+        },
+        {
+          "date": "2026-08-19",
+          "unit_price_inr": 62500
+        }
+      ],
+      "stock_history": [
+        {
+          "date": "2026-08-11",
+          "stock_qty": 140
+        },
+        {
+          "date": "2026-08-13",
+          "stock_qty": 120
+        },
+        {
+          "date": "2026-08-15",
+          "stock_qty": 100
+        },
+        {
+          "date": "2026-08-17",
+          "stock_qty": 80
+        },
+        {
+          "date": "2026-08-19",
+          "stock_qty": 60
+        }
+      ]
+    },
+    {
+      "sku": "OS-LITEBOOK-13",
+      "title": "LiteBook 13",
+      "category": "laptops",
+      "unit_price_inr": 41000,
+      "lead_time_days": 4,
+      "seller_rating": 4.4,
+      "replacement_window_days": 15,
+      "stock_qty": 200,
+      "attributes": [
+        "8GB RAM",
+        "256GB SSD"
+      ],
+      "price_history": [
+        {
+          "date": "2026-08-11",
+          "unit_price_inr": 41500
+        },
+        {
+          "date": "2026-08-13",
+          "unit_price_inr": 41400
+        },
+        {
+          "date": "2026-08-15",
+          "unit_price_inr": 41200
+        },
+        {
+          "date": "2026-08-17",
+          "unit_price_inr": 41100
+        },
+        {
+          "date": "2026-08-19",
+          "unit_price_inr": 41000
+        }
+      ],
+      "stock_history": [
+        {
+          "date": "2026-08-11",
+          "stock_qty": 240
+        },
+        {
+          "date": "2026-08-13",
+          "stock_qty": 230
+        },
+        {
+          "date": "2026-08-15",
+          "stock_qty": 220
+        },
+        {
+          "date": "2026-08-17",
+          "stock_qty": 210
+        },
+        {
+          "date": "2026-08-19",
+          "stock_qty": 200
+        }
+      ]
+    },
+    {
+      "sku": "OS-POWERSTATION-17",
+      "title": "PowerStation 17",
+      "category": "laptops",
+      "unit_price_inr": 94000,
+      "lead_time_days": 7,
+      "seller_rating": 4.9,
+      "replacement_window_days": 60,
+      "stock_qty": 40,
+      "attributes": [
+        "16GB RAM",
+        "512GB SSD"
+      ],
+      "price_history": [
+        {
+          "date": "2026-08-11",
+          "unit_price_inr": 93000
+        },
+        {
+          "date": "2026-08-13",
+          "unit_price_inr": 93200
+        },
+        {
+          "date": "2026-08-15",
+          "unit_price_inr": 93500
+        },
+        {
+          "date": "2026-08-17",
+          "unit_price_inr": 93800
+        },
+        {
+          "date": "2026-08-19",
+          "unit_price_inr": 94000
+        }
+      ],
+      "stock_history": [
+        {
+          "date": "2026-08-11",
+          "stock_qty": 80
+        },
+        {
+          "date": "2026-08-13",
+          "stock_qty": 70
+        },
+        {
+          "date": "2026-08-15",
+          "stock_qty": 60
+        },
+        {
+          "date": "2026-08-17",
+          "stock_qty": 50
+        },
+        {
+          "date": "2026-08-19",
+          "stock_qty": 40
+        }
+      ]
+    }
+  ]
+}

@@ -42,6 +42,54 @@ parser and the UI says so plainly.
 end to end: `python -m streamlit run app.py`. What follows is one section per
 file, in build order, so a cold restart can pick up anywhere.
 
+---
+
+## Since the demo path froze: three categories, one engine
+
+The agent now buys **packaging, office furniture and laptops**. The important
+part is what it cost: a category is one block in `config.yaml` plus rows in a
+catalog. No file in `agent/` names a category except `agent/config.py`, and
+`tests/test_category_is_data.py` fails if that changes.
+
+| What | Where |
+|------|-------|
+| One `categories:` block replaces two flat tables | `config.yaml`, read by `agent/config.py:_category()` |
+| Keywords, spec vocabulary and trade shorthand moved out of code | were in `agent/language.py` and `agent/discovery.py` |
+| Two new sources, ~4 lines each | `OfficeStockAdapter`, `TradeBridgeAdapter` in `agent/sources.py` |
+| Two new catalogs, same two schemas as before | `data/officestock_direct.json`, `data/tradebridge_aggregator.csv` |
+| Frozen numbers for both new categories | `tests/test_categories.py` |
+
+**The three briefs land in three different places on purpose:**
+
+| Brief | Order total | What the agent does |
+|-------|-------------|---------------------|
+| 5,000 mailer boxes | ₹1,09,500 | over the limit → escalates |
+| 12 task chairs | ₹78,000 | **within the limit → proceeds alone** |
+| 8 laptops | ₹4,64,000 | far over, and no in-limit alternative exists |
+
+The chairs are the addition that matters most: before this, every demo run ended
+in an approval screen, so the agent was only ever seen refusing. Now it is seen
+deciding.
+
+**Frozen tables, same discipline as the packaging golden test:**
+
+- furniture — ErgoFlex Task 62.4, Postura Pro 58.5, MeshLite Task 27.9
+- laptops — DevBook 14 70.2, CoreStation 15 58.4, ProBook X1 7.9
+
+In both pools the cheapest eligible option ranks last, and the #1→#2 gap sits on
+opposite sides of the 5-point substitution threshold (furniture 3.9, laptops
+11.8), so the threshold can be shown deciding rather than described.
+
+**Two real bugs the second category found**, both now tested:
+
+1. The price matcher read `[\d]+`, so "max Rs 65,000" parsed as a ₹65 cap and
+   every laptop "exceeded" it. Fixed in `agent/language.py`, comma-grouped like
+   the quantity matcher already was.
+2. An unknown category came back blank offline, so the scope gate asked "what
+   are you buying?" and no answer could ever satisfy it. Now the parser keeps
+   the user's own words, the brief reaches stage 3, and the no-coverage path
+   names what we actually stock.
+
 What `audit.py` gives the rest of the build:
 
 - `AuditLogger(context)` — one logger per transaction, passed to every stage.

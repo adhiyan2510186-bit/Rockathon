@@ -513,14 +513,19 @@ def _offline_extract(text: str) -> _Extraction:
     working = lowered
 
     # --- price cap ---------------------------------------------------------
+    # Digits may be comma-grouped. A box costs "Rs 22" and a laptop costs
+    # "Rs 65,000", and a pattern that stops at the comma reads the second one as
+    # a cap of sixty-five rupees - which every laptop then "exceeds", so the pool
+    # empties and the screen blames the vendors. Same grouping the quantity
+    # matcher below already allows.
     cap: float | None = None
     price_match = re.search(
         r"(?:max|maximum|under|below|upto|up to|no more than|at most)\s*"
-        r"(?:rs\.?|inr|₹)?\s*([\d]+(?:\.\d+)?)",
+        r"(?:rs\.?|inr|₹)?\s*(\d[\d,]*(?:\.\d+)?)",
         working,
-    ) or re.search(r"(?:rs\.?|inr|₹)\s*([\d]+(?:\.\d+)?)\s*(?:per unit|/\s*unit|each|a unit)", working)
+    ) or re.search(r"(?:rs\.?|inr|₹)\s*(\d[\d,]*(?:\.\d+)?)\s*(?:per unit|/\s*unit|each|a unit)", working)
     if price_match:
-        cap = float(price_match.group(1))
+        cap = float(price_match.group(1).rstrip(",").replace(",", ""))
         working = working.replace(price_match.group(0), " ", 1)
 
     # --- delivery window ---------------------------------------------------
@@ -559,6 +564,22 @@ def _offline_extract(text: str) -> _Extraction:
     quantity_match = re.search(r"(\d[\d,]*)", working)
     if quantity_match:
         quantity = int(quantity_match.group(1).replace(",", ""))
+
+    # --- category, when no keyword matched -----------------------------------
+    # Keep the USER'S OWN WORDS instead of leaving the field blank. Blank means
+    # "you did not say what you want", so the scope gate asks what they are
+    # buying - and for anything outside our vocabulary the answer can never
+    # satisfy it, because the next parse comes back blank too. The user gets the
+    # same question forever and never learns the real reason.
+    #
+    # With their words kept, this reaches stage 3, finds nothing, and the
+    # no-coverage path says which categories we can actually source. That is the
+    # answer they needed, and it matches what the Gemini path already did - the
+    # two parsers should not disagree about whether cement is a thing you can
+    # ask for.
+    if not category and quantity_match:
+        tail = working[quantity_match.end():]
+        category = tail.split(",")[0].strip(" .").lower()
 
     # --- stated priorities -------------------------------------------------
     # We look clause by clause, so "reliability matters a lot" attaches the

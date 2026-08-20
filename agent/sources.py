@@ -115,20 +115,25 @@ class SourceAdapter(ABC):
 
 
 # ---------------------------------------------------------------------------
-# Source 1 — PackHub, a direct vendor's JSON
+# Format 1 — a direct vendor's JSON
 # ---------------------------------------------------------------------------
+# Two vendors publish in this shape, so the READING lives here once and each
+# vendor below is a name and a file path. That split is the adapter layer's
+# actual claim, made checkable: a new vendor on a format we already speak costs
+# four lines, and a new FORMAT costs one new class. Neither costs a change to
+# filtering, ranking, signals, authorisation or audit.
 
-class PackHubAdapter(SourceAdapter):
+class DirectJsonAdapter(SourceAdapter):
     """The friendly feed. Rupees are rupees and lead time is already in days."""
 
-    key = "packhub"
-    display_name = "PackHub"
     source_type = "direct"
     feed_format = "direct JSON"
+    path: Path
 
     def __init__(self, path: Path | None = None) -> None:
         super().__init__()
-        self.path = path or DATA_DIR / "packhub_direct.json"
+        if path is not None:
+            self.path = path
 
     def read(self) -> Iterable[Product]:
         raw = json.loads(self.path.read_text(encoding="utf-8"))
@@ -151,20 +156,20 @@ class PackHubAdapter(SourceAdapter):
 
 
 # ---------------------------------------------------------------------------
-# Source 2 — BoxBazaar, an aggregator's CSV
+# Format 2 — an aggregator's CSV
 # ---------------------------------------------------------------------------
 
-class BoxBazaarAdapter(SourceAdapter):
+class AggregatorCsvAdapter(SourceAdapter):
     """The awkward feed. Five conversions, each one a place a live API breaks."""
 
-    key = "boxbazaar"
-    display_name = "BoxBazaar"
     source_type = "aggregator"
     feed_format = "aggregator CSV"
+    path: Path
 
     def __init__(self, path: Path | None = None) -> None:
         super().__init__()
-        self.path = path or DATA_DIR / "boxbazaar_aggregator.csv"
+        if path is not None:
+            self.path = path
 
     def read(self) -> Iterable[Product]:
         text = self.path.read_text(encoding="utf-8")
@@ -177,7 +182,7 @@ class BoxBazaarAdapter(SourceAdapter):
             yield Product(
                 product_id=row["item_code"],
                 name=row["product_name"],
-                source="BoxBazaar",
+                source=self.display_name,
                 source_type="aggregator",
                 category=row["category_tag"].strip().lower(),           # "PACKAGING" -> "packaging"
                 specs=[p.strip() for p in row["spec_blob"].split("|") if p.strip()],
@@ -267,12 +272,52 @@ def first_number(text: str) -> int:
 
 
 # ---------------------------------------------------------------------------
+# The sources — a name, a format, and a file
+# ---------------------------------------------------------------------------
+# Each of these is a whole vendor integration. There is no per-vendor parsing
+# below this line because the format classes above already did it, and no
+# per-category anything because nothing here knows what it is selling: the
+# category travels in the feed, and stage 3 filters on it.
+#
+# PackHub and BoxBazaar sell packaging. OfficeStock and TradeBridge sell office
+# furniture and laptops. Downstream, all four are indistinguishable.
+
+class PackHubAdapter(DirectJsonAdapter):
+    key = "packhub"
+    display_name = "PackHub"
+    path = DATA_DIR / "packhub_direct.json"
+
+
+class BoxBazaarAdapter(AggregatorCsvAdapter):
+    key = "boxbazaar"
+    display_name = "BoxBazaar"
+    path = DATA_DIR / "boxbazaar_aggregator.csv"
+
+
+class OfficeStockAdapter(DirectJsonAdapter):
+    key = "officestock"
+    display_name = "OfficeStock"
+    path = DATA_DIR / "officestock_direct.json"
+
+
+class TradeBridgeAdapter(AggregatorCsvAdapter):
+    key = "tradebridge"
+    display_name = "TradeBridge"
+    path = DATA_DIR / "tradebridge_aggregator.csv"
+
+
+# ---------------------------------------------------------------------------
 # The registry — the only list of sources in the codebase
 # ---------------------------------------------------------------------------
 
 ADAPTERS: dict[str, SourceAdapter] = {
     adapter.key: adapter
-    for adapter in (PackHubAdapter(), BoxBazaarAdapter())
+    for adapter in (
+        PackHubAdapter(),
+        BoxBazaarAdapter(),
+        OfficeStockAdapter(),
+        TradeBridgeAdapter(),
+    )
 }
 
 ALL_SOURCE_KEYS: tuple[str, ...] = tuple(ADAPTERS)

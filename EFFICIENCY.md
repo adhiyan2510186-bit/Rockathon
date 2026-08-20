@@ -209,6 +209,48 @@ changes priority. It never changes authority."*
 
 ---
 
+## 8 · Adding a category is data, not code
+
+**Claim.** Teaching the agent a new kind of purchase costs one config block and
+some catalog rows. It costs zero new branches, zero new code paths, and zero
+changes to filtering, ranking, market signals, authorisation or audit.
+
+**Where.** `config.yaml` — the `categories:` block, one entry per category
+carrying its price cap, default weights, trigger keywords, spec vocabulary and
+trade shorthand. `agent/config.py:_category()` is the single lookup every one of
+those settings goes through, and `agent/config.py` is the only file in `agent/`
+that names a category at all.
+
+**What the naive version does.** Two things, both of which we had. First, the
+settings were spread across two flat tables (`per_unit_cap_defaults_inr` and
+`category_default_weights`) plus three module-level dicts in two Python files, so
+"add a category" meant finding all five. Second — the version we did not build —
+an `if category == "laptops"` in the ranker or the UI, which works for the second
+category and collapses on the fourth.
+
+**Measured — the count, not the clock.** Furniture and laptops were added in the
+same commit as their catalogs. The diff touched `config.yaml`, two new data
+files, and four lines of `agent/sources.py` (two adapters × key, display name,
+path). `agent/ranking.py`, `agent/authorisation.py`, `agent/escalation.py`,
+`agent/signals.py`, `agent/audit.py` and `agent/models.py` were **not modified**.
+`tests/test_category_is_data.py` holds that down: it parses every module in
+`agent/`, strips comments and docstrings, and fails if a category name survives
+as a live string literal outside `config.py`.
+
+**The four soft criteria are deliberately not configurable.** Reliability, price,
+replacement and delivery are the same in every category, because they are the
+universal commercial questions — a replacement window *is* a warranty on a chair.
+Making them per-category would have meant a cross-cutting edit across the ranker,
+the weight engine, every weight table and the chart palette, in exchange for
+nothing a buyer would notice. Specs are what differ between categories; buying
+criteria are not.
+
+**The sentence for stage.** *"That block is the entire furniture implementation.
+The engine has never heard of a mailer box — and there is a test that fails if
+anyone teaches it one."*
+
+---
+
 ## How to add to this file
 
 Log the win **when you write the code**, not at the end. Each entry needs:

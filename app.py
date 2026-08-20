@@ -80,9 +80,34 @@ DEMO_BRIEF = (
 # label, so wording can change without breaking the suite - which it did three
 # times before we did this.
 
-# The one-line gist of DEMO_BRIEF, for the repeat-order shortcut. Short enough
-# to read at a glance; clicking it sends the full sentence above.
-RECENT_REQUEST_LABEL = "5,000 kraft mailer boxes  ·  max Rs 22/unit  ·  within 10 days"
+# The repeat-order shortcuts, one per category we can actually source. Each is a
+# one-line gist short enough to read at a glance; clicking it sends the full
+# sentence. Three rather than one because a buying tool that only knows a single
+# purchase is a script, and because these three land in different places: the
+# chairs are inside the agent's spending authority and the laptops are far
+# outside it, so the same engine visibly decides alone and visibly stops.
+# (button key, one-line gist, the sentence the button actually sends). The key is
+# part of the entry rather than the loop index because the tests select on keys -
+# a fourth shortcut inserted at the top must not silently repoint them.
+RECENT_REQUESTS: tuple[tuple[str, str, str], ...] = (
+    (
+        "start_recent",
+        "5,000 kraft mailer boxes  ·  max Rs 22/unit  ·  within 10 days",
+        DEMO_BRIEF,
+    ),
+    (
+        "start_recent_furniture",
+        "12 ergonomic task chairs  ·  max Rs 7,000 each  ·  within 14 days",
+        "12 ergonomic task chairs, mesh back, adjustable height, max Rs 7,000 each, "
+        "delivered within 14 days. Reliability matters a lot.",
+    ),
+    (
+        "start_recent_laptops",
+        "8 developer laptops  ·  max Rs 65,000 each  ·  within 12 days",
+        "8 developer laptops, 16GB RAM, 512GB SSD, max Rs 65,000 each, "
+        "delivered within 12 days. Reliability matters a lot.",
+    ),
+)
 
 # Not wired to a button any more - the scope gate runs on whatever is typed
 # into the chat box. Kept as the example our tests type, so the demo script
@@ -401,17 +426,18 @@ def _empty_request_state() -> None:
         "your budget and your deadline.",
     )
 
-    # A repeat-order shortcut, which is what an ops manager's tool would actually
-    # offer: Meena reorders packaging every quarter. It doubles as the fast way
-    # to start the demo without typing a long sentence live, but it is not framed
-    # as a demo button, because to a real user it would not be one.
+    # Repeat-order shortcuts, which is what an ops manager's tool would actually
+    # offer: Meena reorders the same few things every quarter. They double as the
+    # fast way to start without typing a long sentence live, but they are not
+    # framed as demo buttons, because to a real user they would not be.
     #
-    # Honest scope: this is a stub with a single hardcoded entry. There is no
-    # request history in this build, and nothing here reads one.
+    # Honest scope: this is a stub with hardcoded entries. There is no request
+    # history in this build, and nothing here reads one.
     st.caption("Recent requests")
-    if st.button(RECENT_REQUEST_LABEL, width="content", key="start_recent"):
-        handle_message(DEMO_BRIEF)
-        st.rerun()
+    for key, label, brief_text in RECENT_REQUESTS:
+        if st.button(label, width="content", key=key):
+            handle_message(brief_text)
+            st.rerun()
 
 
 def _brief_readback(ctx) -> None:
@@ -427,7 +453,7 @@ def _brief_readback(ctx) -> None:
 
     ui.section("What we understood")
     ui.chips([
-        (f"{brief.quantity:,} units", palette.accent),
+        (f"{brief.quantity:,} {config.unit_noun(brief.category)}", palette.accent),
         (brief.category, None),
         *[(spec, None) for spec in brief.specs],
         (f"max ₹{brief.max_price_per_unit_inr:.2f}/unit", None),
@@ -496,7 +522,8 @@ def render_recommendation() -> None:
 
     runner_up_gap = winner.score - ctx.ranked[1].score if len(ctx.ranked) > 1 else None
     ui.figures([
-        ("Order total", f"₹{total:,.0f}", f"{ctx.brief.quantity:,} units"),
+        ("Order total", f"₹{total:,.0f}",
+         f"{ctx.brief.quantity:,} {config.unit_noun(ctx.brief.category)}"),
         ("Delivery", f"{winner.product.delivery_days} days",
          f"{ctx.brief.max_delivery_days - winner.product.delivery_days} days inside your deadline"),
         ("Supplier rating", f"{winner.product.reliability_rating:.1f}",
@@ -714,7 +741,8 @@ def _outcome_trail(ctx) -> None:
         st.markdown("")
         ui.hero("Order placed",
                 f"{summary.product_label} — ₹{summary.amount_inr:,.0f}",
-                f"{summary.quantity:,} units · payment {summary.payment_reference}",
+                f"{summary.quantity:,} {config.unit_noun(ctx.brief.category)}"
+                f" · payment {summary.payment_reference}",
                 variant="done")
 
 

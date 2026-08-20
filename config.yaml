@@ -92,6 +92,38 @@ categories:
     spec_words: [matte, glossy, waterproof, printed, unprinted]
     spec_synonyms: {}
 
+  furniture:
+    unit_noun: chairs
+    keywords: [chair, chairs, desk, desks, table, stool, furniture, cabinet]
+    per_unit_cap_inr: 9000
+    # Reliability and the replacement window lead here: a chair is used daily
+    # for years by a named person, and replacing a bad one costs more than the
+    # price gap between a good one and a cheap one.
+    default_weights:
+      reliability: 0.30
+      price: 0.25
+      replacement: 0.25
+      delivery: 0.20
+    spec_words: [mesh back, adjustable height, fixed height, lumbar support,
+                 fabric, leather, wheeled, stackable]
+    spec_synonyms: {}
+
+  laptops:
+    unit_noun: laptops
+    keywords: [laptop, laptops, macbook, ultrabook, notebook computer]
+    per_unit_cap_inr: 70000
+    # "workstation" is deliberately absent from the keywords above: it is a desk
+    # and it is a computer, so it belongs to neither list. The startup collision
+    # check in agent/config.py is what stops someone adding it to both.
+    default_weights:
+      reliability: 0.35
+      price: 0.25
+      replacement: 0.25
+      delivery: 0.15
+    spec_words: [8gb ram, 16gb ram, 32gb ram, 256gb ssd, 512gb ssd, 1tb ssd,
+                 backlit keyboard, touchscreen]
+    spec_synonyms: {i5: intelcorei5, i7: intelcorei7}
+
   # Fallback for any category without a block of its own. Even weights, because
   # with nothing known about the purchase we have no honest reason to prefer one
   # criterion over another.

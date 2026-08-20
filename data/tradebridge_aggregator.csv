@@ -1,0 +1,16 @@
+# TradeBridge - a second AGGREGATOR feed, in the SAME awkward shape as
+# boxbazaar_aggregator.csv: paise not rupees, a shipping RANGE not a number, a
+# score out of 100 not 5, returns as a SENTENCE, specs as one pipe-separated
+# blob. Identical columns on purpose - agent/sources.py already speaks this
+# format, so this whole vendor integration is four lines (TradeBridgeAdapter:
+# a key, a display name, a path). That is the adapter layer's claim, shown.
+# What is NOT the same is what it sells: office furniture and laptops, in the
+# same columns as boxes. Nothing downstream of discovery notices the difference.
+# The two trail columns are authored demo data, labelled as such in the UI.
+item_code,product_name,category_tag,rate_paise,ship_window,vendor_score_100,returns_policy,qty_available,spec_blob,price_trail,stock_trail
+TB-MESHLITE-01,MeshLite Task,FURNITURE,590000,10-14 days,84,30-day replacement,300,mesh back | adjustable height,2026-08-11:585000|2026-08-13:586000|2026-08-15:588000|2026-08-17:589000|2026-08-19:590000,2026-08-11:700|2026-08-13:600|2026-08-15:500|2026-08-17:400|2026-08-19:300
+TB-WORKNEST-STD,WorkNest Standard,FURNITURE,475000,16-20 days,78,15-day replacement,500,mesh back | adjustable height,2026-08-11:480000|2026-08-13:478000|2026-08-15:477000|2026-08-17:476000|2026-08-19:475000,2026-08-11:540|2026-08-13:530|2026-08-15:520|2026-08-17:510|2026-08-19:500
+TB-CHAIRCO-BASIC,ChairCo Basic,FURNITURE,520000,6-8 days,80,20-day replacement,8,mesh back | adjustable height,2026-08-11:515000|2026-08-13:516000|2026-08-15:518000|2026-08-17:519000|2026-08-19:520000,2026-08-11:48|2026-08-13:38|2026-08-15:28|2026-08-17:18|2026-08-19:8
+TB-PROBOOK-X1,ProBook X1,LAPTOPS,5490000,10-12 days,86,20-day replacement,150,16GB RAM | 512GB SSD,2026-08-11:5520000|2026-08-13:5510000|2026-08-15:5500000|2026-08-17:5495000|2026-08-19:5490000,2026-08-11:190|2026-08-13:180|2026-08-15:170|2026-08-17:160|2026-08-19:150
+TB-VALUEBOOK-15,ValueBook 15,LAPTOPS,4750000,14-18 days,80,15-day replacement,220,16GB RAM | 512GB SSD,2026-08-11:4790000|2026-08-13:4780000|2026-08-15:4770000|2026-08-17:4760000|2026-08-19:4750000,2026-08-11:260|2026-08-13:250|2026-08-15:240|2026-08-17:230|2026-08-19:220
+TB-ULTRALITE-14,UltraLite 14,LAPTOPS,6100000,5-7 days,90,25-day replacement,5,16GB RAM | 512GB SSD,2026-08-11:5900000|2026-08-13:5950000|2026-08-15:6000000|2026-08-17:6050000|2026-08-19:6100000,2026-08-11:45|2026-08-13:35|2026-08-15:25|2026-08-17:15|2026-08-19:5

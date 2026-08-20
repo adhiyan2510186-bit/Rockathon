@@ -596,6 +596,84 @@ SECTION 8.5 - THE INTERFACE: DESIGN DECISIONS THAT ARE ACTUALLY ENGINEERING
                  than no config, because the next person trusts it."
 
 ================================================================================
+SECTION 8.8 - MORE THAN ONE KIND OF PURCHASE
+================================================================================
+
+8.8.1  THE TRAP: A SECOND CATEGORY THAT IS STILL HARDCODED
+    The obvious build: copy the packaging path, add a furniture catalog, and put
+    `if category == "furniture"` wherever the two differ. It works. It demos.
+    And the first judge who asks "what about a fourth category?" gets an answer
+    that costs another day of work each time.
+
+    What we do: a category is ONE BLOCK in config.yaml, carrying its price cap,
+    its default weights, its trigger keywords, its spec vocabulary and its trade
+    shorthand. No file in agent/ contains a category name at all - except
+    config.py, whose whole job is reading those blocks.
+
+    THE LINE: "Scroll to the furniture block. That is the entire furniture
+    implementation - no code, no branch, no new path through the ranker. And
+    there is a test that reads every module in agent/, strips the comments, and
+    fails if anyone hardcodes a category name."
+
+8.8.2  THE TRAP: THE DEMO ONLY EVER SHOWS THE AGENT REFUSING
+    Our packaging order is over the authorisation limit, so it always stops for
+    approval. That proves the agent knows where its authority ends - but an
+    agent that ALWAYS stops has not demonstrated authority, only caution. A
+    judge cannot tell the difference between a careful agent and a broken one
+    that escalates everything.
+
+    What we do: the three categories land in deliberately different places.
+    Chairs cost Rs 78,000 against a Rs 1,05,000 limit, so the agent buys them
+    and reports afterwards. Laptops cost Rs 4,64,000, so it stops. Same engine,
+    same screen, opposite branch.
+
+    THE LINE: "Watch it buy the chairs without asking. Now watch the same code
+    refuse the laptops. The boundary is not a screen we wrote - it is one
+    comparison against one number in a config file."
+
+8.8.3  THE TRAP: A PRICE CAP WITH A COMMA IN IT
+    A bug we actually hit. Our price matcher read digits as `[\d]+`, which is
+    correct for "max Rs 22" and silently wrong for "max Rs 65,000" - it stops at
+    the comma and returns a cap of sixty-five rupees. Every laptop then
+    "exceeds" it, the pool empties, and the screen blames the vendors for a bug
+    in our regex. Nothing crashes, which is what makes it dangerous.
+
+    What we do: the same comma-grouped pattern the quantity matcher already
+    used, and a test that asserts the parsed cap for both briefs.
+
+    THE LINE: "Our packaging demo never had a comma in a number. That is exactly
+    the kind of assumption a second category finds for you - which is half the
+    reason we added one."
+
+8.8.4  THE TRAP: THE QUESTION A USER CANNOT ANSWER
+    Ask for cement. The keyword parser has no vocabulary for it, so it returned
+    a blank category - and blank means "you did not say what you are buying", so
+    the scope gate asked. The user answers "cement". Still blank. It asks again.
+    Forever, with no hint that the real problem is that nobody stocks cement.
+
+    What we do: when no keyword matches we keep the user's own words. The brief
+    then reaches stage 3, finds nothing, and the no-coverage path names the
+    categories we can actually source - which is the answer they needed three
+    questions ago.
+
+    THE LINE: "The honest failure is not 'no results'. It is 'I buy packaging,
+    furniture and laptops, and cement is not one of them.' A search box says the
+    first. An agent should say the second."
+
+8.8.5  WHAT WE DID NOT MAKE CONFIGURABLE, AND WHY
+    The four soft criteria - reliability, price, replacement window, delivery -
+    are the same in every category and cannot be changed per category. That was
+    a choice, not an oversight: they are the universal commercial questions, and
+    a replacement window IS a warranty on a chair or a laptop. Making them
+    per-category would have meant editing the ranker, the weight engine, every
+    weight table and the chart palette, in exchange for nothing a buyer notices.
+
+    THE LINE: "Specs are what differ between categories. Buying criteria are
+    not. A chair and a box are compared on the same four questions, which is why
+    one ranker serves all three."
+
+
+================================================================================
 SECTION 9 - LIKELY QUESTIONS, AND THE SHORT ANSWER
 ================================================================================
 
@@ -644,4 +722,4 @@ differently, and we had a reason. Same shape every time:
 Skip anything that is just a feature description. This file is only for the
 places where we can show judgement.
 
-Last updated: after dark mode and the failure-mode test suite.
+Last updated: after furniture and laptops - three categories, one engine.
