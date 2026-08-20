@@ -265,6 +265,14 @@ def _css(p: Palette) -> str:
      coloured dot beside it carries the identity, never the words themselves. */
   .chip-strong {{ color: {p.ink}; font-weight: 580; }}
 
+  /* ---- example request -------------------------------------------------- */
+  .example {{
+      background: {p.surface}; border: 1px solid {p.border};
+      border-left: 2px solid {p.tint(p.accent, 0.5)}; border-radius: 10px;
+      padding: 0.9rem 1.1rem; margin: 0.2rem 0 0.7rem;
+      color: {p.ink_secondary}; font-size: 0.94rem; line-height: 1.5;
+  }}
+
   /* ---- misc ------------------------------------------------------------ */
   .rule {{ height: 1px; background: {p.border}; margin: 1.1rem 0; border: 0; }}
   .provenance {{

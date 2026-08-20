@@ -36,6 +36,8 @@ from streamlit.testing.v1 import AppTest
 APP = str(Path(__file__).resolve().parent.parent / "app.py")
 TIMEOUT = 120
 
+OFF_TOPIC = "What's the weather in Chennai tomorrow?"
+
 
 @pytest.fixture(autouse=True)
 def offline(monkeypatch):
@@ -78,15 +80,44 @@ def test_app_starts_clean():
 
 
 def test_off_topic_is_refused_and_the_app_stays_ready():
-    app = _click(_fresh(), "Ask something off-topic")
+    """Typed into the real box, because that is the only way in.
+
+    There is deliberately no "ask something off-topic" button in the app - a
+    control that exists purely to prove a feature is a demo artefact. The scope
+    check runs on whatever anyone types, so that is what this types.
+    """
+    app = _fresh()
+    app.chat_input[0].set_value(OFF_TOPIC).run()
 
     assert not app.exception
     assert app.session_state["ctx"].brief is None, "an off-topic message must not start an order"
+    assert app.session_state["ctx"].ranked == [], "and it must not go looking for products"
+
+
+def test_off_topic_mid_order_is_refused_without_disturbing_the_order():
+    """The scope check runs on every message, wherever you are in the app.
+
+    This is why no dedicated "off-topic" control is needed: there is one way in,
+    and it is guarded. An unrelated question during a live order is refused and
+    the order is left exactly as it was - not cancelled, not restarted, not
+    quietly re-parsed with weather in the brief.
+    """
+    app = _click(_fresh(), "Try this example")
+    before = app.session_state["ctx"]
+    ranked_before = [(s.product.name, s.score) for s in before.ranked]
+
+    app.chat_input[0].set_value(OFF_TOPIC).run()
+    after = app.session_state["ctx"]
+
+    assert not app.exception
+    assert after.transaction_id == before.transaction_id, "the order must survive"
+    assert [(s.product.name, s.score) for s in after.ranked] == ranked_before
+    assert after.status.value == "awaiting_approval", "still waiting on the same decision"
 
 
 def test_the_whole_demo_path_runs_without_an_exception():
     """Brief in, ranked, over the limit, approved, payment declines once, closes."""
-    app = _click(_fresh(), "Try a packaging reorder")
+    app = _click(_fresh(), "Try this example")
     assert not app.exception
 
     state = app.session_state
@@ -109,7 +140,7 @@ def test_the_whole_demo_path_runs_without_an_exception():
 
 
 def test_declining_buys_nothing():
-    app = _click(_fresh(), "Try a packaging reorder")
+    app = _click(_fresh(), "Try this example")
     app = _click(app, "Decline")
 
     assert not app.exception
@@ -118,7 +149,7 @@ def test_declining_buys_nothing():
 
 
 def test_the_timing_signal_reaches_the_screen_without_moving_the_decision():
-    app = _click(_fresh(), "Try a packaging reorder")
+    app = _click(_fresh(), "Try this example")
 
     market = app.session_state["market"]
     winner = app.session_state["ctx"].ranked[0]
@@ -145,7 +176,7 @@ PIPELINE_VOCABULARY = [
 
 def test_no_pipeline_vocabulary_on_the_surface():
     """The default screen is for a buyer. Implementation talk goes in drill-downs."""
-    app = _click(_fresh(), "Try a packaging reorder")
+    app = _click(_fresh(), "Try this example")
     surface = _surface_text(app)
 
     found = [word for word in PIPELINE_VOCABULARY if word in surface]
@@ -157,5 +188,5 @@ def test_no_pipeline_vocabulary_on_the_surface():
 
 def test_the_simulated_data_label_is_always_present():
     """We never draw a convincing chart and let a reader assume it is real."""
-    app = _click(_fresh(), "Try a packaging reorder")
+    app = _click(_fresh(), "Try this example")
     assert "simulated market data" in _surface_text(app)

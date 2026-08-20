@@ -57,6 +57,18 @@ def provenance(text: str) -> None:
     st.markdown(f'<div class="provenance">{escape(text)}</div>', unsafe_allow_html=True)
 
 
+def example(text: str) -> None:
+    """A sample request, shown as something the user could have typed.
+
+    Set in a quoted card rather than as a caption, so it reads as an example of
+    the input rather than as instructions about it.
+    """
+    st.markdown(
+        f'<div class="example">“{escape(text)}”</div>',
+        unsafe_allow_html=True,
+    )
+
+
 @contextmanager
 def detail(label: str):
     """A collapsed drill-down. The ONLY place implementation detail may appear.

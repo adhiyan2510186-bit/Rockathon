@@ -49,7 +49,7 @@ def _run(switches: dict[str, bool] | None = None) -> AppTest:
     if switches:
         app.run()
 
-    [b for b in app.button if b.label == "Try a packaging reorder"][0].click().run()
+    [b for b in app.button if b.label == "Try this example"][0].click().run()
     return app
 
 

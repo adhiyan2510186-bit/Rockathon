@@ -76,6 +76,9 @@ DEMO_BRIEF = (
     "delivered within 10 days. Reliability matters a lot - we got burned last quarter."
 )
 
+# Not wired to a button any more - the scope gate runs on whatever is typed
+# into the chat box. Kept as the example our tests type, so the demo script
+# and the test agree on one sentence.
 OFF_TOPIC_EXAMPLE = "What's the weather in Chennai tomorrow?"
 
 # Who the approval is recorded as. The stage-5 audit entry is one of the very
@@ -370,22 +373,30 @@ def render_request() -> None:
 
 
 def _empty_request_state() -> None:
-    """What a first-time user sees. One clear action, not an instruction manual."""
+    """What a first-time user sees. One action, and the example spelled out.
+
+    There is deliberately no second button for asking something off-topic. The
+    scope check runs on whatever is typed into the box at the bottom, so a
+    button for it would be a control that exists only to prove we have a
+    feature - which is a demo artefact, not a product. Typing a real question
+    into the real box is also the more convincing demonstration.
+
+    The example sentence is printed rather than hidden behind the button. A
+    button whose effect you cannot predict is a mystery box, and the sentence
+    itself is half of what we are showing off: this much mess in, a decision out.
+    """
     st.markdown("")
     ui.hero(
         "Procurement",
         "What do you need to buy?",
-        "Describe it in a sentence — quantity, specification, budget and deadline.",
+        "Describe it in a sentence — how many, what specification, your budget "
+        "and your deadline.",
     )
-    left, right = st.columns(2)
-    with left:
-        if st.button("Try a packaging reorder", width="stretch", type="primary"):
-            handle_message(DEMO_BRIEF)
-            st.rerun()
-    with right:
-        if st.button("Ask something off-topic", width="stretch"):
-            handle_message(OFF_TOPIC_EXAMPLE)
-            st.rerun()
+
+    ui.example(DEMO_BRIEF)
+    if st.button("Try this example", width="stretch", type="primary"):
+        handle_message(DEMO_BRIEF)
+        st.rerun()
 
 
 def _brief_readback(ctx) -> None:

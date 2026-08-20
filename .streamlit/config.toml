@@ -36,6 +36,11 @@ linkColor = "#9085e9"
 # ui/theme.py - which is per-mode, as this option is not. Setting it would be a
 # line of config that themes nothing.
 
+# Re-run automatically when a source file changes, instead of showing a
+# "Source file changed" prompt nobody notices mid-demo.
+[server]
+runOnSave = true
+
 [client]
 toolbarMode = "minimal"
 showErrorDetails = true
