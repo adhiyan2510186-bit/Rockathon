@@ -104,6 +104,29 @@ SECTION 1 - READING WHAT A HUMAN ACTUALLY WROTE
                  fake a model call."
 
 
+1.5  THE ADJECTIVE THAT WAS TREATED AS PART OF THE PRODUCT'S NAME
+    The trap:   "25 wireless noise-cancelling headsets, over-ear, under Rs 4,000."
+                Which of those words are requirements?
+    Naive:      Whatever the model returns. Ours returned one: "over-ear", the
+                word after the comma. It read "wireless noise-cancelling" as
+                part of what the thing is CALLED rather than as two things the
+                buyer requires.
+    The cost:   Specs are a pass/fail gate. A missed spec is not a cosmetic loss
+                - it is a product qualifying on something it does not have. A
+                Rs 1,850 headset with no noise cancelling entered the pool for a
+                buyer who had asked for noise cancelling, and it was the
+                cheapest thing in it.
+    We do:      The extraction prompt now says a word describing the item IS a
+                spec, with a worked example in both category vocabularies. Live
+                and offline parses now produce the identical eligible pool on
+                all three demo briefs, which is the property we check.
+    THE LINE:   "The model was not wrong about English - 'wireless
+                 noise-cancelling headset' really is a product name. It was
+                 wrong about our domain, where every adjective a buyer uses is a
+                 requirement somebody has to meet. That is why the language step
+                 is the only place a model touches, and why its output is
+                 checked against a parser that cannot be persuaded."
+
 ================================================================================
 SECTION 2 - TWO VENDORS, TWO SCHEMAS, ONE TRUTH
 ================================================================================
@@ -539,6 +562,29 @@ SECTION 6 - NOT TRUSTING OURSELVES
     THE LINE:   "That is the drift that creeps into authored data the moment
                  someone edits one number and forgets the other - and it would
                  make every signal we compute meaningless."
+
+6.4b  OUR "NO NETWORK" TESTS WERE ON THE NETWORK, AND PASSED ANYWAY
+    ** the best bug we found, because of the SHAPE of it **
+    The trap:   The test suite clears GEMINI_API_KEY to force the deterministic
+                offline parser. Every file says so in its docstring.
+    The bug:    An empty string is falsy. `_api_key()` saw no usable value in the
+                environment and fell through to reading .env off the disk - so
+                the "offline" tests were calling the real model, on every run.
+    Why nobody noticed: they passed. The free-tier quota was exhausted, so every
+                call came back 429 and dropped to the offline parser, which is
+                exactly what we were asserting against. Two things were broken
+                and each one hid the other. It surfaced only when we moved to a
+                model with quota left: a live parse came back, read one brief
+                differently, and a test that had never failed went red.
+    We do:      An explicitly empty key now means "no key" and stops there, and
+                a test asserts the promise directly rather than restating it in
+                a docstring (test_the_offline_fixture_actually_forces_offline).
+    Measured:   The suite went from ~120 seconds to 16. That was the network.
+    THE LINE:   "Our offline tests were quietly online for weeks and passed
+                 every time, because our API quota was exhausted and the failure
+                 mode we were testing was the failure mode we were accidentally
+                 in. A green test is not evidence until you know what would have
+                 turned it red."
 
 6.5  THE GOLDEN NUMBERS
     We do:      58.0 / 48.7 / 33.7 are asserted by a unit test that runs the

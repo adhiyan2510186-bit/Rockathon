@@ -300,15 +300,29 @@ market_signal:
 # model is never told what our authorisation limit is, so no phrasing inside a
 # user's brief can talk it past one. See CLAUDE.md, "THE ONE RULE".
 #
-# model: verified working 2026-08-19. gemini-2.5-flash is NOT usable — Google
+# model: verified working 2026-08-21. gemini-2.5-flash is NOT usable — Google
 #   returns 404 for new API keys and directs callers to the 3.x line.
-# allow_offline_fallback: if Gemini is unreachable or rate-limited (the free
-#   tier allows roughly 10 requests/minute), agent/language.py switches to a
-#   deterministic word-matching parser so a demo cannot die mid-run. The UI
-#   labels this plainly — we degrade honestly, we never fake a model call.
+#
+#   We were on gemini-3.6-flash and spent whole afternoons in offline mode. The
+#   cause, read off the 429 body rather than guessed: the free tier gives that
+#   model 20 requests A DAY (quotaId GenerateRequestsPerDayPerProjectPerModel-
+#   FreeTier). Reading one brief costs two calls — the scope check and the
+#   extraction — so twenty a day is ten briefs, across development, rehearsal
+#   and the demo combined.
+#
+#   The quota is per MODEL, so the lite line is a separate allowance and a much
+#   larger one. Google no longer publishes the per-model table (it is account
+#   specific in AI Studio), so treat the exact number as unknown and the
+#   fallback as the real safety net. The task here is schema-constrained
+#   extraction at temperature 0, which is what a lite model is for.
+#
+# allow_offline_fallback: if Gemini is unreachable or out of quota,
+#   agent/language.py switches to a deterministic word-matching parser so a demo
+#   cannot die mid-run. The UI labels this plainly — we degrade honestly, we
+#   never fake a model call.
 llm:
   provider: gemini
-  model: gemini-3.6-flash
+  model: gemini-3.5-flash-lite
   allow_offline_fallback: true
 
 # ---------------------------------------------------------------------------

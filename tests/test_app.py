@@ -45,6 +45,25 @@ def offline(monkeypatch):
     monkeypatch.setenv("GEMINI_API_KEY", "")
 
 
+def test_the_offline_fixture_actually_forces_offline():
+    """The fixture above has to be true, not just stated. It was not.
+
+    Clearing GEMINI_API_KEY left an empty string, which is falsy, so `_api_key()`
+    fell through to reading .env from disk and every test in this file quietly
+    went to the network. They passed anyway - the free-tier quota was exhausted,
+    so each call 429'd and fell back to the offline parser, which is what we
+    were asserting against. The day the quota came back, one of these tests
+    started reading a live parse and failed.
+
+    That is the worst shape a bug can have: invisible while a second thing is
+    also broken. So the promise is now asserted directly.
+    """
+    from agent import language
+
+    assert language._api_key() is None
+    assert language.is_online() is False
+
+
 def _fresh() -> AppTest:
     app = AppTest.from_file(APP, default_timeout=TIMEOUT)
     app.run()

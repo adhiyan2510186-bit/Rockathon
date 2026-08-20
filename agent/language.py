@@ -321,9 +321,18 @@ def _normalise_category(stated: str, raw_text: str) -> str:
 # ---------------------------------------------------------------------------
 
 def _api_key() -> str | None:
-    """Read GEMINI_API_KEY from the environment, or from .env if it is not there."""
+    """Read GEMINI_API_KEY from the environment, or from .env if it is not there.
+
+    An empty value set DELIBERATELY means "no key", and stops here rather than
+    falling through to the file. That distinction is load bearing: our test
+    suite clears this variable to force the offline parser, and for a long time
+    it did not work — the empty string was falsy, we read .env instead, and the
+    tests quietly went to the network. They passed anyway, because the quota was
+    exhausted and every call fell back offline. The moment the quota came back
+    the "offline" tests started producing live parses and one of them failed.
+    """
     key = os.environ.get("GEMINI_API_KEY")
-    if key:
+    if key is not None:
         return key.strip() or None
     if ENV_PATH.exists():
         for line in ENV_PATH.read_text(encoding="utf-8").splitlines():
@@ -405,7 +414,18 @@ def _extraction_task() -> str:
         "price ceiling is not.\n\n"
         "Leave a numeric field null if the user did not state it. Never guess a "
         "number. Put physical or technical requirements - materials, "
-        "dimensions, sizes, capacities - in specs."
+        "dimensions, sizes, capacities - in specs.\n\n"
+        # Added after watching a live parse drop two of three specs. The model
+        # read "25 wireless noise-cancelling headsets, over-ear" as a PRODUCT
+        # NAME with one spec after the comma, so a headset with no noise
+        # cancelling passed a requirement the buyer had actually stated. Specs
+        # are a pass/fail gate, so a spec the parser misses is not a cosmetic
+        # loss - it is a product qualifying on something it does not have.
+        "A word describing the item itself is a spec, not part of its name. In "
+        "'25 wireless noise-cancelling headsets, over-ear' the specs are "
+        "wireless, noise-cancelling AND over-ear. In '5,000 kraft mailer boxes, "
+        "double-wall' they are kraft and double-wall. Use the user's own words "
+        "for each one."
     )
 
 
