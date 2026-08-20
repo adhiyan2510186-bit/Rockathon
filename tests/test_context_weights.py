@@ -100,7 +100,6 @@ def test_a_category_with_no_contexts_never_asks():
     """A box is a box. Contexts are opt-in data, not a tax on every category."""
     assert weights.context_needed(parse(PACKAGING_BRIEF)) is None
     assert config.category_contexts("packaging") == {}
-    assert config.category_contexts("laptops") == {}
 
 
 def test_an_answered_brief_is_not_asked_twice():
@@ -191,6 +190,64 @@ def test_the_cheap_option_closes_the_gap_but_still_does_not_win():
 
     assert round(trap_in_pool - trap_in_calls, 1) == 16.7
     assert pool[-1].product.product_id == "FLK-HPH-2302"
+
+
+# ---------------------------------------------------------------------------
+# A second category that asks — and the answer that changes the winner
+# ---------------------------------------------------------------------------
+
+# Same shape as the headsets brief: complete, buyable, and silent on the one
+# thing that decides it. A laptop that lives in a bag is a different purchase
+# from one that lives on a desk, and the brief cannot tell you which this is.
+LAPTOP_OPEN_BRIEF = (
+    "8 developer laptops, 16GB RAM, 512GB SSD, max Rs 65,000 each, "
+    "delivered within 12 days."
+)
+
+LAPTOP_FROZEN = {
+    None: {"OS-DEVBOOK-14": 63.8, "OS-CORESTATION-15": 58.4, "TB-PROBOOK-X1": 9.9},
+    "dev_build": {"OS-DEVBOOK-14": 67.5, "OS-CORESTATION-15": 64.4, "TB-PROBOOK-X1": 5.9},
+    "field_sales": {"OS-CORESTATION-15": 64.4, "OS-DEVBOOK-14": 61.2, "TB-PROBOOK-X1": 7.9},
+    "loaner_pool": {"OS-DEVBOOK-14": 53.7, "OS-CORESTATION-15": 52.3, "TB-PROBOOK-X1": 15.8},
+}
+
+
+@pytest.mark.parametrize("tag", list(LAPTOP_FROZEN), ids=lambda t: t or "no-context")
+def test_each_laptop_context_produces_its_frozen_table(tag):
+    """The laptops table, frozen the same way the headsets one is."""
+    _, ranked = rank_under(LAPTOP_OPEN_BRIEF, tag)
+    assert scores(ranked) == LAPTOP_FROZEN[tag]
+
+
+def test_the_laptop_context_changes_which_machine_wins():
+    """The strongest evidence the question is not decoration: the WINNER moves.
+
+    On a desk, the DevBook wins — faster to arrive, better rated, cheaper. Say
+    the same eight laptops are going out on the road and the CoreStation takes
+    it, on a 45-day replacement window against the DevBook's 30. Nothing about
+    the pool changed and no product got better; the buyer told us which risk they
+    were actually carrying.
+
+    A category whose contexts never reorder anything should not ship a question -
+    it would make the agent look attentive and change nothing.
+    """
+    _, desk = rank_under(LAPTOP_OPEN_BRIEF, "dev_build")
+    _, road = rank_under(LAPTOP_OPEN_BRIEF, "field_sales")
+
+    assert desk[0].product.product_id == "OS-DEVBOOK-14"
+    assert road[0].product.product_id == "OS-CORESTATION-15"
+
+
+def test_the_laptop_question_only_fires_when_the_buyer_was_silent():
+    """Same rule as headphones, asserted on the category we just gave a question.
+
+    The demo shortcut says "Reliability matters a lot", so it must NOT ask - the
+    menu is for silence, never for disagreeing with what the buyer said.
+    """
+    assert weights.context_needed(parse(LAPTOP_OPEN_BRIEF)) is not None
+    assert weights.context_needed(
+        parse(LAPTOP_OPEN_BRIEF[:-1] + ". Reliability matters a lot.")
+    ) is None
 
 
 def test_a_context_is_deterministic_across_runs():

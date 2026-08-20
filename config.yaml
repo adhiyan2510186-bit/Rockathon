@@ -162,6 +162,25 @@ categories:
     spec_words: [8gb ram, 16gb ram, 32gb ram, 256gb ssd, 512gb ssd, 1tb ssd,
                  backlit keyboard, touchscreen]
     spec_synonyms: {i5: intelcorei5, i7: intelcorei7}
+    # Same case for asking as headphones, and a sharper one. "8 laptops, 16GB,
+    # under Rs 65,000" is a complete brief that still does not say whether these
+    # sit on a desk or go in a bag — and on our own catalog that answer flips the
+    # recommendation: say they travel and the machine with the 45-day replacement
+    # window wins over the one that is faster to arrive and better rated.
+    context_question: Where will these laptops spend their life?
+    contexts:
+      dev_build:
+        label: Development and builds
+        note: A slow or dead machine costs engineering days.
+        weights: {reliability: 0.40, price: 0.15, replacement: 0.30, delivery: 0.15}
+      field_sales:
+        label: Out on the road
+        note: They get dropped, and a spare is not on the next desk.
+        weights: {reliability: 0.30, price: 0.20, replacement: 0.35, delivery: 0.15}
+      loaner_pool:
+        label: Shared loaner bench
+        note: Spares, handed out and handed back.
+        weights: {reliability: 0.20, price: 0.40, replacement: 0.25, delivery: 0.15}
 
   headphones:
     unit_noun: headsets

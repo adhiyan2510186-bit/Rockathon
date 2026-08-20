@@ -879,6 +879,31 @@ SECTION 8.8 - MORE THAN ONE KIND OF PURCHASE
     the parse is now in the test suite in both word orders."
 
 
+8.8.7  WE ONLY ASK WHERE THE ANSWER ACTUALLY MOVES THE RANKING
+    The trap:   The usage question is our best interaction, so put it on every
+                category.
+    Naive:      Every category gets a menu. Most of the answers land on weight
+                sets close enough that the ranking never changes - and now the
+                agent asks a question, makes the buyer stop and think, and
+                produces the same recommendation whatever they pick. That is a
+                widget that makes an agent look attentive and changes nothing.
+    We do:      Contexts are opt-in data. A category declares a question only
+                when we have checked that the answers reorder the real pool. We
+                ran the laptop pool under all three candidate weight sets before
+                shipping the block, and kept it because it flips the WINNER:
+                "development and builds" picks the DevBook, "out on the road"
+                picks the CoreStation on its 45-day replacement window against
+                the DevBook's 30. Packaging still declares none - a box is a box.
+    Cost:       A config block. No new branch, no new code path, no Python at
+                all - which is the "a category is data, not code" claim being
+                spent rather than asserted.
+    THE LINE:   "Adding that question to laptops was ten lines of config and no
+                 code. We checked first that the answer actually changes the
+                 recommendation - tell it these go out on the road and a
+                 different machine wins, on the longer replacement window. If it
+                 had not moved the ranking we would not have asked, because a
+                 question that cannot change the answer is just friction."
+
 ================================================================================
 SECTION 9 - LIKELY QUESTIONS, AND THE SHORT ANSWER
 ================================================================================
