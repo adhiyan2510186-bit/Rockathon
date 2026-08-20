@@ -104,7 +104,7 @@ def figures(items: Sequence[tuple[str, str, str]]) -> None:
         with column:
             note_html = f'<div class="figure-note">{escape(note)}</div>' if note else ""
             st.markdown(
-                f'<div class="card card-tight">'
+                f'<div class="figure">'
                 f'<div class="figure-label">{escape(label)}</div>'
                 f'<div class="figure-value">{escape(value)}</div>'
                 f"{note_html}</div>",
@@ -122,12 +122,24 @@ def chips(items: Iterable[tuple[str, str | None]], strong_first: bool = False) -
     Chips exist so a fact can be scanned rather than read. "3 days of cover left"
     is a chip; a paragraph explaining stock depletion is not - that is what the
     drill-down is for.
+
+    A chip that carries a colour gets a faint wash of it and a matching border,
+    so a signal is visible at a glance across the page. The TEXT stays in an ink
+    token either way: a coloured dot beside the words carries the identity, and
+    the words themselves never have to fight a tinted background for contrast.
     """
+    palette = theme.active()
     parts = []
+
     for index, (text, colour) in enumerate(items):
-        dot = f'<span class="chip-dot" style="background:{colour}"></span>' if colour else ""
+        if colour:
+            dot = f'<span class="chip-dot" style="background:{colour}"></span>'
+            style = (f' style="background:{palette.tint(colour, 0.12)};'
+                     f'border-color:{palette.tint(colour, 0.45)}"')
+        else:
+            dot, style = "", ""
         emphasis = " chip-strong" if strong_first and index == 0 else ""
-        parts.append(f'<span class="chip{emphasis}">{dot}{escape(text)}</span>')
+        parts.append(f'<span class="chip{emphasis}"{style}>{dot}{escape(text)}</span>')
 
     if parts:
         st.markdown(f'<div class="chip-row">{"".join(parts)}</div>', unsafe_allow_html=True)

@@ -574,6 +574,27 @@ SECTION 8.5 - THE INTERFACE: DESIGN DECISIONS THAT ARE ACTUALLY ENGINEERING
                 the screen is not allowed to do arithmetic."
 
 
+8.5.10  DARK MODE IS SELECTED, NOT FLIPPED
+    The trap:   "Add dark mode" sounds like inverting the lightness.
+    Naive:      Flip the palette. Every accessibility gate it passed on white
+                quietly fails on black - contrast against the surface changes,
+                and so does the separation between adjacent series.
+    We do:      The dark column is the SAME eight hues re-stepped for a dark
+                surface and validated as a set against it. Streamlit's chrome is
+                themed from the same values in .streamlit/config.toml, and
+                ui/theme.py reads the viewer's choice back at runtime so our
+                cards and our charts agree with the widgets around them.
+    THE LINE:   "Our dark mode is a second validated palette, not an inversion.
+                 A palette that passed every contrast gate on white will fail
+                 all of them on black if you just flip it."
+
+8.5.11  WE DELETED A LINE OF CONFIG THAT THEMED NOTHING
+    We do:      Streamlit has a chartCategoricalColors option. We drew all three
+                charts ourselves, so it themes nothing we ship - and it does not
+                exist per-mode, which ours must. So it is not in our config.
+    THE LINE:   "Config that looks like it does something and does not is worse
+                 than no config, because the next person trusts it."
+
 ================================================================================
 SECTION 9 - LIKELY QUESTIONS, AND THE SHORT ANSWER
 ================================================================================
@@ -623,4 +644,4 @@ differently, and we had a reason. Same shape every time:
 Skip anything that is just a feature description. This file is only for the
 places where we can show judgement.
 
-Last updated: after the interface rebuild (four product screens, three charts).
+Last updated: after dark mode and the failure-mode test suite.

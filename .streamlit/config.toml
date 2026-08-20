@@ -1,16 +1,40 @@
-# Pin the app to light mode.
+# Both themes are DECLARED, and neither is pinned.
 #
-# Streamlit otherwise follows whichever laptop it is running on. Our chart
-# palette was validated for accessibility against a LIGHT chart surface, and a
-# palette validated on light tells you nothing about how it renders on dark.
-# Pinning means the colours a judge sees are the colours we checked, on any
-# machine we demo from.
+# Leaving `base` unset keeps Streamlit's Settings -> Appearance switcher
+# available, so a viewer picks Light, Dark or System. ui/theme.py reads that
+# choice back at runtime via st.context.theme.type and styles our own cards and
+# charts to match, so the app and the widgets never disagree.
+#
+# The dark values are NOT the light values inverted. They are the same hues
+# re-stepped for a dark surface and validated as a set against it. An automatic
+# flip is how a palette that passed every accessibility gate on white quietly
+# fails all of them on black.
+
 [theme]
-base = "light"
+font = "ui-sans-serif, -apple-system, 'Segoe UI', system-ui, sans-serif"
+baseRadius = "0.6rem"
+showWidgetBorder = true
+
+[theme.light]
 primaryColor = "#4a3aa7"
 backgroundColor = "#f6f6f4"
 secondaryBackgroundColor = "#fcfcfb"
 textColor = "#0b0b0b"
+borderColor = "#e4e4e0"
+linkColor = "#4a3aa7"
+
+[theme.dark]
+primaryColor = "#9085e9"
+backgroundColor = "#111110"
+secondaryBackgroundColor = "#1a1a19"
+textColor = "#ffffff"
+borderColor = "#34342f"
+linkColor = "#9085e9"
+
+# No chartCategoricalColors here on purpose. It only themes Streamlit's own
+# built-in charts, and we draw all three of ours with Plotly from the palette in
+# ui/theme.py - which is per-mode, as this option is not. Setting it would be a
+# line of config that themes nothing.
 
 [client]
 toolbarMode = "minimal"

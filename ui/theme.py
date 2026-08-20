@@ -3,165 +3,253 @@
 WHY THIS FILE EXISTS
 --------------------
 app.py used to carry its own inline styling decisions, which is how four screens
-end up looking like four different products. Every colour, every chip style and
-every card in the app now comes from here.
+end up looking like four different products. Every colour, every chip and every
+card in the app now comes from here.
 
-WHERE THE PALETTE COMES FROM — AND WHY WE DID NOT INVENT IT
+THREE COLOUR ROLES, NEVER MIXED
+-------------------------------
+This is the rule that keeps the palette honest, and it is worth saying out loud:
+
+  BRAND      one violet. Chrome only - primary buttons, the hero's edge, card
+             tints. It never encodes data, so it can never be mistaken for one.
+  CATEGORICAL four hues, one per soft criterion. Reliability is always the same
+             blue whether it contributed everything or nothing.
+  STATUS     four reserved colours for urgency. Never reused as a series colour,
+             so a status red can never impersonate "product number four".
+
+A colour that means two things means nothing.
+
+WHERE THE PALETTE COMES FROM - AND WHY WE DID NOT INVENT IT
 ------------------------------------------------------------
 These are not colours we liked the look of. They are a published, pre-validated
-categorical palette, used unchanged and IN THE DOCUMENTED ORDER. That matters
-because a categorical palette has to clear real accessibility gates:
+categorical palette, used unchanged and IN THE DOCUMENTED ORDER, because a
+categorical palette has to clear real gates: adjacent series must stay
+distinguishable under colour-vision deficiency AND to normal vision, and each
+must hold contrast against the surface it sits on. Picking four colours that
+"look distinct" to us is how a chart becomes unreadable for roughly one man in
+twelve - quite possibly someone on the judging panel.
 
-  * adjacent series must stay distinguishable under colour-vision deficiency
-  * they must stay distinguishable to normal vision too
-  * each must hold enough contrast against the surface it sits on
+Our chart forms (stacked bars, lines) are validated on the ADJACENT pair list,
+and the first three slots additionally clear the stricter all-pairs gate, which
+is why line charts plot at most three products.
 
-Picking four colours that "look distinct" to us is exactly how a chart ends up
-unreadable for the ~8% of men with red-green colour blindness — quite possibly
-someone on the judging panel. Our chart forms (stacked bars and lines) are
-validated on the ADJACENT pair list, and the first three slots additionally clear
-the stricter all-pairs gate, which is why the line charts use only slots 1-3.
+DARK MODE IS SELECTED, NOT FLIPPED
+----------------------------------
+The dark column below is NOT the light palette with the lightness inverted. It
+is the same eight hues re-stepped for a dark surface and validated as a set
+against it. An automatic flip is how a palette that passed every gate on white
+quietly fails all of them on black.
+
+Streamlit's own chrome is themed to match from .streamlit/config.toml, which
+declares [theme.light] and [theme.dark] with these same values. We read the
+viewer's choice back at runtime with `st.context.theme.type` so our CSS and our
+charts agree with the widgets around them.
 
 THE RELIEF RULE, AND HOW WE SATISFY IT
 --------------------------------------
-Two of the four slots (aqua, yellow) sit below 3:1 contrast on a light surface.
-The documented mitigation is to ship visible direct labels or a table view. We
-ship BOTH: every score bar is directly labelled, and the full comparison table is
-on the same screen. So colour never carries meaning on its own here.
-
-WHY WE PIN THE APP TO LIGHT MODE
---------------------------------
-.streamlit/config.toml sets base="light". Streamlit would otherwise follow
-whichever laptop it is running on, and a palette validated against a light
-surface tells you nothing about how it renders on a dark one. One mode, validated,
-identical on any machine we demo from. Determinism again — same reason stage 4.5
-anchors to the feed instead of the wall clock.
-
-STATUS COLOURS ARE RESERVED
----------------------------
-The four urgency colours below are a separate, fixed status palette. They are
-never reused as a series colour, so a status red can never impersonate "product
-number four". And every status is shown with an icon AND a word, never colour
-alone — two of them are deliberately low-contrast on light, and the icon+label
-pairing is what makes them safe.
+Two light-mode slots (aqua, yellow) sit below 3:1 contrast on a light surface.
+The documented mitigation is visible direct labels or a table view. We ship
+BOTH: every score bar is directly labelled and the full comparison table is on
+the same screen. Colour never carries meaning alone here - and every status is
+shown as colour AND icon AND word.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import streamlit as st
 
+
+@dataclass(frozen=True)
+class Palette:
+    """Every colour one mode needs. Two instances exist: LIGHT and DARK."""
+
+    name: str
+
+    surface: str        # cards, charts - the colour the palette was validated on
+    canvas: str         # page background, one step behind surface
+    border: str
+    border_strong: str
+
+    ink: str            # primary text
+    ink_secondary: str  # labels, captions
+    ink_muted: str      # de-emphasised; never for anything load-bearing
+
+    series: tuple[str, str, str, str]   # categorical, fixed order, never cycled
+    accent: str                          # brand. Chrome only, never data.
+
+    # Status is fixed across both modes - all four clear 3:1 on either surface.
+    good: str = "#0ca30c"
+    warning: str = "#fab219"
+    serious: str = "#ec835a"
+    critical: str = "#d03b3b"
+
+    @property
+    def criterion_colour(self) -> dict[str, str]:
+        """Soft criterion -> its fixed hue. Colour follows the criterion, never rank."""
+        return dict(zip(("reliability", "price", "replacement", "delivery"), self.series))
+
+    @property
+    def product_series(self) -> tuple[str, ...]:
+        """Line charts get the first three slots only - the all-pairs-safe subset."""
+        return self.series[:3]
+
+    def tint(self, hex_colour: str, alpha: float) -> str:
+        """A translucent wash of a colour, for chip and card backgrounds.
+
+        Expressed as rgba over whatever surface is behind it, rather than as a
+        second hardcoded hex. One definition then works in both modes: the same
+        12% wash reads as a pale tint on white and a deep one on near-black.
+        """
+        value = hex_colour.lstrip("#")
+        r, g, b = (int(value[i:i + 2], 16) for i in (0, 2, 4))
+        return f"rgba({r}, {g}, {b}, {alpha})"
+
+
+LIGHT = Palette(
+    name="light",
+    surface="#fcfcfb",
+    canvas="#f6f6f4",
+    border="#e4e4e0",
+    border_strong="#cfcfc9",
+    ink="#0b0b0b",
+    ink_secondary="#52514e",
+    ink_muted="#83827c",
+    series=("#2a78d6", "#eb6834", "#1baf7a", "#eda100"),   # blue orange aqua yellow
+    accent="#4a3aa7",
+)
+
+DARK = Palette(
+    name="dark",
+    surface="#1a1a19",
+    canvas="#111110",
+    border="#34342f",
+    border_strong="#4a4a44",
+    ink="#ffffff",
+    ink_secondary="#c3c2b7",
+    ink_muted="#8e8d84",
+    series=("#3987e5", "#d95926", "#199e70", "#c98500"),   # same hues, re-stepped
+    accent="#9085e9",
+)
+
+
+def active() -> Palette:
+    """The palette matching whatever the viewer has Streamlit set to.
+
+    `st.context.theme.type` is 'light', 'dark', or None when Streamlit has not
+    resolved a theme yet (which happens outside a browser session, e.g. in
+    tests). Light is the fallback, because a wrong guess toward light is merely
+    plain, whereas a wrong guess toward dark is unreadable on white.
+    """
+    try:
+        return DARK if st.context.theme.type == "dark" else LIGHT
+    except Exception:
+        return LIGHT
+
+
 # ---------------------------------------------------------------------------
-# Surfaces and ink
+# Urgency — colour AND icon AND word, always all three
 # ---------------------------------------------------------------------------
 
-SURFACE = "#fcfcfb"        # the chart surface the palette was validated against
-CANVAS = "#f6f6f4"         # page background, one step back from surface
-BORDER = "#e4e4e0"
-BORDER_STRONG = "#cfcfc9"
+def urgency(key: str) -> tuple[str, str, str]:
+    """(colour, icon, label) for an urgency state.
 
-INK = "#0b0b0b"            # primary text
-INK_SECONDARY = "#52514e"  # labels, captions
-INK_MUTED = "#83827c"      # de-emphasised, never for anything load-bearing
+    Two of the status colours are deliberately low-contrast on a light surface.
+    The icon and the word are what make them safe, so nothing in the UI is ever
+    allowed to render the colour on its own.
+    """
+    palette = active()
+    table = {
+        "act_now":    (palette.critical, "!", "Order today"),
+        "order_soon": (palette.serious,  "•", "Order this week"),
+        "no_rush":    (palette.good,     "✓", "No rush"),
+        "unknown":    (palette.ink_muted, "?", "No history"),
+    }
+    return table.get(key, table["unknown"])
 
-# ---------------------------------------------------------------------------
-# Categorical series — fixed order, never cycled, never re-assigned by rank
-# ---------------------------------------------------------------------------
-# Colour follows the CRITERION, not its position in the ranking. If a filter
-# changes which products are on screen, reliability stays blue. Repainting
-# survivors is how a reader loses track of what a colour means mid-demo.
-
-SERIES = ("#2a78d6", "#eb6834", "#1baf7a", "#eda100")   # blue, orange, aqua, yellow
-
-# The four soft criteria, locked to the four slots above in display order.
-CRITERION_COLOUR: dict[str, str] = {
-    "reliability": SERIES[0],
-    "price": SERIES[1],
-    "replacement": SERIES[2],
-    "delivery": SERIES[3],
-}
-
-# Line charts compare products rather than criteria, and only the first three
-# slots clear the stricter all-pairs gate — so we plot at most three products.
-PRODUCT_SERIES = SERIES[:3]
-
-# ---------------------------------------------------------------------------
-# Status — reserved, never used as a series colour
-# ---------------------------------------------------------------------------
-
-GOOD = "#0ca30c"
-WARNING = "#fab219"
-SERIOUS = "#ec835a"
-CRITICAL = "#d03b3b"
-
-# Urgency, as the UI shows it: colour + icon + word, so colour is never alone.
-URGENCY_STYLE: dict[str, tuple[str, str, str]] = {
-    # key            colour     icon  label
-    "act_now":    (CRITICAL, "!", "Order today"),
-    "order_soon": (SERIOUS,  "•", "Order this week"),
-    "no_rush":    (GOOD,     "✓", "No rush"),
-    "unknown":    (INK_MUTED, "?", "No history"),
-}
-
-ACCENT = "#4a3aa7"         # the one brand colour, for primary actions only
 
 # ---------------------------------------------------------------------------
 # The stylesheet
 # ---------------------------------------------------------------------------
 
-_CSS = f"""
+def _css(p: Palette) -> str:
+    """Build the stylesheet for one palette. Colour appears only where it means something."""
+    return f"""
 <style>
   /* ---- page ------------------------------------------------------------ */
-  .stApp {{ background: {CANVAS}; }}
+  .stApp {{ background: {p.canvas}; }}
   .block-container {{ padding-top: 2.2rem; max-width: 1180px; }}
 
-  h1, h2, h3, h4 {{ color: {INK}; letter-spacing: -0.015em; }}
+  h1, h2, h3, h4 {{ color: {p.ink}; letter-spacing: -0.015em; }}
   h1 {{ font-size: 1.55rem !important; font-weight: 640 !important; }}
 
-  /* Streamlit's tab bar, made to read as product navigation rather than steps */
+  /* A brand-tinted rule under the page title, so the app has an identity
+     without a logo. Chrome, not data. */
+  .brandbar {{
+      height: 3px; width: 64px; border-radius: 2px; margin: 0.1rem 0 1.1rem;
+      background: linear-gradient(90deg, {p.accent}, {p.tint(p.accent, 0.15)});
+  }}
+
   .stTabs [data-baseweb="tab-list"] {{
-      gap: 0.35rem; border-bottom: 1px solid {BORDER}; padding-bottom: 0;
+      gap: 0.35rem; border-bottom: 1px solid {p.border}; padding-bottom: 0;
   }}
   .stTabs [data-baseweb="tab"] {{
       height: 2.6rem; padding: 0 1rem; font-size: 0.92rem; font-weight: 520;
-      color: {INK_SECONDARY};
+      color: {p.ink_secondary};
   }}
-  .stTabs [aria-selected="true"] {{ color: {INK}; font-weight: 620; }}
+  .stTabs [aria-selected="true"] {{ color: {p.ink}; font-weight: 620; }}
 
   /* ---- cards ----------------------------------------------------------- */
   .card {{
-      background: {SURFACE}; border: 1px solid {BORDER}; border-radius: 12px;
+      background: {p.surface}; border: 1px solid {p.border}; border-radius: 12px;
       padding: 1.15rem 1.3rem; margin-bottom: 0.85rem;
   }}
   .card-tight {{ padding: 0.85rem 1rem; }}
 
-  /* The recommendation card. One accent edge, so the eye lands here first. */
+  /* The recommendation card. A brand wash and one accent edge, so the eye
+     lands here first without anything shouting. */
   .hero {{
-      background: {SURFACE}; border: 1px solid {BORDER};
-      border-left: 3px solid {ACCENT}; border-radius: 12px;
+      background: linear-gradient(180deg, {p.tint(p.accent, 0.07)}, {p.surface} 70%);
+      border: 1px solid {p.border};
+      border-left: 3px solid {p.accent}; border-radius: 12px;
       padding: 1.35rem 1.5rem; margin-bottom: 0.9rem;
   }}
   .hero-eyebrow {{
       font-size: 0.72rem; font-weight: 620; letter-spacing: 0.07em;
-      text-transform: uppercase; color: {INK_MUTED}; margin-bottom: 0.4rem;
+      text-transform: uppercase; color: {p.accent}; margin-bottom: 0.4rem;
   }}
-  .hero-title {{ font-size: 1.5rem; font-weight: 650; color: {INK}; line-height: 1.2; }}
-  .hero-sub {{ font-size: 0.95rem; color: {INK_SECONDARY}; margin-top: 0.35rem; }}
+  .hero-title {{ font-size: 1.5rem; font-weight: 650; color: {p.ink}; line-height: 1.2; }}
+  .hero-sub {{ font-size: 0.95rem; color: {p.ink_secondary}; margin-top: 0.35rem; }}
 
-  /* An escalation card is the same shape in a different key - never a
-     red-alert banner. Being asked to approve something is normal, not a fault. */
-  .hero-escalated {{ border-left-color: {SERIOUS}; }}
-  .hero-done {{ border-left-color: {GOOD}; }}
+  /* An escalation is the same card in a different key - never a red alarm
+     banner. Being asked to approve a large order is the system working. */
+  .hero-escalated {{
+      border-left-color: {p.serious};
+      background: linear-gradient(180deg, {p.tint(p.serious, 0.10)}, {p.surface} 70%);
+  }}
+  .hero-escalated .hero-eyebrow {{ color: {p.serious}; }}
+  .hero-done {{
+      border-left-color: {p.good};
+      background: linear-gradient(180deg, {p.tint(p.good, 0.10)}, {p.surface} 70%);
+  }}
+  .hero-done .hero-eyebrow {{ color: {p.good}; }}
 
-  /* ---- figures (the number-first tiles) -------------------------------- */
+  /* ---- figures (number-first tiles) ------------------------------------ */
+  .figure {{
+      background: {p.surface}; border: 1px solid {p.border}; border-radius: 12px;
+      padding: 0.85rem 1rem; margin-bottom: 0.85rem;
+      border-top: 2px solid {p.tint(p.accent, 0.45)};
+  }}
   .figure-label {{
       font-size: 0.74rem; font-weight: 560; letter-spacing: 0.04em;
-      text-transform: uppercase; color: {INK_MUTED};
+      text-transform: uppercase; color: {p.ink_muted};
   }}
   .figure-value {{
-      font-size: 1.42rem; font-weight: 640; color: {INK};
+      font-size: 1.42rem; font-weight: 640; color: {p.ink};
       font-variant-numeric: tabular-nums; line-height: 1.25;
   }}
-  .figure-note {{ font-size: 0.8rem; color: {INK_SECONDARY}; }}
+  .figure-note {{ font-size: 0.8rem; color: {p.ink_secondary}; }}
 
   /* ---- chips ----------------------------------------------------------- */
   .chip-row {{ display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.15rem 0 0.2rem; }}
@@ -169,31 +257,32 @@ _CSS = f"""
       display: inline-flex; align-items: center; gap: 0.35rem;
       font-size: 0.79rem; font-weight: 520; line-height: 1;
       padding: 0.34rem 0.6rem; border-radius: 999px;
-      border: 1px solid {BORDER_STRONG}; background: {SURFACE}; color: {INK_SECONDARY};
-      white-space: nowrap;
+      border: 1px solid {p.border_strong}; background: {p.surface};
+      color: {p.ink_secondary}; white-space: nowrap;
   }}
   .chip-dot {{ width: 7px; height: 7px; border-radius: 999px; flex: none; }}
-  .chip-strong {{ color: {INK}; font-weight: 580; }}
+  /* A tinted chip carries a real signal. The text stays in an ink token - a
+     coloured dot beside it carries the identity, never the words themselves. */
+  .chip-strong {{ color: {p.ink}; font-weight: 580; }}
 
   /* ---- misc ------------------------------------------------------------ */
-  .rule {{ height: 1px; background: {BORDER}; margin: 1.1rem 0; border: 0; }}
+  .rule {{ height: 1px; background: {p.border}; margin: 1.1rem 0; border: 0; }}
   .provenance {{
-      font-size: 0.75rem; color: {INK_MUTED}; font-style: italic; margin-top: 0.3rem;
+      font-size: 0.75rem; color: {p.ink_muted}; font-style: italic; margin-top: 0.3rem;
   }}
   .stButton > button[kind="primary"] {{
-      background: {ACCENT}; border-color: {ACCENT}; font-weight: 580;
+      background: {p.accent}; border-color: {p.accent}; font-weight: 580;
   }}
-  /* The chat transcript should read like a conversation, not a log dump. */
   [data-testid="stChatMessage"] {{ background: transparent; padding: 0.35rem 0; }}
 </style>
 """
 
 
 def inject() -> None:
-    """Apply the stylesheet. Called once, at the top of app.py."""
-    st.markdown(_CSS, unsafe_allow_html=True)
+    """Apply the stylesheet for the viewer's current theme. Called once, in app.py."""
+    st.markdown(_css(active()), unsafe_allow_html=True)
 
 
-def urgency(key: str) -> tuple[str, str, str]:
-    """(colour, icon, label) for an urgency state. Unknown states fail quietly."""
-    return URGENCY_STYLE.get(key, URGENCY_STYLE["unknown"])
+def brandbar() -> None:
+    """The small accent rule under the page title."""
+    st.markdown('<div class="brandbar"></div>', unsafe_allow_html=True)

@@ -122,6 +122,7 @@ def init_state() -> None:
         "confirmation": None,
         "payment": None,
         "summary": None,
+        "last_brief": "",          # so a failure can be re-tested in one click
         "switches": config.failure_injection(),
         "source_keys": list(sources.ALL_SOURCE_KEYS),
     }
@@ -143,6 +144,21 @@ def reset() -> None:
 
 def say(role: str, text: str) -> None:
     st.session_state["messages"].append((role, text))
+
+
+def run_again(text: str) -> None:
+    """Run the same brief as a brand new order.
+
+    Each failure scenario deserves its own transaction id and its own audit
+    file - reopening a finished order to try a different outcome would make the
+    trail a lie about what happened. So this resets and starts fresh rather than
+    rewinding.
+
+    What it removes is only the retyping. Flip a switch, press this, and the same
+    brief runs again from scratch under the new conditions.
+    """
+    reset()
+    handle_message(text)
 
 
 # ---------------------------------------------------------------------------
@@ -201,6 +217,7 @@ def handle_message(text: str) -> None:
         return
 
     st.session_state["pending_brief"] = ""
+    st.session_state["last_brief"] = brief_text
 
     # -- the sentence becomes numbers --------------------------------------
     parsed = language.extract_brief(brief_text, log)
@@ -315,6 +332,20 @@ def render_sidebar() -> None:
                 switches[key] = st.checkbox(label, switches.get(key, False), key=f"sw_{key}")
             st.session_state["switches"] = switches
 
+            # The switches are read when the order is executed, so flipping one
+            # while an order is still awaiting approval takes effect on approve -
+            # no new order needed. Once an order has COMPLETED it is finished for
+            # good, and trying the next scenario means running the brief again.
+            if st.session_state["last_brief"]:
+                st.caption("")
+                if st.button("Run this brief again", width="stretch"):
+                    run_again(st.session_state["last_brief"])
+                    st.rerun()
+                st.caption(
+                    "Starts a fresh order with a new reference and its own audit "
+                    "file, using the switches above."
+                )
+
 
 # ---------------------------------------------------------------------------
 # Screen 1 — Request
@@ -366,10 +397,11 @@ def _brief_readback(ctx) -> None:
     single most important distinction in the whole system.
     """
     brief = ctx.brief
+    palette = theme.active()
 
     ui.section("What we understood")
     ui.chips([
-        (f"{brief.quantity:,} units", theme.ACCENT),
+        (f"{brief.quantity:,} units", palette.accent),
         (brief.category, None),
         *[(spec, None) for spec in brief.specs],
         (f"max ₹{brief.max_price_per_unit_inr:.2f}/unit", None),
@@ -381,7 +413,7 @@ def _brief_readback(ctx) -> None:
         st.markdown("")
         ui.section("What you said matters")
         ui.chips([
-            (f"{criterion} {weight:.0%}", theme.CRITERION_COLOUR.get(criterion))
+            (f"{criterion} {weight:.0%}", palette.criterion_colour.get(criterion))
             for criterion, weight in ctx.weights.values.items()
         ])
         st.caption("These decide the order of the results, never who qualifies.")
@@ -459,7 +491,7 @@ def render_recommendation() -> None:
     )
     st.plotly_chart(charts.score_composition(ctx.ranked), width="stretch",
                     config={"displayModeBar": False})
-    ui.chips([(criterion, colour) for criterion, colour in theme.CRITERION_COLOUR.items()])
+    ui.chips(list(theme.active().criterion_colour.items()))
 
     st.markdown("")
     ui.comparison_table(ctx.ranked, market)
@@ -538,7 +570,7 @@ def _no_match(outcome) -> None:
         ui.section("Closest available")
         for option in outcome.options:
             st.markdown(f"**{option.label}** — {option.note}")
-            ui.chips([(text, theme.SERIOUS) for text in option.violations.values()])
+            ui.chips([(text, theme.active().serious) for text in option.violations.values()])
 
     if outcome.proposed_relaxations:
         ui.section("What would need to change")
@@ -734,6 +766,7 @@ theme.inject()
 init_state()
 
 st.markdown("# Procurement")
+theme.brandbar()
 
 render_sidebar()
 
