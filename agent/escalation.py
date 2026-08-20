@@ -272,18 +272,33 @@ def _no_eligible_match(context: TransactionContext, audit: AuditLogger) -> Escal
         )
     else:
         # Everything failed on the non-negotiable tier, so there is nothing to
-        # propose. Saying that plainly is more useful than an empty list.
-        headline = (
-            "No product met every requirement, and none of the misses were on a "
-            "negotiable limit - the gaps are on category, quantity or specification, "
-            "which we do not relax."
-        )
+        # propose — but we know exactly WHICH requirement did it, on every single
+        # row, and saying "the gaps are on category, quantity or specification"
+        # withholds that. A buyer who types "5 gaming laptops" and is told the
+        # gap is "on specification" has to guess which word broke it. Naming it
+        # turns a dead end into an answer they can act on: drop the word, or buy
+        # somewhere else.
+        blockers = _blocking_requirements(brief, context.rejected)
+        if blockers:
+            headline = (
+                f"We checked {len(context.filter_results)} "
+                f"{config.unit_noun(brief.category)} and none of them clears every "
+                f"requirement - {_and_list(blockers)}. That is not a limit we move, "
+                f"so nothing was ordered."
+            )
+        else:
+            headline = (
+                "No product met every requirement, and none of the misses were on a "
+                "negotiable limit - the gaps are on category, quantity or specification, "
+                "which we do not relax."
+            )
 
     detail = {
         "products_considered": len(context.filter_results),
         "products_eligible": 0,
         "near_misses": {option.label: option.violations for option in options},
         "proposed_relaxations": relaxations,
+        "blocking_requirements": _blocking_requirements(brief, context.rejected),
         "non_negotiable_never_relaxed": ["category", "quantity", "specs"],
         "action_taken": "no purchase executed",
     }
@@ -364,6 +379,63 @@ def _no_vendor_coverage(context: TransactionContext, audit: AuditLogger) -> Esca
         headline=headline,
         detail=detail,
     )
+
+
+def _and_list(items: list[str]) -> str:
+    """['a', 'b', 'c'] -> 'a, b and c'. One sentence, not a bulleted list."""
+    if len(items) <= 1:
+        return "".join(items)
+    return f"{', '.join(items[:-1])} and {items[-1]}"
+
+
+def _blocking_requirements(brief: Brief, rejected: list[FilterResult]) -> list[str]:
+    """The non-negotiable requirements that EVERY product missed, in plain words.
+
+    Only requirements that blocked the WHOLE pool are named. A spec that two
+    products lack is not why the search failed — the others failed on something
+    else, and naming it would send the buyer off to fix the wrong word.
+
+    The spec case reads the unmet keys back off the violation message rather than
+    re-running the comparison, so this can only ever say what the filter actually
+    said. Re-deriving it here would let the explanation and the decision drift
+    apart, and then the screen and the audit log would disagree about why nothing
+    was bought.
+
+    Reported in the buyer's own words where we can: they wrote "double-wall", the
+    gate compares "doublewall", and being told your own sentence back is the
+    difference between an answer and a diagnostic.
+    """
+    failures = [result for result in rejected if not result.passed]
+    if not failures:
+        return []
+
+    phrases: list[str] = []
+
+    if all("category" in result.violations for result in failures):
+        phrases.append(f"none of them is {brief.category}")
+
+    if all("specs" in result.violations for result in failures):
+        unmet = [
+            set(
+                result.violations["specs"]
+                .removeprefix(discovery.SPEC_VIOLATION_PREFIX)
+                .split(", ")
+            )
+            for result in failures
+        ]
+        common = set.intersection(*unmet)
+        if common:
+            spoken = {discovery.spec_key(spec): spec for spec in brief.specs}
+            words = sorted(spoken.get(key, key) for key in common)
+            phrases.append(
+                "nothing we can source lists "
+                + _and_list([f"'{word}'" for word in words])
+            )
+
+    if all("quantity" in result.violations for result in failures):
+        phrases.append(f"no supplier has {brief.quantity:,} of them in stock")
+
+    return phrases
 
 
 def _near_misses(brief: Brief, rejected: list[FilterResult]) -> list[FilterResult]:

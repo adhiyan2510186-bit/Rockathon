@@ -69,6 +69,13 @@ def _spec_key(text: str, generation: int) -> str:
     return config.spec_synonyms().get(cleaned, cleaned)
 
 
+# The opening of the specs violation, shared rather than written twice. The
+# escalation handler reads it back off the message to work out WHICH requirement
+# blocked every product, and a sentence one side rephrases without the other is
+# how that explanation silently turns into "no reason given".
+SPEC_VIOLATION_PREFIX = "does not meet required spec(s): "
+
+
 def spec_key(text: str) -> str:
     """Reduce a spec to a comparable key: lowercase, no spaces, no punctuation.
 
@@ -156,7 +163,7 @@ def apply_hard_gates(brief: Brief, products: list[Product]) -> list[FilterResult
 
         unmet = sorted(required_specs - {spec_key(spec) for spec in product.specs})
         if unmet:
-            violations["specs"] = f"does not meet required spec(s): {', '.join(unmet)}"
+            violations["specs"] = f"{SPEC_VIOLATION_PREFIX}{', '.join(unmet)}"
 
         if product.available_quantity < quantity:
             short = quantity - product.available_quantity

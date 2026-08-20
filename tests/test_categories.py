@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import pytest
 
-from agent import authorisation, config, discovery, language, ranking, weights
+from agent import authorisation, config, discovery, escalation, language, ranking, weights
 from agent import audit as audit_module
 from agent.models import TransactionContext
 
@@ -407,6 +407,43 @@ def test_a_category_nobody_stocks_is_reported_honestly():
     assert stocked == ["furniture", "headphones", "laptops", "packaging"]
     assert "labels" not in stocked
     assert "cement" not in stocked
+
+
+def test_a_requirement_nothing_can_meet_is_named_rather_than_hinted_at():
+    """"The gaps are on specification" is not an answer. Which specification?
+
+    A buyer who asks for something no supplier lists gets a refusal, and that is
+    correct - a spec is a requirement, not a wish. What was NOT correct was the
+    screen: every rejected row carried the exact word that blocked it and we
+    showed none of them, so the buyer was told the shape of the problem and left
+    to guess its content.
+
+    Only a requirement that blocked the WHOLE pool is named. A spec two products
+    lack is not why the search failed, and naming it would send someone off to
+    fix the wrong word.
+    """
+    text = ("5,000 kraft mailer boxes, double-wall, max Rs 22 per unit, "
+            "delivered within 10 days.")
+    brief = language._to_brief(text, language._offline_extract(text), audit=None)
+    brief = brief.model_copy(update={"specs": ["double-wall", "flame-retardant"]})
+
+    context = TransactionContext(transaction_id="TXN-BLOCKED", brief=brief)
+    context.filter_results = discovery.run(brief)
+    assert not context.eligible, "nothing stocks flame-retardant; this must not qualify"
+
+    outcome = escalation.handle(
+        context, escalation.Trigger.NO_ELIGIBLE_MATCH, audit_module.AuditLogger(context)
+    )
+
+    assert "'flame-retardant'" in outcome.headline
+    assert "'double-wall'" not in outcome.headline, (
+        "double-wall is stocked, so it did not block anything and must not be blamed"
+    )
+    assert outcome.detail["blocking_requirements"] == [
+        "nothing we can source lists 'flame-retardant'"
+    ]
+    assert outcome.detail["action_taken"] == "no purchase executed"
+    assert not outcome.options, "nothing is offered when the miss is non-negotiable"
 
 
 # ---------------------------------------------------------------------------

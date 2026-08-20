@@ -410,8 +410,18 @@ def _extraction_task() -> str:
         "not judge whether anything is reasonable.\n\n"
         f"For stated_priorities, use only these phrase labels: {labels}. "
         "Include a criterion ONLY if the user actually expressed a preference about "
-        "it. 'Reliability matters a lot' is a stated priority; simply mentioning a "
-        "price ceiling is not.\n\n"
+        "it. 'Reliability matters a lot' is a stated priority. Stating a LIMIT is "
+        "not a preference: 'max Rs 22 per unit' and 'delivered within 10 days' are "
+        "requirements the purchase has to meet, and neither is a priority.\n"
+        # Added after "5 gaming laptops - as cheap as possible" came back with no
+        # priority at all. That is a stated preference in anyone's English, and
+        # missing it does more damage than missing a spec: a missed spec ends in
+        # an honest refusal, while a missed priority ends in a confident
+        # recommendation ranked against the one thing the buyer asked for.
+        "A preference does not have to name the criterion to be one. 'As cheap as "
+        "possible' and 'the cheapest you can find' are price at the strongest "
+        "label; 'whatever is most reliable' is reliability; 'we need these fast' "
+        "is delivery. A superlative about the purchase is a stated priority.\n\n"
         "Leave a numeric field null if the user did not state it. Never guess a "
         "number. Put physical or technical requirements - materials, "
         "dimensions, sizes, capacities - in specs.\n\n"

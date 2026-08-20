@@ -127,6 +127,28 @@ SECTION 1 - READING WHAT A HUMAN ACTUALLY WROTE
                  is the only place a model touches, and why its output is
                  checked against a parser that cannot be persuaded."
 
+1.6  A PREFERENCE DOES NOT HAVE TO NAME THE CRITERION
+    The trap:   "5 gaming laptops - as cheap as possible - within 14 days."
+    Naive:      Our extraction looked for a preference ATTACHED to a criterion
+                ("reliability matters a lot") and came back with no priority at
+                all. So the agent asked what the laptops were for, and the answer
+                "development and builds" set price to 0.15 - the exact opposite
+                of the one thing the buyer had actually said.
+    Why it is worse than the spec bug: a missed spec ends in an honest refusal.
+                A missed priority ends in a confident recommendation ranked
+                against the buyer's own words, and nothing on the screen looks
+                wrong.
+    We do:      The extraction prompt now treats a superlative about the purchase
+                as a stated priority - "as cheap as possible" is price at the
+                strongest label, "we need these fast" is delivery. And stating a
+                LIMIT is still not a preference: "max Rs 22 per unit" and "within
+                10 days" are requirements, not priorities, or every brief would
+                arrive pre-weighted by its own deadline.
+    THE LINE:   "The dangerous parse is not the one that fails. It is the one
+                 that succeeds while quietly dropping the only preference the
+                 buyer expressed - and then asks them a question they already
+                 answered."
+
 ================================================================================
 SECTION 2 - TWO VENDORS, TWO SCHEMAS, ONE TRUTH
 ================================================================================
@@ -500,6 +522,27 @@ SECTION 5 - WHERE THE AGENT'S AUTHORITY ENDS
     THE LINE:   "A wide gap means number two is a meaningfully worse fit for
                  what she actually asked for. Silently swapping is how an agent
                  buys something the buyer never chose and calls it a fallback."
+
+5.4b  A REFUSAL THAT DOES NOT NAME THE REASON IS NOT AN ANSWER
+    The trap:   Nothing qualified, and every miss was on a requirement we never
+                relax. There is genuinely nothing to offer.
+    Naive:      Say so. Ours said "the gaps are on category, quantity or
+                specification, which we do not relax" - which is true, complete,
+                and useless. A buyer who typed "5 gaming laptops" is told the
+                SHAPE of the problem and left to guess its content.
+    We do:      Name the requirement that blocked the whole pool, in the buyer's
+                own words: "we checked 16 laptops and none of them clears every
+                requirement - nothing we can source lists 'gaming'." Only a
+                requirement that blocked EVERY product is named; a spec two
+                products lack is not why the search failed, and blaming it sends
+                someone off to fix the wrong word.
+    Note:       The reason is read back off the violation the filter already
+                wrote, not recomputed. If the screen and the log ever disagreed
+                about why nothing was bought, the log stops being evidence.
+    THE LINE:   "We had the exact word that killed the search on all sixteen
+                 rows and we were showing none of them. A refusal is a product
+                 surface too - 'no' without 'because' is where a user decides
+                 the tool is broken."
 
 5.5  WHAT IS DELIBERATELY *NOT* AN ESCALATION  ** shows restraint - use it **
     The trap:   The top pick is imperfect on some soft preference.
