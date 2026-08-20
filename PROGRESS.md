@@ -1,7 +1,7 @@
 # PROGRESS.md — where we are, so we can restart cold
 
 Read CLAUDE.md first (the rules). Read this second (the state).
-Last updated: 2026-08-19.
+Last updated: 2026-08-20.
 
 ---
 
@@ -33,8 +33,9 @@ parser and the UI says so plainly.
 | 10 | `agent/ranking.py` + `tests/test_ranking.py` | 4 — the golden 58.0/48.7/33.7 | **DONE — 14 tests green** |
 | 11 | `agent/escalation.py` | one handler, four call sites | **DONE** |
 | 12 | `agent/authorisation.py` | 5 — the limit check | **DONE** |
-| 13 | `agent/vendor.py`, `agent/payment.py` | 6-7 — mocks with failure switches | **NEXT** |
-| 14 | `app.py` | Streamlit, four screens | to do |
+| 13 | `agent/vendor.py` | 6 — confirmation & lock, with failure switches | **DONE** |
+| 14 | `agent/payment.py` | 7 — mock payment, retry once then fall back | **NEXT** |
+| 15 | `app.py` | Streamlit, four screens | to do |
 
 `audit.py` is done, so every stage from here on can write its own log line as
 it acts instead of being retrofitted later. `language.py` is next: it is the
@@ -182,6 +183,77 @@ at 4,000 units proceeds alone at Rs 87,600 with Rs 17,400 of headroom. Approving
 declining and expiring each land in the right state, and calling any of the three
 on a transaction that is not awaiting approval raises rather than silently
 acting. Golden test still 14 green.
+
+### Stage 6: confirmation & lock (`agent/vendor.py`)
+
+The last check before money moves. Stages 3-5 all worked from a snapshot taken
+at the start of the run, and a human may have spent an hour deciding in the
+middle of it. So we go back to the vendor and ask two questions about the exact
+product we are about to buy: **do you still have 5,000, and is it still Rs
+21.90?**
+
+`confirm(context, audit, overrides=None)` is the whole stage. It refuses to run
+unless the transaction is APPROVED — reaching a vendor counter without passing
+stage 5 would mean the one human-in-the-loop gate had been skipped.
+
+**It re-reads the catalog rather than trusting `context.selected`.**
+`_live_record()` goes back through `discovery.discover()`, a genuine second
+lookup. Checking our stage-3 copy against itself would pass every time and prove
+nothing. In a real build that function is the vendor's API call — swapping it is
+a one-function change, which is the whole reason it is a module and not a server.
+
+**Re-validation reuses `discovery.apply_hard_gates`.** We rebuild the product at
+the vendor's quoted figures and put it through the same gate stage 3 used. Same
+reason as in escalation.py: two definitions of "eligible" in one codebase is how
+an ineligible product ends up bought.
+
+Three things can go wrong, and all three leave through `escalation.handle()`
+with trigger #3 — this file writes no approval screen of its own:
+
+| What moved | What the human reads |
+|---|---|
+| stock | "is out of stock at confirmation - has 0 in stock against 5,000 needed" |
+| price up | "no longer passes a hard constraint - Rs 23.65 exceeds the Rs 22.00 cap" |
+| money | "would cost Rs 1,09,750, above the Rs 1,09,500 authorised for this order" |
+
+**The agent may lock only two things**: an order at exactly the price that was
+approved, or one that got CHEAPER (nobody needs approval to spend less). Any
+increase escalates, however small — Rs 21.95 is still not the number anybody
+said yes to.
+
+**The money ceiling is a hole we found while testing, not a feature we planned.**
+The escalation handler gates a trigger-3 fallback on the SCORE gap — how
+different the box is — never on what it costs. With our catalog the fallback is
+always cheaper, so it never bites; but "the agent may not commit more than it was
+authorised to" cannot be a rule that only holds because seven mock products
+happen to be priced conveniently. `_authorised_ceiling()` is `max(the agent's
+limit, the total a human actually approved)`, so both routes into stage 6 carry
+their own ceiling and neither number is invented here.
+
+**A fallback is confirmed at the counter too.** When the handler resolves a swap,
+`confirm()` loops and quotes the replacement as well, rather than assuming a swap
+made on paper is one the vendor will honour. It terminates because every product
+tried is added to `exclude_ids` and never offered back.
+
+Two smaller decisions worth defending:
+
+- **The failure switches apply to the FIRST quote only.** They describe one
+  vendor having one bad day. A flag that broke every vendor in the country would
+  make the fallback path untestable, and that is the path we most want to show.
+  Each quote records which switches were on, so an injected demo failure can
+  never be read back later as something a vendor really did.
+- **The lock reference is derived, not random** — `LOCK-TXN-4471-PH-CORUSAFE-DW`.
+  Same run, same reference, every rehearsal. It is quoted at payment and in the
+  audit entry, so the thing paid for and the thing confirmed are provably the
+  same thing.
+
+Verified on the demo brief: clean confirmation locks Corusafe at Rs 21.90 x 5,000
+= Rs 1,09,500 after Meena approves; out-of-stock and price-drift injections both
+escalate (the 9.3-point gap is over the 5-point threshold); with the gap forced
+to 3 points the agent swaps to KraftPro AND re-confirms it, locking Rs 1,04,500;
+a Rs 21.95 fallback is refused on the money ceiling; and calling `confirm()` on a
+RANKED or AWAITING_APPROVAL transaction raises rather than acting. Golden test
+still 14 green.
 
 ---
 
