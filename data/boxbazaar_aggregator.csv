@@ -6,7 +6,10 @@
 # ("DW" for double-wall). agent/discovery.py has to translate all of it into the
 # same Product shape PackHub lands in. If both files had the same columns, the
 # normaliser would be a rename and would prove nothing.
-item_code,product_name,category_tag,rate_paise,ship_window,vendor_score_100,returns_policy,qty_available,spec_blob
-BB-ECOMAIL-DW,EcoMail DW,PACKAGING,1760,7-9 days,82,30-day replacement,50000,DW | 200 x 150 x 80 mm | kraft | recycled
-BB-VALUEPACK-DW,ValuePack DW,PACKAGING,1490,10-12 days,76,15-day replacement,60000,DW | 200 x 150 x 80 mm | kraft
-BB-CRAFTMAIL-DW,CraftMail DW,PACKAGING,1980,5-6 days,88,20-day replacement,3000,DW | 200 x 150 x 80 mm | kraft
+# The two trail columns are the SAME information PackHub publishes as nested JSON
+# arrays, flattened into one string each: 'date:value' pairs, pipe separated, price
+# in PAISE like the rate column. Authored demo data, labelled as such in the UI.
+item_code,product_name,category_tag,rate_paise,ship_window,vendor_score_100,returns_policy,qty_available,spec_blob,price_trail,stock_trail
+BB-ECOMAIL-DW,EcoMail DW,PACKAGING,1760,7-9 days,82,30-day replacement,50000,DW | 200 x 150 x 80 mm | kraft | recycled,2026-08-11:1840|2026-08-13:1790|2026-08-15:1770|2026-08-17:1765|2026-08-19:1760,2026-08-11:54000|2026-08-13:53000|2026-08-15:52000|2026-08-17:51000|2026-08-19:50000
+BB-VALUEPACK-DW,ValuePack DW,PACKAGING,1490,10-12 days,76,15-day replacement,60000,DW | 200 x 150 x 80 mm | kraft,2026-08-11:1520|2026-08-13:1510|2026-08-15:1500|2026-08-17:1495|2026-08-19:1490,2026-08-11:62000|2026-08-13:61500|2026-08-15:61000|2026-08-17:60500|2026-08-19:60000
+BB-CRAFTMAIL-DW,CraftMail DW,PACKAGING,1980,5-6 days,88,20-day replacement,3000,DW | 200 x 150 x 80 mm | kraft,2026-08-11:1900|2026-08-13:1920|2026-08-15:1950|2026-08-17:1970|2026-08-19:1980,2026-08-11:9000|2026-08-13:7500|2026-08-15:6000|2026-08-17:4500|2026-08-19:3000

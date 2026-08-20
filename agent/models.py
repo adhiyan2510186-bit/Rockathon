@@ -28,7 +28,7 @@ agent/config.py, and only from there. See CLAUDE.md, "THE ONE RULE".
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from enum import Enum
 from typing import Any, Literal
 
@@ -226,6 +226,27 @@ class Weights(BaseModel):
 # Stage 3 — the normalised product
 # ---------------------------------------------------------------------------
 
+class Observation(BaseModel):
+    """One dated reading of a product's price or stock level.
+
+    Both catalogs publish a short history and both publish it differently —
+    PackHub as nested JSON objects, BoxBazaar as a flat "date:value|date:value"
+    string in paise. Each adapter converts its own shape into a list of these,
+    so stage 4.5 computes over one series type and never learns which feed it
+    came from.
+
+    IMPORTANT, AND WE SAY IT OUT LOUD: in this build these series are AUTHORED
+    DEMO DATA, not observations of a real market. The UI labels every chart
+    drawn from them 'simulated market data'. A fabricated chart presented as
+    real would contradict the exact property this whole project is selling.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    on: date = Field(description="The day this reading was taken.")
+    value: float = Field(description="Rupees per unit, or units in stock.")
+
+
 class Product(BaseModel):
     """One purchasable item, in the single shape the rest of the pipeline uses.
 
@@ -265,6 +286,18 @@ class Product(BaseModel):
     # --- Soft scoring inputs --------------------------------------------------
     reliability_rating: float = Field(ge=0, le=5, description="Seller reliability out of 5, e.g. 4.8.")
     replacement_window_days: int = Field(ge=0, description="Days to raise a replacement claim, e.g. 7.")
+
+    # --- Stage 4.5 inputs -----------------------------------------------------
+    # Advisory only. Nothing below this line may affect eligibility or score —
+    # see CLAUDE.md, "urgency changes priority, never authority". Both default to
+    # empty: a source that publishes no history produces no signal, which is the
+    # honest outcome. We would rather say nothing than guess a trend.
+    price_history: tuple[Observation, ...] = Field(
+        default=(), description="Dated per-unit price readings, oldest first."
+    )
+    stock_history: tuple[Observation, ...] = Field(
+        default=(), description="Dated stock-level readings, oldest first."
+    )
 
     @property
     def label(self) -> str:
@@ -350,11 +383,18 @@ class ScoredProduct(BaseModel):
 # ---------------------------------------------------------------------------
 
 class EventType(str, Enum):
-    """The five things that can happen to a transaction. Nothing else is loggable.
+    """The six things that can happen to a transaction. Nothing else is loggable.
 
     A fixed list is the point. A finance manager reading the log should never
     meet an event type they have to ask about, and we should never be able to
     bury an escalation under a vague label.
+
+    MARKET_SIGNAL is advisory BY DEFINITION. An entry of this type never
+    accompanies a change in eligibility, score, ranking or authorisation - it
+    records that the agent noticed timing pressure and did nothing about it
+    except tell a human. If one ever appears next to a purchase that would
+    otherwise have escalated, that is the bug CLAUDE.md's stage 4.5 guardrail
+    exists to prevent.
     """
 
     DECISION = "DECISION"        # the agent chose something
@@ -362,6 +402,7 @@ class EventType(str, Enum):
     ESCALATION = "ESCALATION"    # the agent stopped and asked a human
     FALLBACK = "FALLBACK"        # the agent moved to the next eligible option
     ACTION = "ACTION"            # the agent did something in the world (paid, ordered)
+    MARKET_SIGNAL = "MARKET_SIGNAL"  # the agent noticed timing pressure and only said so
 
 
 class Actor(str, Enum):

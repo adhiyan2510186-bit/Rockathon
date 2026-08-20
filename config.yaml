@@ -95,6 +95,31 @@ priority_phrase_weights:
 weight_rounding_step: 0.05
 
 # ---------------------------------------------------------------------------
+# Stage 4.5 - market signal thresholds
+# ---------------------------------------------------------------------------
+# Stage 4.5 reads each product's price and stock history and says whether NOW is
+# a good time to order it. It is ADVISORY and nothing else. Read CLAUDE.md,
+# "urgency changes priority, never authority": a signal computed from these
+# numbers may never move a product past a hard gate, add a point of score,
+# reorder the ranking, or justify spending above authorisation_limit_inr.
+#
+# They live here for the same reason every other limit does - so no phrasing in a
+# user's brief can move them, and so a judge can see the number that produced the
+# words on screen. The LLM never sees this block.
+market_signal:
+
+  # Stock cover, in days, at the observed depletion rate. The question each one
+  # answers is "how long until this vendor no longer has enough for MY order?" -
+  # not "until they hit zero", which would flatter a big catalog.
+  act_now_cover_days: 3        # at or under this -> "order today"
+  order_soon_cover_days: 7     # at or under this -> "order this week"
+
+  # How much a price has to move across the observed window before we call it a
+  # trend rather than noise. Percent, applied in both directions. Set it too low
+  # and every product looks urgent, which is the same as none of them being.
+  material_price_move_pct: 3.0
+
+# ---------------------------------------------------------------------------
 # Stages 0-2 — the language step
 # ---------------------------------------------------------------------------
 # The ONLY part of this file that concerns an LLM, and note what is here: a

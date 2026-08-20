@@ -156,6 +156,59 @@ view in the UI is reading the file, not re-deriving anything.
 
 ---
 
+## 6 · Four "best in pool" badges from one pass, not four sorts
+
+**Claim.** Stage 4.5 works out which product is cheapest, fastest, most reliable
+and has the longest replacement window by walking the pool **once**.
+
+**Where.** `agent/signals.py:334` — `_pool_positions()`. All four bests are
+tracked in a single `for product in products` loop.
+
+**What the naive version does.** Sort the pool four times, once per criterion,
+and take the head of each — `4 × O(n log n)`, plus four throwaway lists. It is
+the obvious way to write it and it re-walks the same data four times to answer
+four questions that could be answered together.
+
+**Shape.** `O(n · k)` with `k = 4` fixed, versus `O(k · n log n)`. One traversal,
+constant extra memory.
+
+**A correctness decision inside it, worth mentioning.** Only a *strictly unique*
+best earns a badge. If two products tie on price, neither is labelled "cheapest"
+— a badge on two rows tells a reader nothing, and "joint cheapest" is not a
+distinguishing fact. Locked by
+`tests/test_signals.py::test_pool_chips_go_only_to_an_outright_winner`.
+
+**Honest scope.** At n=3 survivors this is not a speed story. It is the same
+principle as entry 3: answer every question you can from the traversal you are
+already doing.
+
+---
+
+## 7 · The market signal is structurally unable to change the decision
+
+**Claim.** Stage 4.5 cannot alter eligibility, score, ranking or authorisation —
+not by policy, but because it has no reference to anything that holds one.
+
+**Where.** `agent/signals.py:373` — `read()` takes the ranked list as read-only
+input and returns a separate `MarketRead` keyed by product id. The module imports
+neither `agent.ranking` nor `agent.authorisation`.
+
+**Why this belongs in an efficiency file.** Because it is also why the signal is
+free to re-run. It derives from immutable `Product` data and never feeds back
+into the pipeline, so recomputing it costs nothing and can never desynchronise
+the ranking from what the user was shown.
+
+**Measured.** `tests/test_signals.py` runs the full pipeline twice — once with
+signals, once without — and asserts the ranking and the authorisation outcome are
+identical. Plus a structural test asserting the imports are absent, so a future
+edit that reaches for the ranker fails at the test, not on stage.
+
+**The sentence for stage.** *"Our winner is flagged 'order today' and it still
+escalates for human approval, because the order is over the limit. Urgency
+changes priority. It never changes authority."*
+
+---
+
 ## How to add to this file
 
 Log the win **when you write the code**, not at the end. Each entry needs:

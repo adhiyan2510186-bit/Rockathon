@@ -77,6 +77,7 @@ STAGE_EXTRACTION = "1 - requirement extraction"
 STAGE_WEIGHTS = "2 - preference & weight engine"
 STAGE_DISCOVERY = "3 - vendor discovery & filter"
 STAGE_RANKING = "4 - ranking"
+STAGE_SIGNAL = "4.5 - market signal"
 STAGE_AUTHORISATION = "5 - decision & authorisation"
 STAGE_CONFIRMATION = "6 - vendor confirmation & lock"
 STAGE_PAYMENT = "7 - mock payment execution"
@@ -163,7 +164,7 @@ class AuditLogger:
         with self.path.open("a", encoding="utf-8") as handle:
             handle.write(entry.model_dump_json() + "\n")
 
-    # -- the five event types, one method each ------------------------------
+    # -- the six event types, one method each -------------------------------
     # These exist so a call site reads like the thing that happened
     # ("audit.escalation(...)") rather than like a logging library. They add no
     # behaviour: each one names its event_type and hands over to log().
@@ -237,6 +238,27 @@ class AuditLogger:
     ) -> AuditEntry:
         """The agent did something in the world: locked an order, took a payment."""
         return self.log(stage, EventType.ACTION, reasoning, detail, notify, actor)
+
+    def market_signal(
+        self,
+        stage: str,
+        reasoning: str,
+        detail: dict[str, Any] | None = None,
+        notify: list[str] | None = None,
+    ) -> AuditEntry:
+        """The agent noticed timing pressure and did nothing about it except say so.
+
+        The only event type that is advisory by definition. An entry of this type
+        never accompanies a change in eligibility, score, ranking or
+        authorisation - if one ever does, that is the bug CLAUDE.md's stage 4.5
+        guardrail exists to prevent, and the log is where it would show.
+
+        Notifies the requester only. Finance does not need to hear that a vendor
+        is running low; finance needs to hear when money is about to move, and
+        that is what escalation() and action() are for. Copying them on advice
+        is how a notify list becomes noise nobody reads.
+        """
+        return self.log(stage, EventType.MARKET_SIGNAL, reasoning, detail, notify, Actor.AGENT)
 
     # -- reading it back ----------------------------------------------------
 

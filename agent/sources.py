@@ -62,10 +62,11 @@ import json
 import re
 from abc import ABC, abstractmethod
 from collections.abc import Iterable, Sequence
+from datetime import date
 from pathlib import Path
 from typing import Literal
 
-from agent.models import Product
+from agent.models import Observation, Product
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 
@@ -144,6 +145,8 @@ class PackHubAdapter(SourceAdapter):
                 available_quantity=item["stock_qty"],
                 reliability_rating=item["seller_rating"],
                 replacement_window_days=item["replacement_window_days"],
+                price_history=_json_series(item.get("price_history"), "unit_price_inr"),
+                stock_history=_json_series(item.get("stock_history"), "stock_qty"),
             )
 
 
@@ -183,7 +186,57 @@ class BoxBazaarAdapter(SourceAdapter):
                 available_quantity=int(row["qty_available"]),
                 reliability_rating=float(row["vendor_score_100"]) / 20, # 82/100 -> 4.1/5
                 replacement_window_days=first_number(row["returns_policy"]),  # "30-day…" -> 30
+                price_history=_trail(row.get("price_trail"), divide_by=100),  # paise -> rupees
+                stock_history=_trail(row.get("stock_trail")),
             )
+
+
+# ---------------------------------------------------------------------------
+# Price and stock history — two feeds, two shapes, one series type
+# ---------------------------------------------------------------------------
+# Stage 4.5 computes over `tuple[Observation, ...]` and never learns which feed a
+# series came from. Getting there is two different jobs:
+#
+#   PackHub    [{"date": "2026-08-11", "unit_price_inr": 20.90}, ...]   nested JSON
+#   BoxBazaar  "2026-08-11:2090|2026-08-13:2110|..."                    flat, in paise
+#
+# Same information, and a real integration would meet both. Each helper below
+# returns an empty tuple when its column is absent, because a source that
+# publishes no history should produce no signal — see signals.py. Saying nothing
+# is the honest answer; inventing a trend is not.
+
+def _json_series(raw: list[dict] | None, value_key: str) -> tuple[Observation, ...]:
+    """PackHub's shape: a list of objects, each with a date and one named value."""
+    if not raw:
+        return ()
+    return tuple(
+        Observation(on=date.fromisoformat(point["date"]), value=float(point[value_key]))
+        for point in raw
+    )
+
+
+def _trail(raw: str | None, divide_by: float = 1.0) -> tuple[Observation, ...]:
+    """BoxBazaar's shape: 'date:value|date:value', optionally in paise.
+
+    `divide_by` is the same paise-to-rupees conversion the rate column needs. It
+    is a parameter rather than two near-identical functions so the price and
+    stock trails cannot drift apart.
+    """
+    if not raw or not raw.strip():
+        return ()
+
+    observations = []
+    for pair in raw.split("|"):
+        pair = pair.strip()
+        if not pair:
+            continue
+        day, _, value = pair.partition(":")
+        if not value:
+            raise ValueError(f"could not read a date:value pair from {pair!r}")
+        observations.append(
+            Observation(on=date.fromisoformat(day.strip()), value=float(value) / divide_by)
+        )
+    return tuple(observations)
 
 
 # ---------------------------------------------------------------------------

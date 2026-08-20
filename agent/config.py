@@ -95,6 +95,7 @@ def _validate(raw: dict[str, Any]) -> None:
         "weight_rounding_step",
         "llm",
         "demo_failure_injection",
+        "market_signal",
     ]
     missing = [key for key in required if key not in raw]
     if missing:
@@ -105,6 +106,22 @@ def _validate(raw: dict[str, Any]) -> None:
 
     if raw["substitution_threshold_points"] < 0:
         raise ConfigError("substitution_threshold_points cannot be negative")
+
+    # Stage 4.5 thresholds. "Act now" has to be a tighter window than "order
+    # soon", or every product falls into whichever band is checked first and the
+    # distinction stops meaning anything on screen.
+    signal = raw["market_signal"]
+    for key in ("act_now_cover_days", "order_soon_cover_days", "material_price_move_pct"):
+        if key not in signal:
+            raise ConfigError(f"market_signal is missing '{key}'")
+        if signal[key] <= 0:
+            raise ConfigError(f"market_signal['{key}'] must be a positive number")
+    if signal["act_now_cover_days"] >= signal["order_soon_cover_days"]:
+        raise ConfigError(
+            "market_signal: act_now_cover_days must be SMALLER than "
+            "order_soon_cover_days - 'order today' is a tighter window than "
+            "'order this week'."
+        )
 
     # Every category's default weights must sum to 1.0. A set that sums to 0.9
     # would silently shrink every score and quietly break the golden numbers.
@@ -163,6 +180,32 @@ def substitution_threshold_points() -> float:
     In our demo the gap is 9.3 points, so the agent escalates rather than swaps.
     """
     return float(load()["substitution_threshold_points"])
+
+
+# ---------------------------------------------------------------------------
+# Stage 4.5 — market signal thresholds
+# ---------------------------------------------------------------------------
+# Advisory numbers only. Nothing read through these three functions may change
+# eligibility, score, ranking or the authorisation decision — see CLAUDE.md,
+# "urgency changes priority, never authority".
+
+def act_now_cover_days() -> float:
+    """At or below this many days of stock cover, we say "order today" (3)."""
+    return float(load()["market_signal"]["act_now_cover_days"])
+
+
+def order_soon_cover_days() -> float:
+    """At or below this many days of cover, we say "order this week" (7)."""
+    return float(load()["market_signal"]["order_soon_cover_days"])
+
+
+def material_price_move_pct() -> float:
+    """How far a price must move across the window before we call it a trend (3%).
+
+    Below this we say nothing about direction. A signal that fires on noise
+    trains a user to ignore it, which is worse than having no signal at all.
+    """
+    return float(load()["market_signal"]["material_price_move_pct"])
 
 
 # ---------------------------------------------------------------------------
