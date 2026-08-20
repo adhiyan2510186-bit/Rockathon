@@ -35,6 +35,16 @@ LAPTOP_BRIEF = (
     "delivered within 12 days. Reliability matters a lot."
 )
 
+# The third category, and the one where the cheap-and-nasty option genuinely
+# QUALIFIES. Packaging, furniture and laptops all happen to reject their worst
+# listing on a hard gate, which leaves an obvious question unanswered: what stops
+# the agent buying the Rs 1,299 headset that passes every check and has 2.8 stars?
+# Nothing stops it from qualifying. The ranking is what stops it from winning.
+HEADPHONE_BRIEF = (
+    "25 wireless noise-cancelling headsets, over-ear, max Rs 4,000 each, "
+    "delivered within 12 days. Reliability matters a lot."
+)
+
 # Both briefs say "reliability matters a lot", so both land on the same rounded
 # weights the packaging demo uses - from DIFFERENT category defaults, rescaled by
 # the same pure-Python weight engine. That the two agree is the point: the phrase
@@ -90,8 +100,10 @@ def authorise(text: str):
     [
         (FURNITURE_BRIEF, "furniture", 12, 7000.0, 14, ["mesh back", "adjustable height"]),
         (LAPTOP_BRIEF, "laptops", 8, 65000.0, 12, ["16gb ram", "512gb ssd"]),
+        (HEADPHONE_BRIEF, "headphones", 25, 4000.0, 12,
+         ["over-ear", "wireless", "noise-cancelling"]),
     ],
-    ids=["furniture", "laptops"],
+    ids=["furniture", "laptops", "headphones"],
 )
 def test_brief_is_parsed_into_the_right_category(text, category, quantity, cap, days, specs):
     """Category, quantity, cap, window and specs, with no model involved.
@@ -109,9 +121,13 @@ def test_brief_is_parsed_into_the_right_category(text, category, quantity, cap, 
     assert sorted(brief.specs) == sorted(specs)
 
 
-@pytest.mark.parametrize("text", [FURNITURE_BRIEF, LAPTOP_BRIEF], ids=["furniture", "laptops"])
+@pytest.mark.parametrize(
+    "text",
+    [FURNITURE_BRIEF, LAPTOP_BRIEF, HEADPHONE_BRIEF],
+    ids=["furniture", "laptops", "headphones"],
+)
 def test_stated_priority_beats_the_category_default(text):
-    """Two different default tables, one stated phrase, the same rounded weights."""
+    """Three different default tables, one stated phrase, the same rounded weights."""
     _, computed, _, _ = build_pipeline(text)
 
     assert computed.values == STATED_WEIGHTS
@@ -122,19 +138,32 @@ def test_stated_priority_beats_the_category_default(text):
 # The hard gate, and the four ways to fail it
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("text", [FURNITURE_BRIEF, LAPTOP_BRIEF], ids=["furniture", "laptops"])
-def test_three_of_seven_survive_and_every_gate_is_exercised(text):
-    """Seven candidates, three survivors, and the four rejections are one each.
+@pytest.mark.parametrize(
+    "text, pool, survivors",
+    [
+        (FURNITURE_BRIEF, 10, 3),
+        (LAPTOP_BRIEF, 16, 3),
+        (HEADPHONE_BRIEF, 14, 5),
+    ],
+    ids=["furniture", "laptops", "headphones"],
+)
+def test_the_pool_size_is_frozen_and_every_gate_is_exercised(text, pool, survivors):
+    """Every category's candidate pool fails on all four counts, and no others.
 
     Authored that way on purpose. A catalog where everything passes proves the
     filter runs; a catalog that fails on all four counts proves which gate is
     which - and gives us something to point at when a judge asks what happens to
     the ones that lost.
+
+    The pool size is asserted for the same reason it is in tests/test_ranking.py:
+    two of the four scoring terms are min-max across the SURVIVORS, so a listing
+    that quietly starts passing would move a frozen table with nothing in the
+    diff to explain it.
     """
     _, _, results, _ = build_pipeline(text)
 
-    assert len(results) == 7
-    assert sum(result.passed for result in results) == 3
+    assert len(results) == pool
+    assert sum(result.passed for result in results) == survivors
 
     reasons = {field for result in results if not result.passed for field in result.violations}
     assert reasons == {"specs", "quantity", "max_price_per_unit_inr", "max_delivery_days"}
@@ -175,10 +204,79 @@ def test_laptop_scores_are_frozen():
     ]
 
 
+def test_headphone_scores_are_frozen():
+    """Five survivors, and the cheapest of them is last by a distance.
+
+    This pool is the answer to "what if the bad option passes your filter?".
+    Every one of these five cleared the same hard gates; the Boult at Rs 1,299 is
+    Rs 1,550 cheaper than the winner and lands 52.7 points behind it, because
+    2.8 stars against a 4.7 is worth more than a price margin when the user said
+    reliability matters. No gate rejected it. The weights simply out-voted it.
+    """
+    _, _, _, ranked = build_pipeline(HEADPHONE_BRIEF)
+
+    assert {entry.product.product_id: entry.score for entry in ranked} == {
+        "AMZ-HPH-1302": 80.6,   # Sony WH-CH720N        Rs 3,890  4.7 stars
+        "OS-AUDIOPRO-OE": 69.7,  # AudioPro OE           Rs 3,450  4.5 stars
+        "AMZ-HPH-1301": 66.1,   # boAt Rockerz (Amazon) Rs 2,999  4.4 stars
+        "FLK-HPH-2301": 57.5,   # boAt Rockerz (Flipkart) Rs 2,849 4.2 stars
+        "FLK-HPH-2302": 27.9,   # Boult ProBass         Rs 1,299  2.8 stars
+    }
+
+
+def test_the_worst_reviewed_headset_qualifies_and_still_loses():
+    """The trap in full: it passes every hard gate, and the ranking buries it.
+
+    A filter cannot express "this is cheap because it is bad" — reliability is a
+    SOFT criterion and soft criteria never reject. So the Boult is in the pool,
+    on screen, with its 2.8 stars and its reviews visible, and it comes last. That
+    is the honest shape of the answer: we do not hide the cheap option, we explain
+    why it is not the recommendation.
+    """
+    _, _, results, ranked = build_pipeline(HEADPHONE_BRIEF)
+
+    trap = next(r for r in results if r.product.product_id == "FLK-HPH-2302")
+    assert trap.passed and not trap.violations
+
+    cheapest = min(ranked, key=lambda entry: entry.product.price_per_unit_inr)
+    assert cheapest.product.product_id == "FLK-HPH-2302"
+    assert cheapest.rank == len(ranked)
+
+    # And it loses on exactly the criterion the user named, not on price.
+    assert cheapest.contribution("reliability") == pytest.approx(0.0)
+    assert cheapest.contribution("price") > ranked[0].contribution("price")
+
+
+def test_the_same_headset_listed_twice_is_ranked_twice_and_ordered_sanely():
+    """One product, two marketplaces, two rows — and the better listing wins.
+
+    AMZ-HPH-1301 and FLK-HPH-2301 are the same boAt Rockerz 550. We do not
+    de-duplicate them, and we say so: picking a "canonical" listing would mean
+    silently discarding a real offer. What the engine does instead is rank both
+    on their own terms. Flipkart is Rs 150 cheaper and loses anyway, on three
+    days' extra delivery and a shorter replacement window — a trade the user can
+    see and overrule.
+    """
+    _, _, _, ranked = build_pipeline(HEADPHONE_BRIEF)
+    by_id = {entry.product.product_id: entry for entry in ranked}
+
+    amazon, flipkart = by_id["AMZ-HPH-1301"], by_id["FLK-HPH-2301"]
+
+    assert flipkart.product.price_per_unit_inr < amazon.product.price_per_unit_inr
+    assert amazon.rank < flipkart.rank
+    assert amazon.contribution("delivery") > flipkart.contribution("delivery")
+    assert amazon.contribution("replacement") > flipkart.contribution("replacement")
+
+
 @pytest.mark.parametrize(
     "text, winner",
-    [(FURNITURE_BRIEF, "ErgoFlex Task"), (LAPTOP_BRIEF, "DevBook 14")],
-    ids=["furniture", "laptops"],
+    [
+        (FURNITURE_BRIEF, "ErgoFlex Task"),
+        (LAPTOP_BRIEF, "DevBook 14"),
+        (HEADPHONE_BRIEF, "Sony WH-CH720N Wireless Over-Ear Active Noise Cancelling "
+                          "Headphones with Mic, 35 Hr Battery, Bluetooth 5.2"),
+    ],
+    ids=["furniture", "laptops", "headphones"],
 )
 def test_the_cheapest_survivor_does_not_win(text, winner):
     """The same lesson the packaging table teaches, in two more categories.
@@ -217,6 +315,27 @@ def test_laptop_order_exceeds_the_limit_and_the_agent_stops():
     assert not outcome.within_limit
     assert outcome.escalation is not None
     assert outcome.escalation.detail["action_taken"] == "no purchase executed"
+
+
+def test_headphone_order_is_within_the_limit_and_the_agent_proceeds():
+    """25 x Rs 3,890 = Rs 97,250, comfortably inside Rs 1,05,000.
+
+    The agent buys the BEST-scoring option here, not the cheapest one that fits.
+    That distinction is the whole product: a Rs 32,475 order of the 2.8-star
+    Boult would also have been within authority, and an agent optimising for
+    "spend less" would have placed it without asking anyone.
+    """
+    context, outcome = authorise(HEADPHONE_BRIEF)
+
+    assert outcome.order_total_inr == 97250
+    assert outcome.order_total_inr < config.authorisation_limit_inr()
+    assert outcome.within_limit
+    assert outcome.escalation is None
+
+    cheapest = min(context.ranked, key=lambda entry: entry.product.price_per_unit_inr)
+    cheapest_total = cheapest.product.order_total_inr(context.brief.quantity)
+    assert cheapest_total < outcome.order_total_inr
+    assert context.ranked[0].product.product_id != cheapest.product.product_id
 
 
 def test_laptops_have_no_in_limit_alternative_and_we_say_so():
@@ -271,7 +390,7 @@ def test_laptop_gap_is_outside_the_substitution_threshold():
 
 def test_each_category_only_ever_sees_its_own_products():
     """The stage-3 category gate runs before anything else, in every category."""
-    for category in ("packaging", "furniture", "laptops"):
+    for category in ("packaging", "furniture", "laptops", "headphones"):
         found = discovery.discover(category)
         assert found, f"no products found for {category}"
         assert {product.category for product in found} == {category}
@@ -285,7 +404,7 @@ def test_a_category_nobody_stocks_is_reported_honestly():
     """
     stocked = discovery.available_categories()
 
-    assert stocked == ["furniture", "laptops", "packaging"]
+    assert stocked == ["furniture", "headphones", "laptops", "packaging"]
     assert "labels" not in stocked
     assert "cement" not in stocked
 

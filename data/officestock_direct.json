@@ -466,6 +466,123 @@
           "stock_qty": 40
         }
       ]
+    },
+    {
+      "sku": "OS-AUDIOPRO-OE",
+      "title": "AudioPro OE Wireless ANC",
+      "category": "headphones",
+      "unit_price_inr": 3450,
+      "lead_time_days": 8,
+      "seller_rating": 4.5,
+      "replacement_window_days": 21,
+      "stock_qty": 500,
+      "attributes": [
+        "over-ear",
+        "wireless",
+        "noise-cancelling"
+      ],
+      "price_history": [
+        {
+          "date": "2026-08-11",
+          "unit_price_inr": 3500
+        },
+        {
+          "date": "2026-08-13",
+          "unit_price_inr": 3490
+        },
+        {
+          "date": "2026-08-15",
+          "unit_price_inr": 3480
+        },
+        {
+          "date": "2026-08-17",
+          "unit_price_inr": 3460
+        },
+        {
+          "date": "2026-08-19",
+          "unit_price_inr": 3450
+        }
+      ],
+      "stock_history": [
+        {
+          "date": "2026-08-11",
+          "stock_qty": 620
+        },
+        {
+          "date": "2026-08-13",
+          "stock_qty": 590
+        },
+        {
+          "date": "2026-08-15",
+          "stock_qty": 560
+        },
+        {
+          "date": "2026-08-17",
+          "stock_qty": 530
+        },
+        {
+          "date": "2026-08-19",
+          "stock_qty": 500
+        }
+      ]
+    },
+    {
+      "sku": "OS-CLEARTONE-BT",
+      "title": "ClearTone BT On-Ear",
+      "category": "headphones",
+      "unit_price_inr": 2100,
+      "lead_time_days": 5,
+      "seller_rating": 4.1,
+      "replacement_window_days": 14,
+      "stock_qty": 700,
+      "attributes": [
+        "on-ear",
+        "wireless"
+      ],
+      "price_history": [
+        {
+          "date": "2026-08-11",
+          "unit_price_inr": 2150
+        },
+        {
+          "date": "2026-08-13",
+          "unit_price_inr": 2140
+        },
+        {
+          "date": "2026-08-15",
+          "unit_price_inr": 2130
+        },
+        {
+          "date": "2026-08-17",
+          "unit_price_inr": 2110
+        },
+        {
+          "date": "2026-08-19",
+          "unit_price_inr": 2100
+        }
+      ],
+      "stock_history": [
+        {
+          "date": "2026-08-11",
+          "stock_qty": 780
+        },
+        {
+          "date": "2026-08-13",
+          "stock_qty": 760
+        },
+        {
+          "date": "2026-08-15",
+          "stock_qty": 740
+        },
+        {
+          "date": "2026-08-17",
+          "stock_qty": 720
+        },
+        {
+          "date": "2026-08-19",
+          "stock_qty": 700
+        }
+      ]
     }
   ]
 }

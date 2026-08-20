@@ -24,18 +24,22 @@ else in the repo changes. We have deliberately NOT built one (CLAUDE.md,
 "designed, not demoed") — mock vendors hide real integration pain and we would
 rather name that limit than fake it. The seam is real; the adapter is not built.
 
-TWO SCHEMAS, ON PURPOSE
------------------------
-  PackHub (direct JSON)          BoxBazaar (aggregator CSV)
-  ---------------------          --------------------------
-  unit_price_inr: 21.90          rate_paise: 1760          -> divide by 100
-  lead_time_days: 4              ship_window: "7-9 days"   -> take the LATE end
-  seller_rating: 4.8             vendor_score_100: 82      -> divide by 20
-  replacement_window_days: 7     returns_policy: "30-day…" -> pull the number out
-  attributes: ["double-wall",…]  spec_blob: "DW | 200 x …" -> split and expand
+THREE SCHEMAS, ON PURPOSE
+-------------------------
+  PackHub (direct JSON)       BoxBazaar (aggregator CSV)   Amazon (marketplace JSON)
+  ---------------------       --------------------------   -------------------------
+  unit_price_inr: 21.90       rate_paise: 1760             price_display: "Rs 1,14,900"
+  lead_time_days: 4           ship_window: "7-9 days"      delivery_estimate: "Ships from
+                                                             Delhi NCR - Delivered in 11-12 days"
+  seller_rating: 4.8          vendor_score_100: 82         rating: {stars: 4.3, count: 1284}
+  replacement_window_days: 7  returns_policy: "30-day…"    returns: "10 days replacement only"
+  attributes: ["double-wall"] spec_blob: "DW | 200 x …"    spec_sheet: {"Wall": "Double Wall", …}
+  price_history: [{date,…},…] price_trail: "date:val|…"    price_points: {"2026-08-15": 22.6, …}
 
-If both feeds had the same columns the normaliser would be a rename and would
-prove nothing. Every conversion above is a place a real integration breaks.
+Read down any row: a number, an inconvenient unit, and a string a human was
+meant to read. If the feeds had the same columns the normaliser would be a
+rename and would prove nothing. Every conversion above is a place a real
+integration breaks, and each one lives in exactly one function below.
 
 CACHING, AND THE ONE PLACE WE REFUSE TO CACHE
 ---------------------------------------------
@@ -66,7 +70,7 @@ from datetime import date
 from pathlib import Path
 from typing import Literal
 
-from agent.models import Observation, Product
+from agent.models import Observation, Product, ReviewSnippet
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 
@@ -197,18 +201,82 @@ class AggregatorCsvAdapter(SourceAdapter):
 
 
 # ---------------------------------------------------------------------------
-# Price and stock history — two feeds, two shapes, one series type
+# Format 3 — a consumer marketplace's JSON
+# ---------------------------------------------------------------------------
+# The awkwardness here is different in kind from the aggregator's. BoxBazaar is
+# a machine feed that chose inconvenient units; a marketplace hands you what it
+# renders on a page. So the price arrives as the STRING a shopper reads, the
+# delivery estimate arrives as a SENTENCE that also names the warehouse, and the
+# specs arrive as a key-value SHEET whose keys are marketing labels ("Noise
+# Control", "Fit") rather than anything we can match on.
+#
+# The one that actually bites is the title. A marketplace title is advertising -
+# "Dell Inspiron 15 3520 15.6" FHD Laptop (12th Gen Core i5-1235U/8GB DDR4...)".
+# Reading specs out of it is the obvious shortcut and it is how a buyer gets
+# burned, because the title and the spec sheet disagree often enough that
+# reviewers complain about it in our own catalog. We never parse a title. The
+# gate reads spec_sheet, and the title is display text.
+
+class MarketplaceJsonAdapter(SourceAdapter):
+    """The shopper-facing feed. Prices as text, ETAs as prose, specs as a sheet."""
+
+    source_type = "aggregator"
+    feed_format = "marketplace JSON"
+    path: Path
+
+    def __init__(self, path: Path | None = None) -> None:
+        super().__init__()
+        if path is not None:
+            self.path = path
+
+    def read(self) -> Iterable[Product]:
+        raw = json.loads(self.path.read_text(encoding="utf-8"))
+        for item in raw["listings"]:
+            rating = item["rating"]
+            yield Product(
+                product_id=item["listing_id"],
+                name=item["listing_title"],
+                source=raw["marketplace"],
+                source_type="aggregator",
+                category=item["department"].strip().lower(),     # "Packaging" -> "packaging"
+                # The VALUES of the sheet, not the keys. "Noise Control": "ANC"
+                # contributes "ANC", which config.yaml's trade shorthand then maps
+                # onto "noise-cancelling" exactly as it maps "DW" onto double-wall.
+                specs=[str(value).strip() for value in item["spec_sheet"].values()],
+                price_per_unit_inr=rupees_from_display(item["price_display"]),
+                delivery_days=worst_case_days(item["delivery_estimate"]),
+                available_quantity=item["in_stock"],
+                reliability_rating=rating["stars"],              # already out of 5
+                replacement_window_days=first_number(item["returns"]),
+                review_count=rating["count"],
+                sample_reviews=tuple(
+                    ReviewSnippet(stars=review["stars"], text=review["text"])
+                    for review in item.get("top_reviews", ())
+                ),
+                price_history=_date_keyed(item.get("price_points")),
+                stock_history=_date_keyed(item.get("stock_points")),
+            )
+
+
+# ---------------------------------------------------------------------------
+# Price and stock history — three feeds, three shapes, one series type
 # ---------------------------------------------------------------------------
 # Stage 4.5 computes over `tuple[Observation, ...]` and never learns which feed a
 # series came from. Getting there is two different jobs:
 #
 #   PackHub    [{"date": "2026-08-11", "unit_price_inr": 20.90}, ...]   nested JSON
 #   BoxBazaar  "2026-08-11:2090|2026-08-13:2110|..."                    flat, in paise
+#   Amazon     {"2026-08-15": 22.60, "2026-08-17": 23.00, ...}          keyed by date
 #
-# Same information, and a real integration would meet both. Each helper below
-# returns an empty tuple when its column is absent, because a source that
+# Same information, and a real integration would meet all three. Each helper
+# below returns an empty tuple when its column is absent, because a source that
 # publishes no history should produce no signal — see signals.py. Saying nothing
 # is the honest answer; inventing a trend is not.
+#
+# The marketplace series are also SHORTER — three readings against PackHub's
+# five, because a shopping site publishes a narrower window than a contract
+# vendor. Stage 4.5 handles both without being told, because it computes over a
+# series rather than over a fixed number of points.
 
 def _json_series(raw: list[dict] | None, value_key: str) -> tuple[Observation, ...]:
     """PackHub's shape: a list of objects, each with a date and one named value."""
@@ -244,23 +312,67 @@ def _trail(raw: str | None, divide_by: float = 1.0) -> tuple[Observation, ...]:
     return tuple(observations)
 
 
+def _date_keyed(raw: dict[str, float] | None) -> tuple[Observation, ...]:
+    """The marketplace's shape: {'2026-08-15': 22.60, ...}, already in rupees.
+
+    Sorted by date rather than trusted in file order. The other two feeds are
+    ordered lists and a list has an order; a JSON object does not promise one,
+    and stage 4.5 reads `series[-1]` as "the latest reading". A series that
+    arrived newest-first would invert every trend on screen with nothing to show
+    that it had.
+    """
+    if not raw:
+        return ()
+    return tuple(
+        Observation(on=date.fromisoformat(day), value=float(value))
+        for day, value in sorted(raw.items())
+    )
+
+
 # ---------------------------------------------------------------------------
 # Unit conversions the aggregator forces on us
 # ---------------------------------------------------------------------------
 
 def worst_case_days(window: str) -> int:
-    """Turn a shipping window like '7-9 days' into the number we plan against: 9.
+    """Turn a shipping window into the number we plan against: '7-9 days' -> 9.
 
     The pessimistic end, deliberately. A window is a promise about the earliest
     AND the latest date; the user's 10-day deadline is only genuinely met if the
     latest date clears it. Taking the 7 would let a product pass a hard gate on
     its best-case story. This is the one judgement call in normalisation, and it
     is one function so it can be argued with.
+
+    It also reads the marketplace's prose form, 'Ships from Delhi NCR -
+    Delivered in 11-12 days' -> 12, which is why this function takes the largest
+    number rather than the last one. The warehouse name is carried in that
+    sentence so a reader can see WHY a Chennai buyer waits two weeks for a Delhi
+    listing; only the number survives, because only the number gates anything.
+    A hub whose name contained a digit would poison this, which is the price of
+    reading a number out of a sentence and is worth knowing before we add one.
     """
     numbers = [int(match) for match in re.findall(r"\d+", window)]
     if not numbers:
         raise ValueError(f"could not read a shipping window from {window!r}")
     return max(numbers)
+
+
+def rupees_from_display(text: str) -> float:
+    """'Rs 1,14,900' -> 114900.0. The price as a shopper sees it, made arithmetic.
+
+    Indian comma grouping is not the three-digit kind, so anything that assumed
+    thousands separators would read this wrong rather than fail on it. We strip
+    every character that is not a digit or a decimal point and let the number
+    speak for itself.
+
+    Raising on an unreadable price is the point. A marketplace that started
+    sending 'See price in cart' must stop the run here, loudly, rather than
+    default to zero and hand the ranker a product that beats everything on the
+    price term.
+    """
+    cleaned = re.sub(r"[^\d.]", "", text)
+    if not cleaned or cleaned == ".":
+        raise ValueError(f"could not read a price from {text!r}")
+    return float(cleaned)
 
 
 def first_number(text: str) -> int:
@@ -280,7 +392,9 @@ def first_number(text: str) -> int:
 # category travels in the feed, and stage 3 filters on it.
 #
 # PackHub and BoxBazaar sell packaging. OfficeStock and TradeBridge sell office
-# furniture and laptops. Downstream, all four are indistinguishable.
+# furniture, laptops and headsets. Amazon and Flipkart sell all four categories,
+# with the messy titles and contradictory reviews a marketplace actually carries.
+# Downstream, all six are indistinguishable.
 
 class PackHubAdapter(DirectJsonAdapter):
     key = "packhub"
@@ -306,9 +420,25 @@ class TradeBridgeAdapter(AggregatorCsvAdapter):
     path = DATA_DIR / "tradebridge_aggregator.csv"
 
 
+class AmazonAdapter(MarketplaceJsonAdapter):
+    key = "amazon"
+    display_name = "Amazon"
+    path = DATA_DIR / "amazon_marketplace.json"
+
+
+class FlipkartAdapter(MarketplaceJsonAdapter):
+    key = "flipkart"
+    display_name = "Flipkart"
+    path = DATA_DIR / "flipkart_marketplace.json"
+
+
 # ---------------------------------------------------------------------------
 # The registry — the only list of sources in the codebase
 # ---------------------------------------------------------------------------
+# Six vendors, three formats, two vendors per format. The arithmetic is the
+# claim: adding a vendor on a format we already speak costs four lines, adding a
+# FORMAT costs one class, and neither costs a change to filtering, ranking,
+# signals, authorisation or audit.
 
 ADAPTERS: dict[str, SourceAdapter] = {
     adapter.key: adapter
@@ -317,6 +447,8 @@ ADAPTERS: dict[str, SourceAdapter] = {
         BoxBazaarAdapter(),
         OfficeStockAdapter(),
         TradeBridgeAdapter(),
+        AmazonAdapter(),
+        FlipkartAdapter(),
     )
 }
 

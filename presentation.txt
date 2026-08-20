@@ -147,7 +147,39 @@ SECTION 2 - TWO VENDORS, TWO SCHEMAS, ONE TRUTH
                  opinions about; the catalogs know what we can actually buy. We
                  answer the buyer with the second one."
 
-2.4  A TYPO MUST NOT SILENTLY HALVE THE POOL
+2.4  WE NEVER READ A SPEC OUT OF A PRODUCT TITLE  ** marketplace-specific **
+    The trap:   A marketplace title carries the specs already. Amazon lists
+                "Dell Inspiron 15 3520 15.6" FHD Laptop (12th Gen Core i5-1235U/
+                8GB DDR4/512GB SSD/Win 11...)". Parsing "16GB" out of a string
+                like that is thirty seconds of regex.
+    Naive:      Read specs from the title. It works on most listings.
+    We do:      Read spec_sheet, the structured field, and treat the title as
+                display text only.
+    Why:        Titles are advertising and they are wrong often enough that our
+                own catalog carries a buyer complaining about it: "The listing
+                photo showed 16GB. It is 8GB. Read the spec sheet, not the
+                title." A gate that reads marketing copy inherits the marketing.
+    THE LINE:   "The title is what the seller wants you to read. The spec sheet
+                 is what they are willing to be held to. We gate on the second
+                 one — and when they disagree, the user sees both."
+
+2.5  THE SAME PRODUCT ON TWO SITES IS TWO OFFERS, NOT A DUPLICATE
+    The trap:   The identical boAt Rockerz 550 is on Amazon at Rs 2,999 and on
+                Flipkart at Rs 2,849 under a completely different title. The
+                obvious thing is to de-duplicate them into one "product".
+    Naive:      Fuzzy-match the titles, pick a canonical listing, drop the other.
+    We do:      Rank both. Two rows, two prices, two delivery estimates.
+    Why:        De-duplicating means silently discarding a real, purchasable
+                offer on the strength of a string comparison. And the "duplicate"
+                is not identical in the ways that matter: Flipkart is Rs 150
+                cheaper and three days slower with a shorter replacement window,
+                so it loses — visibly, on the terms the user set.
+    THE LINE:   "We do not merge them, because they are not the same offer. The
+                 cheaper one loses on delivery and replacement, and you can see
+                 exactly by how much. A de-duplicator would have made that choice
+                 for you and told you nothing."
+
+2.6  A TYPO MUST NOT SILENTLY HALVE THE POOL
     The trap:   Source selection is a list of keys. A typo passes an unknown key.
     Naive:      Ignore unknown keys and return whatever matched.
     We do:      Raise immediately, naming the unknown source and the known ones.
@@ -169,6 +201,49 @@ SECTION 3 - RANKING: WHERE THE JUDGEMENT LIVES
     THE LINE:   "The formula has no favourite. The brief does. If she had said
                  price matters most, the same sixty lines would hand you
                  EcoMail - and we can show you that live."
+
+3.1b THE BAD OPTION QUALIFIES, AND WE SHOW IT ANYWAY
+     ** the answer to "what if the cheap one passes your filter?" - expect this **
+    The setup:  The headsets brief. A Boult ProBass at Rs 1,299 - Rs 1,550 under
+                the winner - passes EVERY hard gate. Over-ear, wireless, ANC, in
+                stock, inside the cap, inside the window. It carries 2.8 stars
+                and reviews saying the right cup died in a fortnight. It comes
+                LAST, at 27.9 against the winner's 80.6.
+    The trap:   Add a reliability floor to the filter. "Reject anything under
+                3.5 stars." It feels responsible and it takes one line.
+    Naive:      A hidden quality gate. The cheap option silently disappears and
+                the buyer is never told there was a Rs 1,299 option at all.
+    We do:      Nothing rejects on reliability. Reliability is a SOFT criterion,
+                it only orders the list, and the Boult sits on screen in last
+                place with its price advantage fully visible.
+    Why:        A hard floor is us imposing our taste as a rule. The buyer might
+                genuinely want the cheap ones for a warehouse floor. What she
+                needs is the trade-off stated, not the option removed.
+    THE LINE:   "We did not hide the cheap one. It passed every check we were
+                 given. It lost by fifty-two points because she said reliability
+                 mattered - and if she had said price mattered, the same sixty
+                 lines would have handed it to her."
+
+3.1c THE REVIEWS ARE ON FILE AND THEY SCORE NOTHING
+     ** the LLM-temptation question in a new place **
+    The trap:   Every marketplace listing carries thousands of words of buyer
+                opinion. Feeding that to the model and asking "how good is this
+                really?" is the single most demo-friendly thing in the dataset.
+    Naive:      An LLM sentiment score folded into the ranking. It would look
+                impressive for about ten seconds.
+    We do:      Reviews travel with the product, are shown to the human under
+                the score breakdown, and are read by nothing that decides
+                anything. tests/test_reviews_are_advisory.py rewrites the
+                winner's reviews into three furious one-stars and asserts the
+                score does not move by a hair.
+    Why:        Review text is unstructured, adversarial - sellers write some of
+                it - and unreproducible. Three properties that would poison a
+                number a finance manager has to defend in a meeting. The star
+                RATING is different and IS scored, because it is already a
+                number every source publishes the same way.
+    THE LINE:   "The rating is a number, so we score it. The sentences are not,
+                 so we show them to you instead. The difference between those two
+                 is the entire project."
 
 3.2  THE SQUARE ROOT
     The trap:   Score price by raw margin under the cap, and a deep discount

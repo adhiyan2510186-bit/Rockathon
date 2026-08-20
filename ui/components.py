@@ -244,3 +244,29 @@ def score_breakdown(scored: ScoredProduct) -> None:
         },
     )
     st.caption(f"Total: {scored.score} out of 100")
+
+
+def buyer_reviews(product) -> None:
+    """What buyers actually said, shown to the person and scored by nothing.
+
+    This sits under the score breakdown deliberately. The table above is every
+    number that produced the recommendation; this is the part that did NOT. A
+    reader can see a one-star review here and still see it contributed zero
+    points, which is the honest way round: we surface the warning without
+    pretending an algorithm weighed it.
+
+    The seller's star rating IS in the table above, because it is a number every
+    source publishes the same way. The sentences are not, because they are not
+    comparable, not verifiable, and half-written by the seller.
+    """
+    if not product.sample_reviews:
+        st.caption("This supplier publishes no buyer reviews.")
+        return
+
+    st.caption(
+        f"{product.review_count:,} buyer ratings · {product.reliability_rating:.1f} "
+        f"out of 5 average. Shown for context — reviews are not scored."
+    )
+    for review in product.sample_reviews:
+        stars = "★" * int(round(review.stars)) + "☆" * (5 - int(round(review.stars)))
+        st.markdown(f"{stars}  {review.text}")

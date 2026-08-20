@@ -82,10 +82,14 @@ DEMO_BRIEF = (
 
 # The repeat-order shortcuts, one per category we can actually source. Each is a
 # one-line gist short enough to read at a glance; clicking it sends the full
-# sentence. Three rather than one because a buying tool that only knows a single
-# purchase is a script, and because these three land in different places: the
-# chairs are inside the agent's spending authority and the laptops are far
-# outside it, so the same engine visibly decides alone and visibly stops.
+# sentence. Four rather than one because a buying tool that only knows a single
+# purchase is a script, and because these four land in different places: the
+# chairs and the headsets are inside the agent's spending authority and the
+# laptops are far outside it, so the same engine visibly decides alone and
+# visibly stops. The headsets add the case none of the others cover — the cheap,
+# badly reviewed option that passes every hard gate and loses on the ranking
+# anyway, which is where "reliability never rejects, it only orders" stops being
+# a sentence in a docstring and becomes something on screen.
 # (button key, one-line gist, the sentence the button actually sends). The key is
 # part of the entry rather than the loop index because the tests select on keys -
 # a fourth shortcut inserted at the top must not silently repoint them.
@@ -105,6 +109,12 @@ RECENT_REQUESTS: tuple[tuple[str, str, str], ...] = (
         "start_recent_laptops",
         "8 developer laptops  ·  max Rs 65,000 each  ·  within 12 days",
         "8 developer laptops, 16GB RAM, 512GB SSD, max Rs 65,000 each, "
+        "delivered within 12 days. Reliability matters a lot.",
+    ),
+    (
+        "start_recent_headsets",
+        "25 noise-cancelling headsets  ·  max Rs 4,000 each  ·  within 12 days",
+        "25 wireless noise-cancelling headsets, over-ear, max Rs 4,000 each, "
         "delivered within 12 days. Reliability matters a lot.",
     ),
 )
@@ -552,6 +562,7 @@ def render_recommendation() -> None:
     for scored in ctx.ranked:
         with ui.detail(f"Score breakdown — {scored.product.name} ({scored.score})"):
             ui.score_breakdown(scored)
+            ui.buyer_reviews(scored.product)
 
     rejected = [result for result in ctx.filter_results if not result.passed]
     if rejected:

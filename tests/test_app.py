@@ -168,6 +168,66 @@ def test_an_order_far_over_the_limit_stops_and_offers_nothing_it_cannot_afford()
     )
 
 
+def test_the_cheap_badly_reviewed_option_is_shown_and_is_not_recommended():
+    """The headsets brief, and the case the other three shortcuts never reach.
+
+    Packaging, furniture and laptops all reject their nastiest listing on a hard
+    gate, which leaves a fair question open: what happens when the bad option
+    genuinely qualifies? Here it does. The Boult at Rs 1,299 passes every gate,
+    is Rs 1,550 cheaper than the winner, carries 2.8 stars and reviews saying the
+    right cup died in a fortnight - and it comes last, on screen, with its price
+    advantage intact and visible.
+
+    We do not hide it and we do not let it win. That is the whole argument.
+    """
+    app = _click(_fresh(), "start_recent_headsets")
+    assert not app.exception
+
+    state = app.session_state
+    ranked = state["ctx"].ranked
+
+    assert ranked[0].product.product_id == "AMZ-HPH-1302"
+    assert ranked[-1].product.product_id == "FLK-HPH-2302"
+    assert ranked[-1].product.price_per_unit_inr < ranked[0].product.price_per_unit_inr
+
+    # Rs 97,250 against a Rs 1,05,000 limit: the agent acts, and it does not
+    # reach for the cheaper option to stay comfortably inside its authority.
+    outcome = state["auth"]
+    assert outcome.within_limit
+    assert outcome.escalation is None
+
+
+def test_review_text_stays_behind_a_drill_down():
+    """Meena sees a decision. She opens the reviews if she wants them.
+
+    The reviews are real content and they belong on the screen somewhere - but
+    pasting three strangers' complaints next to a recommendation is a wall of
+    text, not a product. They live under "Score breakdown", one click away,
+    directly beneath the four numbers that DID decide it.
+
+    Asserted against the SOURCE rather than the rendered text, and that is worth
+    knowing: `_surface_text` above says it excludes expander contents, and
+    Streamlit's test harness does not actually honour that - it flattens every
+    element into one list regardless of nesting. So "the words are not on the
+    surface" is not a thing this harness can tell us. What it can tell us is
+    where the call sits, which is the design decision we are protecting.
+    """
+    app = _click(_fresh(), "start_recent_headsets")
+    assert not app.exception
+
+    source = Path(APP).read_text(encoding="utf-8")
+    detail_block = source.split('with ui.detail(f"Score breakdown')[1].split("\n\n")[0]
+
+    assert "ui.buyer_reviews(scored.product)" in detail_block, (
+        "buyer reviews must be rendered inside the score-breakdown drill-down, "
+        "not on the default surface"
+    )
+    assert source.count("ui.buyer_reviews(") == 1, (
+        "reviews are shown in exactly one place; a second call site is how they "
+        "end up on the recommendation screen by accident"
+    )
+
+
 def test_the_unit_noun_follows_the_category():
     """"12 chairs", not "12 units". The screen says what is being bought."""
     surface = _surface_text(_click(_fresh(), "start_recent_furniture"))
@@ -175,6 +235,9 @@ def test_the_unit_noun_follows_the_category():
 
     surface = _surface_text(_click(_fresh(), "start_recent_laptops"))
     assert "8 laptops" in surface
+
+    surface = _surface_text(_click(_fresh(), "start_recent_headsets"))
+    assert "25 headsets" in surface
 
 
 def test_a_category_we_do_not_stock_is_declined_by_name():

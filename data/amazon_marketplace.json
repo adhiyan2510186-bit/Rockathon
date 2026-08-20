@@ -1,0 +1,316 @@
+{
+  "_comment": "Amazon - a MARKETPLACE feed, and a THIRD schema on purpose. It disagrees with both of the feeds we already speak. PackHub's direct JSON gives us a number for the price; this one gives us the string a shopper sees, currency symbol and Indian comma grouping included ('Rs 1,14,900'). BoxBazaar's CSV gives us a bare shipping range; this one buries the range in a sentence that also names the warehouse. PackHub gives a clean list of specs and BoxBazaar a pipe-separated blob; this one gives a KEY-VALUE SHEET, so the adapter has to take the values and drop the marketing labels. And the price/stock history is keyed BY DATE instead of being a list of objects or a flat trail string. Five different conversions, none of which existed before this file.",
+  "_titles_note": "The titles are deliberately as messy as the real thing - pack sizes, model codes, warehouse notes and marketing words all crammed into one line. Note that we never parse a title. The gate reads spec_sheet, which is the structured field. AMZ-LAP-1101's title advertises '8GB DDR4' and a buyer skimming would miss it; the spec sheet says 8GB RAM and stage 3 rejects it against a 16GB brief without ever reading the headline.",
+  "_delivery_note": "Every estimate is quoted to a Chennai 600001 buyer, which is why the same product is 2-3 days from a Chennai hub and 13-14 days from Delhi NCR. The hub is in the text so a judge can see WHY the number differs; only the number survives normalisation, because the number is the only part the delivery gate can use.",
+  "_history_note": "price_points and stock_points are AUTHORED DEMO DATA, not observations of a real market, and the UI labels them 'simulated market data' wherever they are drawn. A marketplace publishes a shorter window than a contract vendor, so these carry three readings where PackHub carries five - stage 4.5 handles both because it computes over a series, not over a fixed number of points. The last reading of each series must equal the listing's current price_display / in_stock; a feed that contradicts itself would make every signal meaningless.",
+  "_reviews_note": "top_reviews are shown to the human and read by nothing that decides anything. See agent/models.py, ReviewSnippet: review TEXT is unstructured, adversarial and unreproducible, so it never touches a score. The star RATING does, because it is already a number published the same way for every listing.",
+  "marketplace": "Amazon",
+  "storefront": "amazon.in",
+  "buyer_pincode": "600001",
+  "listings": [
+    {
+      "listing_id": "AMZ-PKG-1001",
+      "listing_title": "Amazon Brand - Solimo Kraft Mailer Box 200x150x80mm, Double Wall Corrugated Shipping Boxes (Pack of 100)",
+      "department": "Packaging",
+      "price_display": "Rs 23.40",
+      "delivery_estimate": "Ships from Chennai - Delivered in 2-3 days",
+      "rating": {"stars": 4.3, "count": 1284},
+      "returns": "10 days replacement only",
+      "in_stock": 42000,
+      "spec_sheet": {"Wall": "Double Wall", "Material": "Kraft", "Size": "200 x 150 x 80 mm"},
+      "top_reviews": [
+        {"stars": 5, "text": "Sturdy boxes, nothing crushed in transit across 400 orders."},
+        {"stars": 3, "text": "Good quality but the price has crept up twice this month."},
+        {"stars": 2, "text": "Pack of 100 arrived with six boxes water-stained."}
+      ],
+      "price_points": {"2026-08-15": 22.60, "2026-08-17": 23.00, "2026-08-19": 23.40},
+      "stock_points": {"2026-08-15": 46000, "2026-08-17": 44000, "2026-08-19": 42000}
+    },
+    {
+      "listing_id": "AMZ-PKG-1002",
+      "listing_title": "Bulk Kraft Mailer Boxes 8x6x3 inch Brown Single Wall Corrugated Cartons for Shipping (Pack of 200)",
+      "department": "Packaging",
+      "price_display": "Rs 12.75",
+      "delivery_estimate": "Ships from Chennai - Delivered in 2-3 days",
+      "rating": {"stars": 3.6, "count": 5120},
+      "returns": "7 days replacement only",
+      "in_stock": 88000,
+      "spec_sheet": {"Wall": "Single Wall", "Material": "Kraft", "Size": "200 x 150 x 80 mm"},
+      "top_reviews": [
+        {"stars": 1, "text": "Boxes arrived flattened, half of them were unusable."},
+        {"stars": 2, "text": "Great price but the walls crush the moment you stack them."},
+        {"stars": 4, "text": "Fine for light items. Do not use these for glass."}
+      ],
+      "price_points": {"2026-08-15": 13.20, "2026-08-17": 12.95, "2026-08-19": 12.75},
+      "stock_points": {"2026-08-15": 96000, "2026-08-17": 92000, "2026-08-19": 88000}
+    },
+    {
+      "listing_id": "AMZ-PKG-1003",
+      "listing_title": "Premium Double Wall Kraft Mailer Box 200 x 150 x 80 mm - E-commerce Shipping Carton (Pack of 50)",
+      "department": "Packaging",
+      "price_display": "Rs 21.10",
+      "delivery_estimate": "Ships from Delhi NCR - Delivered in 11-12 days",
+      "rating": {"stars": 4.6, "count": 402},
+      "returns": "30 days replacement",
+      "in_stock": 30000,
+      "spec_sheet": {"Wall": "Double Wall", "Material": "Kraft", "Size": "200 x 150 x 80 mm"},
+      "top_reviews": [
+        {"stars": 5, "text": "Best boxes we have bought - thick board and a clean printing surface."},
+        {"stars": 4, "text": "Quality is excellent, but delivery to Chennai took nearly two weeks."},
+        {"stars": 3, "text": "Wish they shipped from a southern warehouse."}
+      ],
+      "price_points": {"2026-08-15": 21.40, "2026-08-17": 21.20, "2026-08-19": 21.10},
+      "stock_points": {"2026-08-15": 34000, "2026-08-17": 32000, "2026-08-19": 30000}
+    },
+    {
+      "listing_id": "AMZ-PKG-1004",
+      "listing_title": "Bubble Wrap Roll 1 metre x 100 metre Air Bubble Packing Sheet for Packing and Moving",
+      "department": "Packaging",
+      "price_display": "Rs 18.00",
+      "delivery_estimate": "Ships from Chennai - Delivered in 2-3 days",
+      "rating": {"stars": 4.4, "count": 8901},
+      "returns": "7 days replacement only",
+      "in_stock": 900,
+      "spec_sheet": {"Type": "Bubble Wrap", "Roll Size": "1 m x 100 m", "Material": "Polyethylene"},
+      "top_reviews": [
+        {"stars": 5, "text": "Bubbles are strong, no burst rolls in six months of ordering."},
+        {"stars": 3, "text": "Roll measured about 90 metres, not the 100 advertised."}
+      ],
+      "price_points": {"2026-08-15": 18.50, "2026-08-17": 18.20, "2026-08-19": 18.00},
+      "stock_points": {"2026-08-15": 1400, "2026-08-17": 1100, "2026-08-19": 900}
+    },
+    {
+      "listing_id": "AMZ-PKG-1005",
+      "listing_title": "EcoPack Recycled Kraft Mailer Box 200x150x80mm Double Wall, FSC Certified (Pack of 100)",
+      "department": "Packaging",
+      "price_display": "Rs 20.50",
+      "delivery_estimate": "Ships from Bengaluru - Delivered in 5-6 days",
+      "rating": {"stars": 4.5, "count": 61},
+      "returns": "15 days replacement",
+      "in_stock": 3200,
+      "spec_sheet": {"Wall": "Double Wall", "Material": "Kraft", "Size": "200 x 150 x 80 mm", "Finish": "Recycled"},
+      "top_reviews": [
+        {"stars": 5, "text": "Cheaper than our current supplier and the recycled stock looks premium."},
+        {"stars": 4, "text": "They only ever hold a few thousand - they cannot scale with us."},
+        {"stars": 3, "text": "Had to split one order across two months waiting for stock."}
+      ],
+      "price_points": {"2026-08-15": 20.90, "2026-08-17": 20.70, "2026-08-19": 20.50},
+      "stock_points": {"2026-08-15": 7000, "2026-08-17": 5100, "2026-08-19": 3200}
+    },
+    {
+      "listing_id": "AMZ-LAP-1101",
+      "listing_title": "Dell Inspiron 15 3520 15.6\" FHD Laptop (12th Gen Core i5-1235U/8GB DDR4/512GB SSD/Win 11 + MSO'21/Carbon Black) D560789WIN9B",
+      "department": "Laptops",
+      "price_display": "Rs 46,990",
+      "delivery_estimate": "Ships from Chennai - Delivered in 2-3 days",
+      "rating": {"stars": 4.2, "count": 3127},
+      "returns": "7 days replacement only",
+      "in_stock": 120,
+      "spec_sheet": {"RAM": "8GB RAM", "Storage": "512GB SSD", "Processor": "i5", "Keyboard": "Backlit Keyboard"},
+      "top_reviews": [
+        {"stars": 4, "text": "Great value, but 8GB is tight for anything beyond a browser and Slack."},
+        {"stars": 2, "text": "The listing photo showed 16GB. It is 8GB. Read the spec sheet, not the title."},
+        {"stars": 5, "text": "Sealed box, delivered next morning in Chennai."}
+      ],
+      "price_points": {"2026-08-15": 47990, "2026-08-17": 47490, "2026-08-19": 46990},
+      "stock_points": {"2026-08-15": 180, "2026-08-17": 150, "2026-08-19": 120}
+    },
+    {
+      "listing_id": "AMZ-LAP-1102",
+      "listing_title": "Lenovo ThinkPad E14 Gen 5 Business Laptop (16GB RAM, 512GB SSD, Backlit Keyboard, 3 Year Onsite Warranty)",
+      "department": "Laptops",
+      "price_display": "Rs 67,900",
+      "delivery_estimate": "Ships from Chennai - Delivered in 4-5 days",
+      "rating": {"stars": 4.6, "count": 892},
+      "returns": "30 days replacement",
+      "in_stock": 70,
+      "spec_sheet": {"RAM": "16GB RAM", "Storage": "512GB SSD", "Keyboard": "Backlit Keyboard"},
+      "top_reviews": [
+        {"stars": 5, "text": "Onsite warranty is the only reason we still buy ThinkPads for the team."},
+        {"stars": 4, "text": "Slightly over our budget but the build is a different class."},
+        {"stars": 3, "text": "Battery life is average for the price."}
+      ],
+      "price_points": {"2026-08-15": 66900, "2026-08-17": 67400, "2026-08-19": 67900},
+      "stock_points": {"2026-08-15": 110, "2026-08-17": 90, "2026-08-19": 70}
+    },
+    {
+      "listing_id": "AMZ-LAP-1103",
+      "listing_title": "HP Pavilion 14 Thin & Light Laptop (16GB RAM/512GB SSD/Win 11/Backlit KB) Natural Silver",
+      "department": "Laptops",
+      "price_display": "Rs 63,200",
+      "delivery_estimate": "Ships from Delhi NCR - Delivered in 13-14 days",
+      "rating": {"stars": 4.1, "count": 640},
+      "returns": "10 days replacement only",
+      "in_stock": 90,
+      "spec_sheet": {"RAM": "16GB RAM", "Storage": "512GB SSD", "Keyboard": "Backlit Keyboard"},
+      "top_reviews": [
+        {"stars": 4, "text": "Good machine, but two weeks to Chennai is painful when a hire starts Monday."},
+        {"stars": 3, "text": "Northern warehouse only - check the ETA before you commit."},
+        {"stars": 5, "text": "Screen and keyboard are excellent for the money."}
+      ],
+      "price_points": {"2026-08-15": 63900, "2026-08-17": 63500, "2026-08-19": 63200},
+      "stock_points": {"2026-08-15": 130, "2026-08-17": 110, "2026-08-19": 90}
+    },
+    {
+      "listing_id": "AMZ-LAP-1104",
+      "listing_title": "Apple MacBook Air 13\" M3 Chip (16GB Unified Memory, 512GB SSD) - Midnight",
+      "department": "Laptops",
+      "price_display": "Rs 1,14,900",
+      "delivery_estimate": "Ships from Chennai - Delivered in 2-3 days",
+      "rating": {"stars": 4.8, "count": 15332},
+      "returns": "15 days replacement",
+      "in_stock": 40,
+      "spec_sheet": {"RAM": "16GB RAM", "Storage": "512GB SSD", "Keyboard": "Backlit Keyboard"},
+      "top_reviews": [
+        {"stars": 5, "text": "Nothing else in the office is this quiet or lasts this long on a charge."},
+        {"stars": 4, "text": "Superb, if finance will sign it off."},
+        {"stars": 2, "text": "Two ports. Budget for a dock on top of the price."}
+      ],
+      "price_points": {"2026-08-15": 116900, "2026-08-17": 115900, "2026-08-19": 114900},
+      "stock_points": {"2026-08-15": 60, "2026-08-17": 50, "2026-08-19": 40}
+    },
+    {
+      "listing_id": "AMZ-LAP-1105",
+      "listing_title": "Acer Aspire Lite 12th Gen Core i5 Laptop (16GB RAM/512GB SSD) - Limited Stock Deal",
+      "department": "Laptops",
+      "price_display": "Rs 52,400",
+      "delivery_estimate": "Ships from Hyderabad - Delivered in 4-5 days",
+      "rating": {"stars": 4.3, "count": 210},
+      "returns": "15 days replacement",
+      "in_stock": 5,
+      "spec_sheet": {"RAM": "16GB RAM", "Storage": "512GB SSD", "Processor": "i5"},
+      "top_reviews": [
+        {"stars": 5, "text": "Best price we have seen anywhere for 16GB and a 512 drive."},
+        {"stars": 3, "text": "Stock vanished in two days - we could only get one unit."},
+        {"stars": 4, "text": "Solid for the money, though the chassis is all plastic."}
+      ],
+      "price_points": {"2026-08-15": 53900, "2026-08-17": 53000, "2026-08-19": 52400},
+      "stock_points": {"2026-08-15": 22, "2026-08-17": 12, "2026-08-19": 5}
+    },
+    {
+      "listing_id": "AMZ-FUR-1201",
+      "listing_title": "Green Soul Beast Series Ergonomic Chair, Mesh Back, Adjustable Height, Lumbar Support (Black & Grey)",
+      "department": "Furniture",
+      "price_display": "Rs 8,499",
+      "delivery_estimate": "Ships from Chennai - Delivered in 3-4 days",
+      "rating": {"stars": 4.4, "count": 9880},
+      "returns": "10 days replacement only",
+      "in_stock": 300,
+      "spec_sheet": {"Back": "Mesh Back", "Height": "Adjustable Height", "Support": "Lumbar Support"},
+      "top_reviews": [
+        {"stars": 5, "text": "Best chair under ten thousand and it assembled in twenty minutes."},
+        {"stars": 3, "text": "Armrests started creaking in month four."},
+        {"stars": 4, "text": "Mesh stays comfortable through a full Chennai workday."}
+      ],
+      "price_points": {"2026-08-15": 8199, "2026-08-17": 8349, "2026-08-19": 8499},
+      "stock_points": {"2026-08-15": 380, "2026-08-17": 340, "2026-08-19": 300}
+    },
+    {
+      "listing_id": "AMZ-FUR-1202",
+      "listing_title": "Nilkamal Fabric Visitor Chair, Fixed Height, Office and Home Seating (Set of 2)",
+      "department": "Furniture",
+      "price_display": "Rs 1,890",
+      "delivery_estimate": "Ships from Chennai - Delivered in 2-3 days",
+      "rating": {"stars": 3.4, "count": 2110},
+      "returns": "7 days replacement only",
+      "in_stock": 800,
+      "spec_sheet": {"Back": "Fabric", "Height": "Fixed Height"},
+      "top_reviews": [
+        {"stars": 2, "text": "Fine for a waiting room, not for eight hours a day."},
+        {"stars": 4, "text": "Cheap and does the job for visitors."},
+        {"stars": 1, "text": "One of the two arrived with a cracked leg and no packing foam."}
+      ],
+      "price_points": {"2026-08-15": 1950, "2026-08-17": 1920, "2026-08-19": 1890},
+      "stock_points": {"2026-08-15": 900, "2026-08-17": 850, "2026-08-19": 800}
+    },
+    {
+      "listing_id": "AMZ-HPH-1301",
+      "listing_title": "boAt Rockerz 550 Over Ear Bluetooth Wireless Headphones with 20H Playback, Active Noise Cancelling, Black",
+      "department": "Headphones",
+      "price_display": "Rs 2,999",
+      "delivery_estimate": "Ships from Chennai - Delivered in 2-3 days",
+      "rating": {"stars": 4.4, "count": 18402},
+      "returns": "10 days replacement only",
+      "in_stock": 900,
+      "spec_sheet": {"Fit": "Over-Ear", "Connection": "Wireless", "Noise Control": "Noise Cancelling", "Protocol": "Bluetooth"},
+      "top_reviews": [
+        {"stars": 5, "text": "Great for calls - the team stopped complaining about floor noise."},
+        {"stars": 3, "text": "Ear padding flattens after a few months of daily use."},
+        {"stars": 4, "text": "Battery genuinely lasts the claimed twenty hours."}
+      ],
+      "price_points": {"2026-08-15": 3199, "2026-08-17": 3099, "2026-08-19": 2999},
+      "stock_points": {"2026-08-15": 1200, "2026-08-17": 1050, "2026-08-19": 900}
+    },
+    {
+      "listing_id": "AMZ-HPH-1302",
+      "listing_title": "Sony WH-CH720N Wireless Over-Ear Active Noise Cancelling Headphones with Mic, 35 Hr Battery, Bluetooth 5.2",
+      "department": "Headphones",
+      "price_display": "Rs 3,890",
+      "delivery_estimate": "Ships from Chennai - Delivered in 3-4 days",
+      "rating": {"stars": 4.7, "count": 9640},
+      "returns": "30 days replacement",
+      "in_stock": 300,
+      "spec_sheet": {"Fit": "Over-Ear", "Connection": "Wireless", "Noise Control": "Noise Cancelling", "Protocol": "Bluetooth"},
+      "top_reviews": [
+        {"stars": 5, "text": "Noise cancelling is a genuine step above the budget brands."},
+        {"stars": 5, "text": "Light enough that you forget you are wearing them."},
+        {"stars": 3, "text": "No carry case included at this price."}
+      ],
+      "price_points": {"2026-08-15": 3990, "2026-08-17": 3940, "2026-08-19": 3890},
+      "stock_points": {"2026-08-15": 420, "2026-08-17": 360, "2026-08-19": 300}
+    },
+    {
+      "listing_id": "AMZ-HPH-1303",
+      "listing_title": "Apple AirPods Max Over-Ear Active Noise Cancelling Wireless Headphones - Space Grey",
+      "department": "Headphones",
+      "price_display": "Rs 59,900",
+      "delivery_estimate": "Ships from Chennai - Delivered in 2-3 days",
+      "rating": {"stars": 4.8, "count": 4210},
+      "returns": "15 days replacement",
+      "in_stock": 60,
+      "spec_sheet": {"Fit": "Over-Ear", "Connection": "Wireless", "Noise Control": "Noise Cancelling", "Protocol": "Bluetooth"},
+      "top_reviews": [
+        {"stars": 5, "text": "Unmatched, and completely unjustifiable for a forty-person rollout."},
+        {"stars": 4, "text": "Heavy after two hours on a call."}
+      ],
+      "price_points": {"2026-08-15": 60900, "2026-08-17": 60400, "2026-08-19": 59900},
+      "stock_points": {"2026-08-15": 80, "2026-08-17": 70, "2026-08-19": 60}
+    },
+    {
+      "listing_id": "AMZ-HPH-1304",
+      "listing_title": "JBL Tune 510BT On-Ear Wireless Bluetooth Headphones, 40H Battery, Multi-Point Connection",
+      "department": "Headphones",
+      "price_display": "Rs 2,199",
+      "delivery_estimate": "Ships from Chennai - Delivered in 2-3 days",
+      "rating": {"stars": 4.3, "count": 26718},
+      "returns": "10 days replacement only",
+      "in_stock": 1500,
+      "spec_sheet": {"Fit": "On-Ear", "Connection": "Wireless", "Protocol": "Bluetooth"},
+      "top_reviews": [
+        {"stars": 5, "text": "Battery is unbelievable for the price."},
+        {"stars": 2, "text": "No noise cancelling, despite what the listing images imply."},
+        {"stars": 4, "text": "On-ear pads get warm in a Chennai summer."}
+      ],
+      "price_points": {"2026-08-15": 2299, "2026-08-17": 2249, "2026-08-19": 2199},
+      "stock_points": {"2026-08-15": 1700, "2026-08-17": 1600, "2026-08-19": 1500}
+    },
+    {
+      "listing_id": "AMZ-HPH-1305",
+      "listing_title": "boAt Airdopes 141 True Wireless In-Ear Earbuds with ENx Tech and 42H Playtime",
+      "department": "Headphones",
+      "price_display": "Rs 1,099",
+      "delivery_estimate": "Ships from Chennai - Delivered in 1-2 days",
+      "rating": {"stars": 4.0, "count": 58921},
+      "returns": "7 days replacement only",
+      "in_stock": 5000,
+      "spec_sheet": {"Fit": "In-Ear", "Connection": "Wireless", "Protocol": "Bluetooth"},
+      "top_reviews": [
+        {"stars": 5, "text": "Cannot fault them at this price."},
+        {"stars": 2, "text": "Left bud stopped charging in month three."},
+        {"stars": 3, "text": "Fine for calls, poor on a noisy warehouse floor."}
+      ],
+      "price_points": {"2026-08-15": 1199, "2026-08-17": 1149, "2026-08-19": 1099},
+      "stock_points": {"2026-08-15": 5600, "2026-08-17": 5300, "2026-08-19": 5000}
+    }
+  ]
+}

@@ -247,18 +247,47 @@ class Observation(BaseModel):
     value: float = Field(description="Rupees per unit, or units in stock.")
 
 
+class ReviewSnippet(BaseModel):
+    """One buyer's rating and one line of what they said.
+
+    ADVISORY, AND THAT IS THE WHOLE POINT
+    -------------------------------------
+    A marketplace listing carries thousands of words of opinion, and the obvious
+    thing to do with them is ask a language model "how good is this product,
+    really?" and fold the answer into the score. We deliberately do not.
+
+    Review text is unstructured, adversarial (sellers write some of it) and
+    unreproducible — three properties that would poison a number a finance
+    manager has to defend. So reviews travel with the product, get shown to the
+    human on the drill-down, and are read by nothing that decides anything.
+    tests/test_reviews_are_advisory.py holds that down: a product's score is
+    identical with and without them.
+
+    The reliability RATING is different, and the distinction matters. A rating is
+    already a number, published by the source and normalised the same way for
+    every product. That is scoreable. The sentences next to it are not.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    stars: float = Field(ge=0, le=5, description="What this reviewer gave it, out of 5.")
+    text: str = Field(description="One line of what they wrote, verbatim from the feed.")
+
+
 class Product(BaseModel):
     """One purchasable item, in the single shape the rest of the pipeline uses.
 
-    Both vendor sources land here: PackHub's direct JSON and BoxBazaar's
-    aggregator CSV have different field names, different units, and different
-    ideas of what a reliability score is. The normaliser in discovery.py does
-    that translation, and this model is what it must translate INTO. If it
-    misses a field, Pydantic raises here rather than producing a silently wrong
-    score three stages later.
+    Every vendor source lands here: PackHub's direct JSON, BoxBazaar's aggregator
+    CSV and Amazon's marketplace JSON have different field names, different
+    units, and different ideas of what a reliability score is. The adapters in
+    sources.py do that translation, and this model is what they must translate
+    INTO. If one misses a field, Pydantic raises here rather than producing a
+    silently wrong score three stages later.
 
-    Every field below is either a hard gate input or a soft scoring input. There
-    is nothing decorative in this model.
+    Every field below is one of exactly three things: a hard gate input, a soft
+    scoring input, or an explicitly ADVISORY input that no decision code reads
+    (the two histories and the two review fields). Nothing here is decorative,
+    and nothing advisory has ever moved a score.
     """
 
     model_config = ConfigDict(frozen=True)  # A product must not change under the ranker.
@@ -297,6 +326,19 @@ class Product(BaseModel):
     )
     stock_history: tuple[Observation, ...] = Field(
         default=(), description="Dated stock-level readings, oldest first."
+    )
+
+    # --- Buyer feedback -------------------------------------------------------
+    # Also advisory, and for a sharper reason than the histories: this is the one
+    # place in the catalog where an LLM would obviously "help". It does not. See
+    # ReviewSnippet above. Both default to empty because our B2B vendors publish
+    # no reviews at all, and an empty list is the honest way to say so — we do
+    # not invent a rating count to make a column look full.
+    review_count: int = Field(
+        default=0, ge=0, description="How many buyers rated it. Context for the rating, never scored."
+    )
+    sample_reviews: tuple[ReviewSnippet, ...] = Field(
+        default=(), description="A few verbatim snippets, shown to the human on the drill-down."
     )
 
     @property

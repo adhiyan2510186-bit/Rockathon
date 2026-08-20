@@ -149,12 +149,21 @@ def test_weights_match_the_deck():
     assert math.isclose(sum(computed.values.values()), 1.0, abs_tol=1e-9)
 
 
-def test_three_of_seven_products_survive_the_hard_gates():
-    """Seven considered, three eligible, four rejected for four different reasons."""
+def test_three_of_seventeen_products_survive_the_hard_gates():
+    """Seventeen considered, three eligible, and all four gates do real work.
+
+    The count is asserted because the golden scores depend on it. Two of the four
+    normalisation terms are min-max ACROSS THE SURVIVING POOL, so one extra
+    product that quietly passes the gates would move 58.0 / 48.7 / 33.7 without
+    anyone touching the ranker. Every packaging listing added since the deck was
+    frozen fails at least one hard constraint on purpose, and this line is what
+    tells us the moment one stops.
+    """
     _, _, results, _ = build_pipeline()
-    assert len(results) == 7
+    assert len(results) == 17
     passed = [result for result in results if result.passed]
     assert len(passed) == 3
+    assert {result.product.name for result in passed} == set(GOLDEN_SCORES)
 
     rejected_reasons = {
         field for result in results if not result.passed for field in result.violations
@@ -165,6 +174,46 @@ def test_three_of_seven_products_survive_the_hard_gates():
         "max_price_per_unit_inr",
         "max_delivery_days",
     }
+
+
+def test_the_near_misses_are_kept_with_their_deltas():
+    """The interesting rejections, and why keeping them is not bookkeeping.
+
+    Three listings fail on exactly one gate each, which is what makes them worth
+    showing a human when nothing qualifies: a cheaper box that is one day late,
+    a cheaper box the seller does not hold enough of, and a box that costs
+    ninety-five paise too much. The escalation handler builds its near-miss list
+    out of these, so a filter that returned only survivors would have nothing to
+    offer at the exact moment the user needs an option.
+    """
+    _, _, results, _ = build_pipeline()
+    by_id = {result.product.product_id: result for result in results}
+
+    # Rs 21.80 and otherwise perfect — eleven days against a ten-day window.
+    assert set(by_id["FLK-PKG-2002"].violations) == {"max_delivery_days"}
+    # Rs 16.20, the cheapest double-wall in the pool — only 4,200 of the 5,000.
+    assert set(by_id["FLK-PKG-2003"].violations) == {"quantity"}
+    # Rs 22.95 against a Rs 22.00 cap: the smallest price violation we hold.
+    assert set(by_id["FLK-PKG-2001"].violations) == {"max_price_per_unit_inr"}
+
+
+def test_a_cheap_listing_with_bad_reviews_is_rejected_on_a_gate_not_on_a_vibe():
+    """FLK-PKG-2003 is the trap, and it is rejected for the RIGHT reason.
+
+    It is the cheapest double-wall kraft box in the pool at Rs 16.20, and its
+    reviews are a warning: 2.9 stars, "half the consignment was the wrong size".
+    It is out of the running because the seller holds 4,200 boxes against 5,000
+    needed — a fact — and not because we let anything read the reviews and form
+    an opinion. The reviews are why a HUMAN would not want it. The stock count is
+    why the AGENT cannot have it.
+    """
+    _, _, results, _ = build_pipeline()
+    trap = next(r for r in results if r.product.product_id == "FLK-PKG-2003")
+
+    assert trap.product.price_per_unit_inr == 16.20
+    assert trap.product.reliability_rating == 2.9
+    assert trap.product.sample_reviews          # the warning is on file for the human
+    assert set(trap.violations) == {"quantity"}  # and plays no part in the verdict
 
 
 def test_survivor_figures_match_the_deck():

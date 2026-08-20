@@ -121,7 +121,7 @@ answer cannot change — which is what keeps it correct at 7 products and at 7,0
 is one new class and zero edits anywhere else.
 
 **Where.** `agent/sources.py` — the `SourceAdapter` interface, and the registry
-at `agent/sources.py:220`. `agent/discovery.py` imports `sources` and never
+at `agent/sources.py:443`. `agent/discovery.py` imports `sources` and never
 mentions JSON or CSV.
 
 **What the naive version does.** Before this, `discovery.py` contained
@@ -133,8 +133,84 @@ The measurable version: `tests/test_sources.py` asserts that toggling a source
 changes the candidate pool **and nothing downstream** — same ranker, same audit
 schema, same scores for whatever survives.
 
+**Measured — six vendors, three read() methods.** We grew the catalog from 21
+products across two vendors to **57 across six** (packaging 17, laptops 16,
+headphones 14, furniture 10) by adding two marketplace feeds, Amazon and
+Flipkart, in a third schema shape. The diff:
+
+| Added | Cost |
+| ----- | ---- |
+| A third feed FORMAT (`MarketplaceJsonAdapter`) | one class, `agent/sources.py:220` |
+| Two vendors on that format (`AmazonAdapter`, `FlipkartAdapter`) | four lines each — key, display name, path |
+| A fourth category (headphones) | one `config.yaml` block, plus catalog rows |
+| 36 new products with reviews, messy titles and hub-based delivery | data files only |
+
+`agent/ranking.py`, `agent/discovery.py`, `agent/authorisation.py`,
+`agent/escalation.py`, `agent/signals.py` and `agent/audit.py` were **not
+modified**. `tests/test_sources.py::test_a_second_vendor_on_a_known_format_costs_no_new_parsing`
+asserts the ratio directly: six adapters, three distinct `read` implementations.
+
 **The sentence for stage.** *"The live vendor API we did not build is one file.
 That is not a promise — the toggle you just watched is the same seam."*
+
+---
+
+## 4b · The marketplace conversions the other two feeds never needed
+
+**Claim.** Each awkward shape a feed arrives in is handled in exactly one
+function, and adding a format adds functions rather than branches.
+
+**Where.** `agent/sources.py` — `rupees_from_display()` (`"Rs 1,14,900"` →
+`114900.0`), `_date_keyed()` (a history keyed by date rather than listed), and
+the reuse of `worst_case_days()` on prose (`"Ships from Delhi NCR - Delivered in
+11-12 days"` → `12`).
+
+**What the naive version does.** Two things we specifically avoided. First, a
+`float(price.strip("Rs "))`, which reads `"Rs 1,14,900"` as a crash — or worse,
+a "helpful" `replace(",", "")` that assumes three-digit grouping and is simply
+wrong on Indian lakhs. Second — the real temptation — **reading specs out of the
+listing title**. `AMZ-LAP-1101`'s title advertises `8GB DDR4` inside a 120-character
+marketing string, and parsing it is thirty seconds of regex. We read `spec_sheet`,
+the structured field, and treat the title as display text.
+
+**Measured — reuse, counted.** The marketplace format required **two new parsing
+functions**; the other three conversions it needs (`worst_case_days`,
+`first_number`, and the category lowering) were already written for the
+aggregator CSV and are called unchanged. `_date_keyed` sorts by date rather than
+trusting file order, because a JSON object promises no ordering and stage 4.5
+reads `series[-1]` as "latest" — an unsorted series would invert every trend on
+screen with nothing to show that it had.
+
+**The sentence for stage.** *"Three feeds, and the same fact arrives as a number,
+an inconvenient unit, and a string a human was meant to read. Every one of those
+conversions lives in one function you can open."*
+
+---
+
+## 4c · Buyer reviews cost the decision path nothing, by construction
+
+**Claim.** The catalog carries ~100 review snippets and the ranker does not read
+one. Adding them changed no scoring code and cannot change a score.
+
+**Where.** `agent/models.py` — `ReviewSnippet`, and `Product.review_count` /
+`Product.sample_reviews`. Rendered at `ui/components.py:249`, `buyer_reviews()`,
+called from exactly one place in `app.py` — inside the score-breakdown drill-down.
+
+**What the naive version does.** Sends the review text to the LLM and folds a
+sentiment score into the ranking. That is one extra model call per product per
+run — for our headphones pool, **five calls where we make zero** — and it makes
+the ranking non-deterministic, so the same brief stops producing the same table.
+
+**Measured — a guarantee, not a benchmark.**
+`tests/test_reviews_are_advisory.py` runs four checks: stripping every review
+leaves the ranking byte-identical; replacing the winner's reviews with three
+furious one-stars leaves its score unchanged; a product with zero reviews is not
+penalised for the silence; and a static AST pass fails if any module in `agent/`
+outside `models.py` and `sources.py` so much as names `sample_reviews`.
+
+**The sentence for stage.** *"The star rating is a number, so we score it. The
+sentences are not, so we show them to you instead. That distinction is the whole
+project, and there is a test that fails the moment we blur it."*
 
 ---
 

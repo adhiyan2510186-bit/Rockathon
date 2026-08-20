@@ -1,0 +1,279 @@
+{
+  "_comment": "Flipkart - a second MARKETPLACE feed, in the SAME shape as amazon_marketplace.json. Identical columns on purpose: agent/sources.py already speaks this format, so this whole vendor integration is four lines (FlipkartAdapter - a key, a display name, a path). That is the adapter layer's claim, shown rather than asserted. It is the same trick PackHub/OfficeStock and BoxBazaar/TradeBridge already demonstrate: three formats, six vendors, and the normalising code written once per format.",
+  "_pairs_note": "Several listings here are the SAME PHYSICAL PRODUCT as a listing in amazon_marketplace.json, described completely differently and priced slightly apart. That is the point of having both files: FLK-LAP-2101 'Dell 15 Laptop 11th Gen - Carbon Black' and AMZ-LAP-1101 'Dell Inspiron 15 3520 15.6\" FHD Laptop (12th Gen Core i5-1235U/8GB DDR4/512GB SSD...)' are one machine. Nothing downstream compares titles - after normalisation both carry 8GB RAM and 512GB SSD, both fail a 16GB brief for the same stated reason, and the cheaper of the two wins on the price term if they ever qualify. The pairs are: AMZ-PKG-1001/FLK-PKG-2001, AMZ-LAP-1101/FLK-LAP-2101, AMZ-LAP-1102/FLK-LAP-2102, AMZ-FUR-1201/FLK-FUR-2201, AMZ-HPH-1301/FLK-HPH-2301.",
+  "_delivery_note": "Quoted to a Chennai 600001 buyer, same as the Amazon feed, which is why the same product can be four days from one warehouse and eighteen from another.",
+  "_history_note": "Authored demo data, labelled 'simulated market data' in the UI. Last reading of each series equals the listing's current price_display / in_stock.",
+  "marketplace": "Flipkart",
+  "storefront": "flipkart.com",
+  "buyer_pincode": "600001",
+  "listings": [
+    {
+      "listing_id": "FLK-PKG-2001",
+      "listing_title": "Kraft Mailer Box DW 200x150x80 (Pack of 100), Brown Corrugated Shipping Box",
+      "department": "Packaging",
+      "price_display": "Rs 22.95",
+      "delivery_estimate": "Ships from Chennai - Delivered in 3-4 days",
+      "rating": {"stars": 4.1, "count": 774},
+      "returns": "7 days replacement only",
+      "in_stock": 25000,
+      "spec_sheet": {"Wall": "Double Wall", "Material": "Kraft", "Size": "200 x 150 x 80 mm"},
+      "top_reviews": [
+        {"stars": 4, "text": "Same box we buy on the other site, forty-five paise cheaper here."},
+        {"stars": 3, "text": "Seller ships in batches - our order came as two consignments."},
+        {"stars": 5, "text": "Thick double wall, no crush damage in three months."}
+      ],
+      "price_points": {"2026-08-15": 23.40, "2026-08-17": 23.10, "2026-08-19": 22.95},
+      "stock_points": {"2026-08-15": 31000, "2026-08-17": 28000, "2026-08-19": 25000}
+    },
+    {
+      "listing_id": "FLK-PKG-2002",
+      "listing_title": "SuperSeal Double Wall Corrugated Kraft Box 200 x 150 x 80 mm (Pack of 100) Brown",
+      "department": "Packaging",
+      "price_display": "Rs 21.80",
+      "delivery_estimate": "Ships from Mumbai - Delivered in 10-11 days",
+      "rating": {"stars": 4.0, "count": 233},
+      "returns": "20 days replacement",
+      "in_stock": 60000,
+      "spec_sheet": {"Wall": "Double Wall", "Material": "Kraft", "Size": "200 x 150 x 80 mm"},
+      "top_reviews": [
+        {"stars": 5, "text": "Good boxes and they always have stock."},
+        {"stars": 3, "text": "Eleven days from Mumbai - plan ahead or do not bother."},
+        {"stars": 4, "text": "Sizing is consistent across the whole pack."}
+      ],
+      "price_points": {"2026-08-15": 22.10, "2026-08-17": 21.95, "2026-08-19": 21.80},
+      "stock_points": {"2026-08-15": 66000, "2026-08-17": 63000, "2026-08-19": 60000}
+    },
+    {
+      "listing_id": "FLK-PKG-2003",
+      "listing_title": "Factory Direct Combo Mailer Boxes Kraft 200x150x80mm Double Wall (Pack of 500) - Lowest Price Guaranteed",
+      "department": "Packaging",
+      "price_display": "Rs 16.20",
+      "delivery_estimate": "Ships from Chennai - Delivered in 8-9 days",
+      "rating": {"stars": 2.9, "count": 1580},
+      "returns": "3 days replacement only",
+      "in_stock": 4200,
+      "spec_sheet": {"Wall": "Double Wall", "Material": "Kraft", "Size": "200 x 150 x 80 mm"},
+      "top_reviews": [
+        {"stars": 1, "text": "Half the consignment was the wrong size. The seller stopped replying."},
+        {"stars": 2, "text": "Cheapest listing on the site and it shows - soft board, no print quality."},
+        {"stars": 4, "text": "If you only need a few hundred boxes it is perfectly fine."}
+      ],
+      "price_points": {"2026-08-15": 16.90, "2026-08-17": 16.50, "2026-08-19": 16.20},
+      "stock_points": {"2026-08-15": 9000, "2026-08-17": 6500, "2026-08-19": 4200}
+    },
+    {
+      "listing_id": "FLK-PKG-2004",
+      "listing_title": "Void Fill Honeycomb Paper Wrap Roll 500 mm x 250 m, Eco Packing Material",
+      "department": "Packaging",
+      "price_display": "Rs 34.00",
+      "delivery_estimate": "Ships from Bengaluru - Delivered in 4-5 days",
+      "rating": {"stars": 4.2, "count": 310},
+      "returns": "10 days replacement only",
+      "in_stock": 400,
+      "spec_sheet": {"Type": "Void Fill", "Roll Size": "500 mm x 250 m", "Material": "Kraft"},
+      "top_reviews": [
+        {"stars": 5, "text": "Replaced bubble wrap entirely and customers commented on it."},
+        {"stars": 3, "text": "Works out dearer per parcel than bubble wrap once you measure it."}
+      ],
+      "price_points": {"2026-08-15": 34.90, "2026-08-17": 34.40, "2026-08-19": 34.00},
+      "stock_points": {"2026-08-15": 600, "2026-08-17": 500, "2026-08-19": 400}
+    },
+    {
+      "listing_id": "FLK-PKG-2005",
+      "listing_title": "Large Mailer Box Double Wall Kraft 250x200x100 mm (Pack of 100) for Apparel",
+      "department": "Packaging",
+      "price_display": "Rs 27.50",
+      "delivery_estimate": "Ships from Chennai - Delivered in 3-4 days",
+      "rating": {"stars": 4.7, "count": 190},
+      "returns": "20 days replacement",
+      "in_stock": 18000,
+      "spec_sheet": {"Wall": "Double Wall", "Material": "Kraft", "Size": "250 x 200 x 100 mm"},
+      "top_reviews": [
+        {"stars": 5, "text": "Perfect for apparel, very sturdy."},
+        {"stars": 4, "text": "Bigger than we needed for skincare minis."}
+      ],
+      "price_points": {"2026-08-15": 27.90, "2026-08-17": 27.70, "2026-08-19": 27.50},
+      "stock_points": {"2026-08-15": 22000, "2026-08-17": 20000, "2026-08-19": 18000}
+    },
+    {
+      "listing_id": "FLK-LAP-2101",
+      "listing_title": "Dell 15 Laptop 11th Gen Core i5 (8 GB/512 GB SSD/Windows 11 Home) - Carbon Black",
+      "department": "Laptops",
+      "price_display": "Rs 45,499",
+      "delivery_estimate": "Ships from Chennai - Delivered in 5-6 days",
+      "rating": {"stars": 3.9, "count": 11204},
+      "returns": "7 days replacement only",
+      "in_stock": 300,
+      "spec_sheet": {"RAM": "8GB RAM", "Storage": "512GB SSD", "Processor": "i5"},
+      "top_reviews": [
+        {"stars": 4, "text": "Same laptop as elsewhere for less. Check the RAM before you order."},
+        {"stars": 2, "text": "Title says 11th Gen, the box says 12th. Support was unhelpful."},
+        {"stars": 3, "text": "Fine machine, slower to arrive than the estimate."}
+      ],
+      "price_points": {"2026-08-15": 45999, "2026-08-17": 45699, "2026-08-19": 45499},
+      "stock_points": {"2026-08-15": 360, "2026-08-17": 330, "2026-08-19": 300}
+    },
+    {
+      "listing_id": "FLK-LAP-2102",
+      "listing_title": "Lenovo ThinkPad E14 (16 GB/512 GB SSD/Windows 11 Pro) Business Laptop - Black",
+      "department": "Laptops",
+      "price_display": "Rs 66,450",
+      "delivery_estimate": "Ships from Bengaluru - Delivered in 8-9 days",
+      "rating": {"stars": 4.4, "count": 2015},
+      "returns": "20 days replacement",
+      "in_stock": 55,
+      "spec_sheet": {"RAM": "16GB RAM", "Storage": "512GB SSD", "Keyboard": "Backlit Keyboard"},
+      "top_reviews": [
+        {"stars": 5, "text": "Cheaper here than the other marketplace for the identical SKU."},
+        {"stars": 4, "text": "Nine days, but worth waiting for."},
+        {"stars": 3, "text": "Onsite warranty registration was a hassle."}
+      ],
+      "price_points": {"2026-08-15": 67200, "2026-08-17": 66800, "2026-08-19": 66450},
+      "stock_points": {"2026-08-15": 80, "2026-08-17": 68, "2026-08-19": 55}
+    },
+    {
+      "listing_id": "FLK-LAP-2103",
+      "listing_title": "GenericBook Ultra 16GB/512GB SSD Laptop | Lowest Price Online | Imported Model",
+      "department": "Laptops",
+      "price_display": "Rs 38,900",
+      "delivery_estimate": "Ships from overseas warehouse - Delivered in 15-18 days",
+      "rating": {"stars": 2.7, "count": 4410},
+      "returns": "3 days replacement only",
+      "in_stock": 260,
+      "spec_sheet": {"RAM": "16GB RAM", "Storage": "512GB SSD"},
+      "top_reviews": [
+        {"stars": 1, "text": "Keyboard stopped working in three weeks. There is no service centre in India."},
+        {"stars": 2, "text": "Cheapest 16/512 anywhere. You get exactly what you pay for."},
+        {"stars": 4, "text": "Works fine so far, but the charger is a foreign plug."}
+      ],
+      "price_points": {"2026-08-15": 39900, "2026-08-17": 39400, "2026-08-19": 38900},
+      "stock_points": {"2026-08-15": 320, "2026-08-17": 290, "2026-08-19": 260}
+    },
+    {
+      "listing_id": "FLK-LAP-2104",
+      "listing_title": "ASUS Vivobook 15 (8 GB/512 GB SSD/Windows 11) Thin and Light Laptop - Cool Silver, 2026 Model",
+      "department": "Laptops",
+      "price_display": "Rs 41,200",
+      "delivery_estimate": "Ships from Chennai - Delivered in 3-4 days",
+      "rating": {"stars": 4.0, "count": 6730},
+      "returns": "10 days replacement only",
+      "in_stock": 180,
+      "spec_sheet": {"RAM": "8GB RAM", "Storage": "512GB SSD"},
+      "top_reviews": [
+        {"stars": 5, "text": "Light, bright screen, good for the price."},
+        {"stars": 3, "text": "8GB is the ceiling - it is soldered, not upgradeable."},
+        {"stars": 4, "text": "Arrived a day early."}
+      ],
+      "price_points": {"2026-08-15": 41900, "2026-08-17": 41500, "2026-08-19": 41200},
+      "stock_points": {"2026-08-15": 230, "2026-08-17": 205, "2026-08-19": 180}
+    },
+    {
+      "listing_id": "FLK-FUR-2201",
+      "listing_title": "Green Soul Beast Race Edition Gaming/Office Chair with Mesh Back and Adjustable Height - Black & Grey",
+      "department": "Furniture",
+      "price_display": "Rs 8,190",
+      "delivery_estimate": "Ships from Hyderabad - Delivered in 6-7 days",
+      "rating": {"stars": 4.2, "count": 21455},
+      "returns": "10 days replacement only",
+      "in_stock": 250,
+      "spec_sheet": {"Back": "Mesh Back", "Height": "Adjustable Height", "Support": "Lumbar Support"},
+      "top_reviews": [
+        {"stars": 5, "text": "Same chair as the other listing, three hundred rupees cheaper."},
+        {"stars": 2, "text": "Delivered with the bolt kit missing - a week to get one sent."},
+        {"stars": 4, "text": "Comfortable, though the gaming branding is not for every office."}
+      ],
+      "price_points": {"2026-08-15": 8390, "2026-08-17": 8290, "2026-08-19": 8190},
+      "stock_points": {"2026-08-15": 320, "2026-08-17": 285, "2026-08-19": 250}
+    },
+    {
+      "listing_id": "FLK-HPH-2301",
+      "listing_title": "boAt Rockerz 550 Bluetooth Headset with Upto 20 Hours Playback - Black",
+      "department": "Headphones",
+      "price_display": "Rs 2,849",
+      "delivery_estimate": "Ships from Bengaluru - Delivered in 5-6 days",
+      "rating": {"stars": 4.2, "count": 33108},
+      "returns": "7 days replacement only",
+      "in_stock": 1200,
+      "spec_sheet": {"Fit": "Over-Ear", "Connection": "Wireless", "Noise Control": "Noise Cancelling", "Protocol": "Bluetooth"},
+      "top_reviews": [
+        {"stars": 5, "text": "Cheaper here than anywhere else and it is the same unit."},
+        {"stars": 3, "text": "Six days, and the box arrived dented."},
+        {"stars": 4, "text": "Good sound for the money, mic is average on calls."}
+      ],
+      "price_points": {"2026-08-15": 2999, "2026-08-17": 2899, "2026-08-19": 2849},
+      "stock_points": {"2026-08-15": 1500, "2026-08-17": 1350, "2026-08-19": 1200}
+    },
+    {
+      "listing_id": "FLK-HPH-2302",
+      "listing_title": "Boult Audio ProBass Anchor Over-Ear Wireless ANC Headset - Combo Offer - Lowest Price",
+      "department": "Headphones",
+      "price_display": "Rs 1,299",
+      "delivery_estimate": "Ships from Chennai - Delivered in 4-5 days",
+      "rating": {"stars": 2.8, "count": 1842},
+      "returns": "3 days replacement only",
+      "in_stock": 2000,
+      "spec_sheet": {"Fit": "Over-Ear", "Connection": "Wireless", "Noise Control": "ANC", "Protocol": "Bluetooth"},
+      "top_reviews": [
+        {"stars": 1, "text": "Right cup died in the second week. The replacement window is three days, so no help."},
+        {"stars": 2, "text": "ANC is a marketing word on this one. It does almost nothing."},
+        {"stars": 4, "text": "For thirteen hundred rupees I have no complaints."}
+      ],
+      "price_points": {"2026-08-15": 1499, "2026-08-17": 1399, "2026-08-19": 1299},
+      "stock_points": {"2026-08-15": 2600, "2026-08-17": 2300, "2026-08-19": 2000}
+    },
+    {
+      "listing_id": "FLK-HPH-2303",
+      "listing_title": "Noise Two Wireless Over-Ear Headphone with Noise Cancelling - Imported Stock",
+      "department": "Headphones",
+      "price_display": "Rs 2,650",
+      "delivery_estimate": "Ships from Delhi NCR - Delivered in 16-18 days",
+      "rating": {"stars": 3.5, "count": 912},
+      "returns": "7 days replacement only",
+      "in_stock": 800,
+      "spec_sheet": {"Fit": "Over-Ear", "Connection": "Wireless", "Noise Control": "Noise Cancelling", "Protocol": "Bluetooth"},
+      "top_reviews": [
+        {"stars": 3, "text": "Decent unit, absurd delivery time."},
+        {"stars": 2, "text": "Ordered these for a launch and they arrived after it."},
+        {"stars": 4, "text": "Sound is better than the reviews suggest."}
+      ],
+      "price_points": {"2026-08-15": 2750, "2026-08-17": 2700, "2026-08-19": 2650},
+      "stock_points": {"2026-08-15": 950, "2026-08-17": 880, "2026-08-19": 800}
+    },
+    {
+      "listing_id": "FLK-HPH-2304",
+      "listing_title": "Sennheiser HD 450BT Over-Ear Wireless Active Noise Cancelling Headset - Limited Units",
+      "department": "Headphones",
+      "price_display": "Rs 3,750",
+      "delivery_estimate": "Ships from Chennai - Delivered in 3-4 days",
+      "rating": {"stars": 4.6, "count": 1580},
+      "returns": "20 days replacement",
+      "in_stock": 22,
+      "spec_sheet": {"Fit": "Over-Ear", "Connection": "Wireless", "Noise Control": "Noise Cancelling", "Protocol": "Bluetooth"},
+      "top_reviews": [
+        {"stars": 5, "text": "The best sounding pair we tested by a distance."},
+        {"stars": 3, "text": "Never more than a couple of dozen in stock."},
+        {"stars": 4, "text": "Comfortable, but the companion app is clunky."}
+      ],
+      "price_points": {"2026-08-15": 3990, "2026-08-17": 3850, "2026-08-19": 3750},
+      "stock_points": {"2026-08-15": 60, "2026-08-17": 40, "2026-08-19": 22}
+    },
+    {
+      "listing_id": "FLK-HPH-2305",
+      "listing_title": "Zebronics Thunder Over Ear Wireless Headphone with Noise Cancelling - Bulk Pack Offer",
+      "department": "Headphones",
+      "price_display": "Rs 899",
+      "delivery_estimate": "Ships from Chennai - Delivered in 2-3 days",
+      "rating": {"stars": 2.4, "count": 4900},
+      "returns": "3 days replacement only",
+      "in_stock": 20,
+      "spec_sheet": {"Fit": "Over-Ear", "Connection": "Wireless", "Noise Control": "Noise Cancelling", "Protocol": "Bluetooth"},
+      "top_reviews": [
+        {"stars": 1, "text": "Three of the five units were dead on arrival."},
+        {"stars": 1, "text": "Ear pads peeled within a month."},
+        {"stars": 3, "text": "At nine hundred rupees you cannot expect much."}
+      ],
+      "price_points": {"2026-08-15": 999, "2026-08-17": 949, "2026-08-19": 899},
+      "stock_points": {"2026-08-15": 45, "2026-08-17": 38, "2026-08-19": 20}
+    }
+  ]
+}

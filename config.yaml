@@ -124,6 +124,27 @@ categories:
                  backlit keyboard, touchscreen]
     spec_synonyms: {i5: intelcorei5, i7: intelcorei7}
 
+  headphones:
+    unit_noun: headsets
+    keywords: [headphone, headphones, headset, headsets, earbud, earbuds,
+               earphone, earphones]
+    per_unit_cap_inr: 5000
+    # Reliability leads for the same reason it does on a chair: this is a thing a
+    # named person wears all day, and the cheap end of this market fails inside a
+    # month. Delivery is the least of it — nobody's launch slips because the
+    # headsets came a week late.
+    default_weights:
+      reliability: 0.35
+      price: 0.25
+      replacement: 0.25
+      delivery: 0.15
+    spec_words: [over-ear, over ear, on-ear, on ear, in-ear, in ear,
+                 wireless, wired, noise-cancelling, noise cancelling,
+                 bluetooth, foldable]
+    # "ANC" is this category's "DW": the marketplace spec sheet writes the trade
+    # shorthand and the buyer writes the words. One product, one spelling.
+    spec_synonyms: {anc: noisecancelling}
+
   # Fallback for any category without a block of its own. Even weights, because
   # with nothing known about the purchase we have no honest reason to prefer one
   # criterion over another.
