@@ -35,11 +35,12 @@ parser and the UI says so plainly.
 | 12 | `agent/authorisation.py` | 5 — the limit check | **DONE** |
 | 13 | `agent/vendor.py` | 6 — confirmation & lock, with failure switches | **DONE** |
 | 14 | `agent/payment.py` | 7 — mock payment, retry once then fall back | **DONE** |
-| 15 | `app.py` | Streamlit, four screens | **NEXT** |
+| 15 | `agent/close.py` | 8 — the final entry, the only COMPLETED | **DONE** |
+| 16 | `app.py` | Streamlit, four screens | **DONE — demo path runs end to end** |
 
-`audit.py` is done, so every stage from here on can write its own log line as
-it acts instead of being retrofitted later. `language.py` is next: it is the
-only file that touches Gemini, and stages 0-2 are the front of the demo run.
+**Every file in the demo path is built.** The eight-step run in CLAUDE.md goes
+end to end: `python -m streamlit run app.py`. What follows is one section per
+file, in build order, so a cold restart can pick up anywhere.
 
 What `audit.py` gives the rest of the build:
 
@@ -341,6 +342,50 @@ acting. Golden test still 14 green.
 ```
 
 notify list across the run: `['requester', 'finance']`.
+
+### Stage 8 and the app (`agent/close.py`, `app.py`)
+
+**`close.py` exists because no stage marks its own work finished.** Stage 6 leaves
+the transaction CONFIRMING, stage 7 leaves it PAYING. A stage that declared itself
+complete would be the one stage nobody else verified, so closing is its own step:
+final entry, requester and finance notified, status COMPLETED — the only place
+that status is ever set.
+
+It computes nothing. Every figure is read from what earlier stages recorded, and
+whether a human signed is read off a USER-actored DECISION entry in the trail
+rather than inferred from the amount (the total only says whether one was
+*needed*). It refuses to close an escalated transaction: that stays parked with
+its state intact, because tidying up is not approval either.
+
+**`app.py` is four tabs and no business logic.** Every number on screen is read
+off an object a stage already produced. The engine is called from exactly two
+functions — `handle_message()` for stages 0-5 and `execute()` for stages 6-8 —
+and the screens only read `st.session_state`. That split is what stops a
+Streamlit re-run from re-running discovery or paying twice.
+
+| Tab | Shows |
+|---|---|
+| 1 · Brief | chat intake, parsed fields with HARD/SOFT class and CONFIRMED/ASSUMED provenance, the four weights and where each came from |
+| 2 · Comparison | 7 considered / 3 qualified, the ranked table, **every score term expandable**, and the 4 rejections with reasons |
+| 3 · Decision | the limit check as four metrics, the escalation, Approve / Decline / Let it expire, then stages 6-8 as they happen |
+| 4 · Audit | the trail, the notify list, the one-page auditor view, both downloads, and a replay read back from the .jsonl |
+
+The sidebar carries the transaction id and status, an honest parser label (Gemini
+reachable, or "offline parser · no API key found"), and the four failure switches.
+
+**Verified by driving the real app** with Streamlit's own `AppTest` harness — not
+by reading the code and hoping. Seven scenarios, no exceptions on any screen:
+
+1. cold start renders 4 tabs, 3 buttons, 4 switches
+2. off-topic message -> declined with the scope statement, nothing started
+3. the demo brief -> **58.0 / 48.7 / 33.7 through the live Gemini parser**, gap
+   9.3, Rs 1,09,500, status `awaiting_approval`, 5 audit entries
+4. Approve -> lock, payment declined once then approved, closed at 10 entries
+5. out-of-stock switch -> stage 6 escalates instead, nothing paid
+6. Decline -> `declined`, nothing bought
+7. Let it expire -> `expired`, nothing bought
+
+**To run it:** `python -m streamlit run app.py`
 
 ---
 
