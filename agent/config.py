@@ -89,8 +89,7 @@ def _validate(raw: dict[str, Any]) -> None:
     required = [
         "authorisation_limit_inr",
         "substitution_threshold_points",
-        "per_unit_cap_defaults_inr",
-        "category_default_weights",
+        "categories",
         "priority_phrase_weights",
         "weight_rounding_step",
         "llm",
@@ -123,15 +122,7 @@ def _validate(raw: dict[str, Any]) -> None:
             "'order this week'."
         )
 
-    # Every category's default weights must sum to 1.0. A set that sums to 0.9
-    # would silently shrink every score and quietly break the golden numbers.
-    for category, weights in raw["category_default_weights"].items():
-        total = sum(weights.values())
-        if abs(total - 1.0) > _WEIGHT_SUM_TOLERANCE:
-            raise ConfigError(
-                f"category_default_weights['{category}'] sums to {total}, not 1.0. "
-                f"Weights are proportions of one decision; they must total exactly 1."
-            )
+    _validate_categories(raw["categories"])
 
     # Stage 2 rescales around whichever criterion the user prioritised, so a
     # stated weight of 1.0 or more would leave nothing for the other criteria.
@@ -151,11 +142,153 @@ def _validate(raw: dict[str, Any]) -> None:
             f"weight_rounding_step is {step}; it must be greater than 0 and at most 0.25."
         )
 
-    if "default" not in raw["category_default_weights"]:
-        raise ConfigError("category_default_weights needs a 'default' entry as a fallback")
 
-    if "default" not in raw["per_unit_cap_defaults_inr"]:
-        raise ConfigError("per_unit_cap_defaults_inr needs a 'default' entry as a fallback")
+def _validate_categories(categories: dict[str, Any]) -> None:
+    """Check every category block before any stage is allowed to read one.
+
+    Category blocks are the one part of config.yaml a non-programmer is meant to
+    edit — adding a category is meant to be data entry. So this is where a typo
+    has to be caught: at startup, with a readable message, rather than as a
+    silently mis-weighted ranking in front of judges.
+    """
+    if not isinstance(categories, dict) or not categories:
+        raise ConfigError("config.yaml 'categories' must be a non-empty mapping")
+
+    # Every lookup in this file falls back to `default`, so its absence would
+    # turn any unrecognised category into a KeyError mid-run.
+    if "default" not in categories:
+        raise ConfigError("categories needs a 'default' entry as a fallback")
+
+    required_keys = (
+        "unit_noun",
+        "keywords",
+        "per_unit_cap_inr",
+        "default_weights",
+        "spec_words",
+        "spec_synonyms",
+    )
+
+    for name, block in categories.items():
+        if not isinstance(block, dict):
+            raise ConfigError(f"categories['{name}'] must be a mapping of settings")
+
+        for key in required_keys:
+            if key not in block:
+                raise ConfigError(f"categories['{name}'] is missing '{key}'")
+
+        if block["per_unit_cap_inr"] <= 0:
+            raise ConfigError(
+                f"categories['{name}']['per_unit_cap_inr'] must be a positive number"
+            )
+
+        # A set that sums to 0.9 would silently shrink every score in that
+        # category and quietly break the golden numbers.
+        weights = block["default_weights"]
+        total = sum(weights.values())
+        if abs(total - 1.0) > _WEIGHT_SUM_TOLERANCE:
+            raise ConfigError(
+                f"categories['{name}']['default_weights'] sums to {total}, not 1.0. "
+                f"Weights are proportions of one decision; they must total exactly 1."
+            )
+
+    # A keyword may belong to exactly one category. _normalise_category takes the
+    # FIRST match, so a word listed under two categories would route a brief by
+    # dictionary order — invisible on screen, and wrong in a way nobody would
+    # think to check. "workstation" is the live example: it is a desk and it is a
+    # laptop, so it belongs to neither.
+    seen: dict[str, str] = {}
+    for name, block in categories.items():
+        for keyword in block["keywords"]:
+            word = str(keyword).strip().lower()
+            if word in seen:
+                raise ConfigError(
+                    f"keyword '{word}' is listed under both '{seen[word]}' and "
+                    f"'{name}'. A keyword decides which category's price cap and "
+                    f"weights apply, so it must belong to exactly one."
+                )
+            seen[word] = name
+
+
+# ---------------------------------------------------------------------------
+# Categories — the one lookup every category-aware setting goes through
+# ---------------------------------------------------------------------------
+
+def _category(name: str) -> dict[str, Any]:
+    """The config block for a category, or the `default` block if we have none.
+
+    Every category-aware setting in this file goes through here, so "what happens
+    for a category we have never heard of?" has exactly one answer instead of one
+    answer per setting. An unknown category is not an error — the agent still has
+    to be able to read a cement brief far enough to say it cannot source cement.
+    """
+    categories = load()["categories"]
+    return categories.get(name, categories["default"])
+
+
+def category_keywords() -> dict[str, tuple[str, ...]]:
+    """Every category's trigger words, for stage 1's category normaliser.
+
+    The `default` block is excluded: its keyword list is empty by definition, and
+    a category named "default" is not something a user can ask for. Returned in
+    config order, which is the order the first-match-wins loop will use — the
+    startup collision check is what makes that order safe to rely on.
+    """
+    return {
+        name: tuple(block["keywords"])
+        for name, block in load()["categories"].items()
+        if name != "default" and block["keywords"]
+    }
+
+
+def category_spec_words(category: str) -> tuple[str, ...]:
+    """Physical-requirement vocabulary the offline parser looks for, per category.
+
+    Per-category rather than one global list on purpose. "recycled" is a real
+    packaging spec and noise in a chair brief; pulling it out of a furniture
+    sentence would invent a hard constraint the user never stated and empty the
+    pool for no visible reason.
+    """
+    return tuple(_category(category)["spec_words"])
+
+
+def all_spec_words() -> tuple[str, ...]:
+    """Every category's spec vocabulary at once, for when the category is unknown.
+
+    The offline parser identifies the category before it extracts specs, so this
+    is only reached when nothing matched — a brief we cannot place. Casting a
+    wide net there is the right trade: a spurious spec surfaces as a near-miss,
+    a missed spec surfaces as a wrong purchase.
+    """
+    words: list[str] = []
+    for block in load()["categories"].values():
+        for word in block["spec_words"]:
+            if word not in words:
+                words.append(word)
+    return tuple(words)
+
+
+def spec_synonyms() -> dict[str, str]:
+    """Trade shorthand from every category, merged into one lookup for stage 3.
+
+    Merged rather than per-category because the gate compares a brief's specs
+    against a product's specs and both sides are already known to be in the same
+    category — the category filter ran first. One flat table keeps spec_key()
+    a cache-friendly single lookup.
+    """
+    merged: dict[str, str] = {}
+    for block in load()["categories"].values():
+        merged.update(block["spec_synonyms"] or {})
+    return merged
+
+
+def unit_noun(category: str) -> str:
+    """What one item is called on screen — "boxes", "chairs", "laptops".
+
+    Display only. Nothing downstream branches on this; it exists so a chip reads
+    "12 chairs" instead of "12 units", which is the difference between a product
+    and a form.
+    """
+    return str(_category(category)["unit_noun"])
 
 
 # ---------------------------------------------------------------------------
@@ -219,8 +352,7 @@ def per_unit_cap_default_inr(category: str) -> float:
     ASSUMED rather than CONFIRMED — the audit trail must never present our guess
     as the user's instruction.
     """
-    caps = load()["per_unit_cap_defaults_inr"]
-    return float(caps.get(category, caps["default"]))
+    return float(_category(category)["per_unit_cap_inr"])
 
 
 # ---------------------------------------------------------------------------
@@ -233,8 +365,7 @@ def category_default_weights(category: str) -> dict[str, float]:
     Returned as a copy so a caller cannot accidentally mutate the loaded config
     and change the behaviour of every later stage in the same run.
     """
-    table = load()["category_default_weights"]
-    return dict(table.get(category, table["default"]))
+    return dict(_category(category)["default_weights"])
 
 
 def priority_phrase_weight(phrase: str) -> float | None:

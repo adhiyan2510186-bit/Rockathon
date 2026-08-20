@@ -23,44 +23,89 @@ authorisation_limit_inr: 105000
 substitution_threshold_points: 5
 
 # ---------------------------------------------------------------------------
-# Stage 3 — per-unit price cap defaults
+# Categories — everything the agent knows about a kind of purchase
 # ---------------------------------------------------------------------------
-# HARD constraint used by the stage-3 filter. If the user's brief states a
-# per-unit cap ("max ₹22/unit"), that stated value is used and this default is
-# ignored. If the brief omits it, the category default below is applied and
-# logged as an ASSUMED (not CONFIRMED) field per the Stage-1 ambiguous-field
-# rule. Values are per-unit INR ceilings, one per procurement category.
-per_unit_cap_defaults_inr:
-  packaging: 25          # mailer boxes, void fill, printed cartons
-  labels: 3
-  default: 50             # fallback for any category without a specific entry
+# ONE BLOCK PER CATEGORY. This is the whole implementation of a category: there
+# is no matching `if category == "packaging"` anywhere in agent/. Adding
+# furniture meant adding a block here and rows to a catalog; it meant no new
+# code path, no new branch, and no change to ranking, authorisation or audit.
+# tests/test_category_is_data.py enforces that by failing if any category name
+# appears as a literal in agent/*.py outside this file's reader.
+#
+# Each block carries:
+#   unit_noun        what one of these is called on screen ("12 chairs", not
+#                    "12 units"). Display only — never used in a decision.
+#   keywords         Stage 1. The model may answer "kraft mailer boxes"; Python
+#                    maps that onto "packaging" so the lookups below cannot
+#                    miss. Matched as substrings against the brief, first
+#                    category to match wins. A keyword may not appear under two
+#                    categories — agent/config.py raises at startup if one does,
+#                    because a silent mis-route is invisible on stage.
+#   per_unit_cap_inr Stage 3 HARD constraint, used ONLY if the brief states no
+#                    cap of its own. When this default is used, stage 1 logs the
+#                    field as ASSUMED rather than CONFIRMED — the audit trail
+#                    must never present our guess as the user's instruction.
+#   default_weights  Stage 2, used when the user states no priority. Must sum to
+#                    1.0 (validated). See weight_rounding_step below for how a
+#                    stated priority rescales these.
+#   spec_words       Stage 1 offline parser only. The vocabulary it will pull out
+#                    of a sentence as a physical requirement. Kept per-category
+#                    so "recycled" in a packaging brief does not become a hard
+#                    spec gate on a chair.
+#   spec_synonyms    Stage 3. Trade shorthand, so one product is one product:
+#                    the aggregator writes "DW", the user writes "double-wall",
+#                    the parser sometimes returns "double wall".
+#
+# The four SOFT criteria (reliability, price, replacement, delivery) are the
+# same in every category and are deliberately NOT configurable. They are the
+# universal commercial questions — a replacement window IS a warranty on a chair
+# or a laptop. Specs are what differ between categories; buying criteria are not.
+categories:
 
-# ---------------------------------------------------------------------------
-# Stage 2 — category default weights (soft criteria only)
-# ---------------------------------------------------------------------------
-# Used when the user's brief leaves a priority unstated. Each category's
-# weights must sum to 1.0. When the user DOES state a priority (e.g.
-# "reliability matters a lot"), Stage 2's Python weight engine substitutes
-# the stated weight for that criterion, rescales the remaining criteria
-# proportionally, then rounds them to weight_rounding_step below so the full
-# set still sums to 1.0 — the ratios here are what that rescale is
-# proportional to, so keep them deliberate, not arbitrary, if you edit them.
-category_default_weights:
   packaging:
-    reliability: 0.25
-    price: 0.30
-    replacement: 0.25
-    delivery: 0.20
+    unit_noun: boxes
+    keywords: [box, boxes, mailer, carton, packag, void fill, tape, bubble, corrugat]
+    per_unit_cap_inr: 25          # mailer boxes, void fill, printed cartons
+    default_weights:
+      reliability: 0.25
+      price: 0.30
+      replacement: 0.25
+      delivery: 0.20
+    spec_words: [double-wall, double wall, single-wall, single wall, corrugated,
+                 kraft, waterproof, food-grade, food grade, matte, glossy,
+                 recycled, printed, unprinted]
+    spec_synonyms: {dw: doublewall, sw: singlewall}
+
+  # Deliberately an orphan: we hold opinions about labels and no vendor stocks a
+  # single one. That gap is the reason discovery.available_categories() reads
+  # what we can actually buy from the CATALOGS rather than from this file. The
+  # agent tells a user what it can really source, not what it has defaults for.
   labels:
-    reliability: 0.20
-    price: 0.35
-    replacement: 0.20
-    delivery: 0.25
+    unit_noun: labels
+    keywords: [label, sticker, tag, decal]
+    per_unit_cap_inr: 3
+    default_weights:
+      reliability: 0.20
+      price: 0.35
+      replacement: 0.20
+      delivery: 0.25
+    spec_words: [matte, glossy, waterproof, printed, unprinted]
+    spec_synonyms: {}
+
+  # Fallback for any category without a block of its own. Even weights, because
+  # with nothing known about the purchase we have no honest reason to prefer one
+  # criterion over another.
   default:
-    reliability: 0.25
-    price: 0.25
-    replacement: 0.25
-    delivery: 0.25
+    unit_noun: units
+    keywords: []
+    per_unit_cap_inr: 50
+    default_weights:
+      reliability: 0.25
+      price: 0.25
+      replacement: 0.25
+      delivery: 0.25
+    spec_words: []
+    spec_synonyms: {}
 
 # ---------------------------------------------------------------------------
 # Stage 2 — stated-priority phrase → weight mapping
