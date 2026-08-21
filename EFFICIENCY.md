@@ -257,7 +257,7 @@ conversions lives in one function you can open."*
 one. Adding them changed no scoring code and cannot change a score.
 
 **Where.** `agent/models.py` — `ReviewSnippet`, and `Product.review_count` /
-`Product.sample_reviews`. Rendered at `ui/components.py:364`, `buyer_reviews()`,
+`Product.sample_reviews`. Rendered at `ui/components.py:524`, `buyer_reviews()`,
 called from exactly one place in `app.py` — inside the score-breakdown drill-down.
 
 **What the naive version does.** Sends the review text to the LLM and folds a
@@ -399,7 +399,7 @@ downstream changes.
 
 **Where.** `agent/language.py:522`, `_use_model()` — the one line that decides
 whether a call happens. `agent/language.py:589`, `_skipped_note()` says which of
-the two reasons applied. `app.py:520`, `_language_switch()` is the sidebar
+the two reasons applied. `app.py:514`, `_language_switch()` is the sidebar
 control, and `app.py`, `handle_message()` reads the flag **once** and passes it
 to both `check_scope()` and `extract_brief()`, so a single brief can never be
 half-read by the model and half by the word matcher.
@@ -425,6 +425,42 @@ the claim the sidebar caption makes to the user.
 **The sentence for stage.** *"The model reads the sentence. It does not decide
 anything — so we can turn it off mid-demo and show you the same ranking, with
 the app telling you plainly that it is reading your words itself."*
+
+---
+
+## 9 · The progress trail is the record, so it costs one pass and cannot disagree
+
+**Claim.** The rail showing what the agent did — on the request screen and on
+the record — is drawn straight from the audit entries the stages already wrote.
+It builds no second list, stores nothing in session state, and recomputes
+nothing. One pass over entries that are already in memory.
+
+**Where.** `ui/components.py` — `trace()`. Called twice: `app.py`,
+`_what_the_agent_did()` (compact, no sentences) and `render_activity()` (full).
+Both are handed `ctx.audit` / `log.entries()` — the same list `agent/audit.py`
+appends to as each event happens.
+
+**What the naive version does.** Keeps a separate list of UI progress steps,
+appended alongside the audit writes so the screen can be styled independently of
+the log. That is a second source of truth for the same sequence, and the moment
+one of the two gains a step the other does not, the picture and the exported
+file disagree — about the one thing this product exists to be trusted on.
+
+It also usually arrives with a `time.sleep()` between steps, so the progress has
+something to animate. We were asked for a live `st.status()` and did not build
+one, for exactly that reason: Streamlit clears it on the rerun that follows, so
+the only way to make it linger is to slow the agent down on purpose.
+
+**Measured — a structural guarantee, not a benchmark.** There is no arithmetic
+to check. `trace()` reads six fields off each entry and emits markup; it has no
+branch that can add, drop or reorder a step, and no access to anything except
+the list it is handed. The screen cannot drift from the file because there is
+only one list. `tests/test_app.py::test_the_whole_demo_path_runs_without_an_exception`
+covers it rendering across every state the demo passes through.
+
+**The line.** *"The progress display is the audit log. Not a view of it, not a
+copy of it — we hand the same list to the renderer that we hand to the export,
+so there is no version of this where the screen and the record disagree."*
 
 ---
 

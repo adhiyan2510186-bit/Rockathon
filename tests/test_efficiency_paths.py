@@ -49,3 +49,46 @@ def test_every_citation_points_at_real_code(path: str, line_number: int):
         f"{'blank' if not line else 'a comment'}. The reference has drifted - "
         f"find where the thing it names actually lives and update the number."
     )
+
+
+def _string_literal_lines(path: Path) -> set[int]:
+    """Every line occupied by a string literal - docstrings included.
+
+    Uses the parsed tree rather than a regex because a docstring is not
+    lexically distinguishable from any other expression statement, and the
+    thing we care about spans many lines.
+    """
+    import ast
+
+    lines: set[int] = set()
+    tree = ast.parse(path.read_text(encoding="utf-8"), str(path))
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            lines.update(range(node.lineno, (node.end_lineno or node.lineno) + 1))
+    return lines
+
+
+@pytest.mark.parametrize("path, line_number", references())
+def test_no_citation_has_slid_into_a_docstring(path: str, line_number: int):
+    """A reference that has drifted usually lands in prose, not on nothing.
+
+    The test above only asks whether the cited line is blank or a comment, and
+    that turned out to be far too weak. Two references drifted during the
+    interface work and BOTH still passed it: one had slid off `_language_switch`
+    into the middle of that function's own docstring, the other onto a lone
+    closing `\"\"\"` 160 lines from the function it named. Both are "a line of
+    real code" as far as the old check is concerned.
+
+    They are not, though, and the tell is the same in both cases - EFFICIENCY.md
+    cites things a judge should be able to OPEN: a def, a call, a branch. It
+    never cites a sentence. So a citation landing inside a string literal is
+    always drift, and this catches the exact failure we actually had rather than
+    the one we imagined.
+    """
+    target = ROOT / path
+    assert line_number not in _string_literal_lines(target), (
+        f"EFFICIENCY.md cites {path}:{line_number}, which is inside a docstring "
+        f"or string literal. References name code a judge can open, never prose - "
+        f"so this one has drifted off whatever it used to point at. Find where "
+        f"that thing lives now and update the number."
+    )

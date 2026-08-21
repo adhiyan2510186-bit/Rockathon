@@ -25,19 +25,33 @@ hovered row, and the selected row. They are only a few percent apart on purpose.
 Big jumps between greys read as unrelated boxes; a narrow band reads as one
 surface with things resting on it.
 
-SEPARATION IS A HAIRLINE. DECORATION IS A DIFFERENT JOB.
---------------------------------------------------------
+SEPARATION IS A HAIRLINE. DEPTH IS A DIFFERENT JOB.
+---------------------------------------------------
 Where one surface ends and the next begins is ALWAYS said with a hairline or a
-fill shift - never with a shadow and never with a gradient. On a near-black page
-a drop shadow is invisible, so a UI that leans on one just looks flat and
-slightly muddy. A 1px white line at 7% opacity is visible, costs nothing, and
-never blurs an edge.
+fill shift. A 1px white line at 7% opacity is visible on any background, costs
+nothing, and never blurs an edge. Every panel in the app still has one.
 
-That rule is about EDGES. It is not a vow of plainness, and three things in here
-now carry a gradient on purpose, none of them structural: the brand mark, the
-primary button, and a wash inside the recommendation panel that fades out well
-before that panel's own border. Each one is brand colour used as brand colour.
-Take any of them away and every boundary on the page is exactly where it was.
+This used to read "never a shadow and never a gradient", and half of that has
+now been deliberately reversed - so it is worth being precise about which half,
+because the distinction is what stops the interface sliding into mush.
+
+Panels now carry depth: a translucent fill, a highlight along the top edge, and
+a shadow underneath. What depth says is "this is a separate object lying above
+the page". What it must never be asked to say is "the object stops HERE" - a
+soft-edged shadow is far too vague to mark a boundary, especially on near-black,
+which is exactly why the old rule banned it and exactly why the border did not
+go anywhere when the shadow arrived. Two jobs, two devices, no overlap.
+
+The rule that survives intact is the one about EDGES. Nothing on any screen
+locates a boundary with a blur or a gradient. Gradients appear on the brand
+mark, the primary button, the panel lighting and a wash inside the
+recommendation - all of them decorative or tonal, none of them structural. Take
+every one away and every boundary on the page is exactly where it was.
+
+WHAT IS NOT HERE: NO backdrop-filter. Glass panels normally have one. Ours had
+one and it was removed after the renderer stalled twice on the machine we
+demonstrate from. See the note beside `--glass-fill` in ui/styles.py for the
+evidence and for why a blur was buying us almost nothing on this canvas anyway.
 
 THREE COLOUR ROLES, NEVER MIXED
 -------------------------------
@@ -195,8 +209,10 @@ DARK = Palette(
     backdrop="#3a4a60",
 )
 
-# Same structure inverted, same accent, same scale. Borders on, shadows off -
-# the discipline transfers even when the polarity does not.
+# Same structure inverted, same accent, same scale. The shadow does not invert
+# with it: ui/styles.py picks a much weaker one for light, because a shadow is an
+# absence of light and the value that registers on near-black looks like soot on
+# white. The discipline transfers even where the number cannot.
 LIGHT = Palette(
     name="light",
     canvas="#ffffff",

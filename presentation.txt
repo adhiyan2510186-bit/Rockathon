@@ -1238,6 +1238,99 @@ A: "Real vendor integrations - auth, pagination, rate limits, and vendors whose
                  see."
 
 
+8.8.14  THE TRAP: WE REVERSED FOUR OF OUR OWN DESIGN RULES AND LEFT THE
+        ARGUMENT AGAINST THEM SITTING IN THE FILE
+    ui/theme.py carried written rules banning shadows, hover states on static
+    tiles, and pill-shaped tags, each with a reason we could defend out loud. We
+    then decided to go the other way on all of them - glass panels, lift under
+    the cursor, pills everywhere.
+
+    The trap is not the reversal. It is that a reversal is two jobs and only the
+    first one is fun. Change the CSS and you are done in twenty minutes; the
+    paragraph explaining why shadows are wrong is still sitting directly above
+    the shadow, and now the repo argues with itself. A judge who opens that file
+    finds either a rule we broke or a comment we never read. Both are worse than
+    whichever choice we made.
+
+    Naive: delete the old comments. That loses the thinking, which is the part
+    worth having.
+
+    What we do: rewrite each rule to say what the code now does AND what the
+    original concern was, because the concern was right and it is what keeps the
+    new version honest. "Never a shadow" became "a hairline says where a panel
+    STOPS, depth says a panel is a separate OBJECT" - two jobs, two devices, and
+    the border did not go anywhere when the shadow arrived. "No hover on static
+    tiles" became "the cursor is the affordance, not the lift", with
+    cursor:default set on every tile that is not a button.
+
+    THE LINE:   "We changed our minds about four things and rewrote the reasons
+                 to match. A file that argues with its own code has told you
+                 nobody read it since."
+
+
+8.8.15  THE TRAP: THE PRETTIEST EFFECT WE ADDED WAS THE ONE THE DEMO LAPTOP
+        COULD NOT DRAW
+    Glass panels want backdrop-filter, so we put one on the recommendation and
+    the sidebar. Twice during ordinary use the renderer went unresponsive for
+    tens of seconds - once mid-scroll, once just after approval. On the laptop
+    we are presenting from: Intel UHD 620, 1.5x scaling, compositing a blur
+    behind a full-height sidebar every frame.
+
+    There was a second, quieter version of the same mistake underneath it. The
+    page background had `background-attachment: fixed`, which sounds free. It
+    was not doing anything at all - Streamlit scrolls an inner container, not the
+    page, so there was nothing for `fixed` to hold still - while forcing all six
+    background layers to repaint under every translucent panel on every scroll
+    frame. Full price, no effect.
+
+    Naive: keep the blur because glassmorphism is the look, and hope the room's
+    machine is faster. Or panic and strip the whole design back to flat panels.
+
+    What we do: ask what the blur was actually buying. A blur needs detail
+    behind it to smear, and behind ours is near-black canvas with soft gradients
+    and a 3%-opacity grid - there is nothing there to soften. The glass read was
+    always coming from the other three properties: a translucent fill that lets
+    the grid show through the panel, a highlight on the top edge, a shadow
+    underneath. So the blur came out and the design did not change.
+
+    Being straight about the evidence: that is two reproductions of a stall, not
+    a benchmark. We tried to measure the frame rate and the harness we wrote for
+    it stalled the page by itself, which says the machine is near its limit but
+    does not give us a number. The claim in the comment is the small one.
+
+    THE LINE:   "We took the blur out after the renderer hung twice on this
+                 laptop. It cost us nothing, because on a near-black page there
+                 was never anything behind the panel to blur."
+
+
+8.8.16  THE TRAP: THE TEST GUARDING OUR CODE REFERENCES PASSED WHILE TWO OF
+        THEM POINTED AT PROSE
+    EFFICIENCY.md promises we can open the code the moment a judge asks, and a
+    test checks every `file.py:N` in it exists and is not blank or a comment.
+    The interface work shifted a few hundred lines around. Two references
+    drifted. The test stayed green.
+
+    One had slid off `_language_switch()` into the middle of that function's own
+    docstring. The other had landed on a lone closing triple-quote 160 lines
+    from `buyer_reviews()`, the function it names. Both are "a line of real
+    code" to a check that only asks whether the line is empty.
+
+    Naive: fix the two numbers. The same thing happens on the next refactor, and
+    this is the SECOND time these references have rotted - the test exists
+    because twelve of sixteen had drifted once already.
+
+    What we do: fix the numbers, then make the guard catch this specific shape.
+    EFFICIENCY.md cites things a judge can OPEN - a def, a call, a branch. It
+    never cites a sentence. So a reference landing inside a string literal is
+    always drift, and that is now its own test, parsed off the AST rather than
+    guessed at with a regex. We checked it fails on both old numbers before
+    trusting it.
+
+    THE LINE:   "The guard was green while two references pointed at prose. A
+                 test that only asks 'is this line blank' is a test that buys
+                 silence."
+
+
 ================================================================================
 MAINTENANCE
 ================================================================================
@@ -1250,7 +1343,7 @@ differently, and we had a reason. Same shape every time:
 Skip anything that is just a feature description. This file is only for the
 places where we can show judgement.
 
-Last updated: after an audit sweep found the closing entry claiming human
-approval for orders the agent cleared alone, two runs sharing one transaction
-file, and a product-bar test that was green while the screen said "act_now"
-(8.8.11 - 8.8.13).
+Last updated: after the interface work - reversing four of our own design rules
+and rewriting the reasons to match, taking out a blur that hung the demo laptop
+twice, and finding two EFFICIENCY.md references pointing at prose while the test
+guarding them stayed green (8.8.14 - 8.8.16).
