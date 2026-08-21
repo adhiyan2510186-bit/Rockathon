@@ -82,7 +82,21 @@ def css(p: "Palette") -> str:
       /* Two washes of the brand, pre-mixed once so no caller invents its own
          opacity. Anything brand-tinted in this sheet uses one of these. */
       --accent-wash: {p.tint(p.accent, 0.10)};
-      --accent-faint: {p.tint(p.accent, 0.04)};
+
+      /* ---- the two pools on the canvas -----------------------------------
+         Both live here rather than inline in the .stApp rule below, because
+         they are one decision - how present is the page allowed to be - and
+         somebody tuning it should find both numbers on adjacent lines.
+
+         These are the only two brand/backdrop washes in the sheet that never
+         touch an element, so they can be moved without any blast radius.
+         They were 4% and 13%, which is where this started: on a near-black
+         surface 4% of anything is a change of two or three values per channel
+         - real in the stylesheet, invisible on a screen. The design was
+         already here, it was just being painted below the floor at which an
+         eye registers it. */
+      --pool-brand: {p.tint(p.accent, 0.09)};
+      --pool-slate: {p.tint(p.backdrop, 0.22)};
       --font: 'Inter Tight', Inter, -apple-system, 'Segoe UI', system-ui, sans-serif;
       --mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
 
@@ -128,7 +142,7 @@ def css(p: "Palette") -> str:
       --glow: 0 0 0 1px {p.tint(p.accent, 0.30)}, 0 10px 30px -12px {p.tint(p.accent, 0.42)};
       /* The hairline grid on the canvas, in ink rather than a fixed white, so it
          is faint dark lines on a light page and faint light ones on a dark one. */
-      --grid: {p.tint(p.ink, 0.035)};
+      --grid: {p.tint(p.ink, 0.05)};
 
       /* ---- motion ---------------------------------------------------------
          One curve and two durations for the whole app. Every transition in this
@@ -145,8 +159,11 @@ def css(p: "Palette") -> str:
      CSS paints background layers first-listed on top, so reading down this list
      is reading from the front of the page to the back:
 
-       1  brand pool, behind the header. The page's warmest point is where the
-          eye lands first anyway.
+       1  brand pool, up behind the header. The page's warmest point is where
+          the eye lands first anyway. Its centre sits just above the top edge
+          rather than well above it, so the bloom lands ON the page instead of
+          mostly off the top of it - see the header rule below, which is the
+          other half of that fix.
        2  slate pool, low and to the right. Somewhere for the far corner of a
           1120px page to go that is not flat black. It is the one use of
           `backdrop` in the palette and it never touches an element.
@@ -171,13 +188,44 @@ def css(p: "Palette") -> str:
      is the worst trade in the sheet. */
   .stApp {{
       background:
-          radial-gradient(70rem 24rem at 50% -8rem, var(--accent-faint), transparent 70%),
-          radial-gradient(52rem 34rem at 108% 64%, {p.tint(p.backdrop, 0.13)}, transparent 68%),
+          radial-gradient(70rem 26rem at 50% -2rem, var(--pool-brand), transparent 70%),
+          radial-gradient(52rem 34rem at 108% 64%, var(--pool-slate), transparent 68%),
           radial-gradient(135% 105% at 50% -5%, transparent 0 42%, var(--canvas) 100%),
           repeating-linear-gradient(0deg,  var(--grid) 0 1px, transparent 1px 48px),
           repeating-linear-gradient(90deg, var(--grid) 0 1px, transparent 1px 48px),
           var(--canvas);
       font-family: var(--font);
+  }}
+
+  /* AND THE BAR THAT WAS SITTING ON TOP OF ALL OF IT.
+     Streamlit puts a header across the top of the page - absolutely
+     positioned, full width - and paints it in the page colour unless it
+     happens to be empty. Ours is not empty: `toolbarMode = "viewer"` in
+     config.toml keeps the options menu, so the header had content, so it was
+     opaque, so it was drawing a solid rectangle over precisely the band where
+     the brand pool blooms. The pool was being rendered and then covered.
+
+     A FADE RATHER THAN FULLY TRANSPARENT, AND WE TRIED IT BOTH WAYS.
+     Fully transparent is the obvious fix and it looks right until you scroll:
+     the header does not move, so the page slides underneath it and the top row
+     of whatever you are reading gets sliced in half at the frame, with the menu
+     button hovering beside the offcut. Half a heading at the top of the screen
+     is the sort of thing nobody can name and everybody sees.
+
+     So the bar keeps a background, but it is the page colour fading out rather
+     than a solid block: opaque enough at the very top to swallow the offcut,
+     gone by the bottom edge so the pool blooms through underneath. Scrolled
+     content now dissolves upward instead of being guillotined.
+
+     It costs nothing, because the pool's centre sits at -2rem - its brightest
+     band is already above the viewport, and everything we actually see of it
+     starts below this 60px strip.
+
+     Pointer events are deliberately NOT touched: the menu button still has to
+     be clickable, and Streamlit only drops them when it makes the bar
+     transparent itself. */
+  header.stAppHeader {{
+      background: linear-gradient(180deg, var(--canvas) 55%, transparent);
   }}
   /* The top padding clears Streamlit's own floating toolbar. Without it our
      header scrolls up underneath the menu button and the first thing on the

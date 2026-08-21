@@ -1331,6 +1331,50 @@ A: "Real vendor integrations - auth, pagination, rate limits, and vendors whose
                  silence."
 
 
+8.8.17  THE TRAP: THE BACKGROUND WE WERE ASKED TO ADD WAS ALREADY THERE, BEING
+        PAINTED WHERE NOBODY COULD SEE IT
+    The page read as flat black and looked unfinished under the panels. The
+    obvious response is to design a background: pick a gradient, put it on the
+    page, done in five minutes.
+
+    We went and read the stylesheet first, and the background was already in it
+    - five layers on `.stApp`, a brand pool, a slate pool, a vignette and a 48px
+    grid, all written months earlier and all invisible. Two separate reasons,
+    and only one of them was ours:
+
+    Ours: the opacities were below the floor at which an eye registers anything.
+    The brand pool was the accent at 4% over a near-black page, which is a
+    change of two or three values per channel. Real in the file, invisible on a
+    screen. We had reviewed those numbers as CSS and never as light.
+
+    Streamlit's: it puts a header bar across the top of the page, absolutely
+    positioned, and paints it in the page colour unless it happens to be empty.
+    `toolbarMode = "viewer"` keeps the options menu, so ours had content, so it
+    was opaque - a solid rectangle sitting over exactly the band where the brand
+    pool blooms. The pool was being rendered and then covered. Nothing in our
+    code was wrong; a default in somebody else's was in the way.
+
+    Naive: add a second background on top of the first. Now there are two
+    definitions of the page, they disagree, and the next person to touch it has
+    to work out which one is live.
+
+    What we do: find out why the first one is invisible, fix both causes, and
+    change nothing else. Two token values, one gradient position, one rule for
+    the header. Every panel, chart and chip on all four screens is untouched.
+
+    The header fix has its own small trap, and we only found it by scrolling.
+    Fully transparent is the obvious answer and it looks right at rest - then
+    the page slides underneath the bar that does not move, and the top row of
+    whatever you are reading gets sliced in half at the frame with the menu
+    button hovering beside the offcut. So the bar keeps a background: the page
+    colour fading out rather than a solid block. Scrolled content dissolves
+    upward instead of being guillotined, and the pool still blooms underneath.
+
+    THE LINE:   "The gradient was already in the file. It was being drawn at 4%
+                 on a black page and then covered by a toolbar we did not know
+                 was opaque. We found that out before writing a second one."
+
+
 ================================================================================
 MAINTENANCE
 ================================================================================
@@ -1345,5 +1389,7 @@ places where we can show judgement.
 
 Last updated: after the interface work - reversing four of our own design rules
 and rewriting the reasons to match, taking out a blur that hung the demo laptop
-twice, and finding two EFFICIENCY.md references pointing at prose while the test
-guarding them stayed green (8.8.14 - 8.8.16).
+twice, finding two EFFICIENCY.md references pointing at prose while the test
+guarding them stayed green, and discovering the page background we were about to
+build had been in the stylesheet all along, drawn below the visible floor and
+covered by Streamlit's own header (8.8.14 - 8.8.17).

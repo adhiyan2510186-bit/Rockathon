@@ -190,7 +190,13 @@ class Palette:
 # The default. Four neutrals within a narrow band, hairlines between them.
 DARK = Palette(
     name="dark",
-    canvas="#0a0a0b",
+    # Cool, not neutral. This used to be #0a0a0b - a true grey-black - and the
+    # page read as flat black however much we layered onto it. Three points of
+    # blue is almost nothing in luminance terms (the step up to the panel colour
+    # is unchanged: #131316 is +9/+8/+8 above this, and was +9/+9/+11 above the
+    # old value) but it gives the whole surface a cast that belongs with the
+    # violet and slate pools lying on top of it, instead of fighting them.
+    canvas="#0a0b0e",
     surface="#131316",
     surface_2="#1a1a1e",
     surface_3="#232328",

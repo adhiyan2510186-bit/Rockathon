@@ -21,7 +21,7 @@
 
 [theme]
 base = "dark"
-backgroundColor = "#0a0a0b"
+backgroundColor = "#0a0b0e"
 secondaryBackgroundColor = "#131316"
 textColor = "#ededef"
 borderColor = "#26262a"
