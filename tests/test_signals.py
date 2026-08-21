@@ -69,7 +69,11 @@ def test_urgency_does_not_move_the_authorisation_limit(pipeline):
     tmp = Path(tempfile.mkdtemp())
 
     def authorise_with(compute_signals: bool):
-        ctx = TransactionContext(transaction_id="TXN-GUARD", brief=brief)
+        # Two separate runs of the same brief, so two transaction ids. They used
+        # to share one, which meant both wrote into a single audit file - the
+        # collision the logger now refuses outright.
+        suffix = "SIGNALS" if compute_signals else "PLAIN"
+        ctx = TransactionContext(transaction_id=f"TXN-GUARD-{suffix}", brief=brief)
         ctx.ranked = ranked
         log = audit_module.AuditLogger(ctx, export_dir=tmp)
         if compute_signals:

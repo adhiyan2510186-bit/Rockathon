@@ -67,6 +67,12 @@ IST = timezone(timedelta(hours=5, minutes=30), name="IST")
 # in the repo pretending to be evidence.
 EXPORT_DIR = Path(__file__).resolve().parent.parent / "exports"
 
+# How many times new_transaction_id() will draw a free four-digit id before it
+# gives up and widens the number. Nine thousand ids and a directory holding a
+# demo's worth of runs means a clash is rare and a run of twenty clashes in a
+# row is not going to happen — this is the belt to the braces.
+_MINT_ATTEMPTS = 20
+
 
 # Stage labels, spelled once. The schema says stage is "5 - decision &
 # authorisation" — a number AND a name — so the log reads end to end without
@@ -84,15 +90,34 @@ STAGE_PAYMENT = "7 - mock payment execution"
 STAGE_CLOSE = "8 - confirmation & audit close"
 
 
-def new_transaction_id() -> str:
+def new_transaction_id(export_dir: Path | None = None) -> str:
     """Mint a fresh transaction id, e.g. 'TXN-4471'.
 
     One id ties an entire order together: hand this string to `replay()` and the
-    whole run comes back in sequence. Four random digits is plenty for a
-    hackathon demo — we are not running a warehouse, and an id a judge can read
-    off the screen is worth more than a UUID nobody can say out loud.
+    whole run comes back in sequence. Four random digits keeps an id a judge can
+    read off the screen, which is worth more than a UUID nobody can say out loud.
+
+    But four digits alone is not enough, and we learned that the hard way. The
+    first version picked a number and trusted it. Because the log is opened in
+    append mode, a repeat id did not fail — it quietly appended a second order
+    into the first one's file, so `replay()` returned two interleaved runs and
+    the entry numbering restarted from 01 halfway down. That is the exact
+    property the audit trail is supposed to guarantee, broken silently.
+
+    So the id is checked against the directory it will be written to, and we draw
+    again if it is taken. The random part stays readable; the guarantee stops
+    depending on luck.
     """
-    return f"TXN-{random.randint(1000, 9999)}"
+    directory = export_dir or EXPORT_DIR
+    for _ in range(_MINT_ATTEMPTS):
+        candidate = f"TXN-{random.randint(1000, 9999)}"
+        if not (directory / f"{candidate}.jsonl").exists():
+            return candidate
+
+    # Every draw was taken. Rather than hand back an id we know collides, widen
+    # the number until it cannot. Ugly on screen, and it has never happened, but
+    # a readable id is a nicety and a unique one is the whole point.
+    return f"TXN-{random.randint(100000, 999999)}"
 
 
 class AuditLogger:
@@ -115,6 +140,9 @@ class AuditLogger:
         self.export_dir = export_dir or EXPORT_DIR
         self.export_dir.mkdir(parents=True, exist_ok=True)
         self.path = self.export_dir / f"{self.transaction_id}.jsonl"
+        # Set once, read by _flush: the first write creates the file
+        # exclusively, every later one appends. See _flush for why.
+        self._started = False
 
     # -- the one write path -------------------------------------------------
 
@@ -154,15 +182,34 @@ class AuditLogger:
         return entry
 
     def _flush(self, entry: AuditEntry) -> None:
-        """Append one JSON line to the transaction's file, immediately.
+        """Write one JSON line to the transaction's file, immediately.
 
-        Opened in append mode and closed again each time on purpose. It is a few
-        microseconds slower than holding the file open, and in exchange the log
-        on disk is always complete up to the last thing that happened — even if
-        the next stage throws, or we hit Ctrl-C mid-demo.
+        Opened and closed again each time on purpose. It is a few microseconds
+        slower than holding the file open, and in exchange the log on disk is
+        always complete up to the last thing that happened - even if the next
+        stage throws, or we hit Ctrl-C mid-demo.
+
+        The FIRST write uses "x", which creates the file and fails if one is
+        already there; every later write appends. That one character is the
+        difference between a collision we hear about and a collision we do not.
+        Plain append mode meant a reused transaction id merged two separate
+        orders into a single file and nothing anywhere said so.
+        new_transaction_id() now checks the directory before handing an id out,
+        so this should never fire. It is here because "should never" is not a
+        guarantee, and a loud failure beats quietly handing a judge a corrupted
+        audit trail as evidence.
         """
-        with self.path.open("a", encoding="utf-8") as handle:
-            handle.write(entry.model_dump_json() + "\n")
+        mode = "a" if self._started else "x"
+        try:
+            with self.path.open(mode, encoding="utf-8") as handle:
+                handle.write(entry.model_dump_json() + "\n")
+        except FileExistsError as exc:  # pragma: no cover - guarded at mint time
+            raise FileExistsError(
+                f"An audit trail for {self.transaction_id} already exists at "
+                f"{self.path}. Refusing to write a second order into it - the "
+                f"log would replay as one transaction when it is two."
+            ) from exc
+        self._started = True
 
     # -- the six event types, one method each -------------------------------
     # These exist so a call site reads like the thing that happened

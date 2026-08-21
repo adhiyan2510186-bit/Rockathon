@@ -106,3 +106,67 @@ def test_an_order_over_the_limit_records_the_approval_it_actually_got():
     assert not outcome.within_limit, "this brief is meant to exceed the limit"
     assert summary.approved_by_human is True
     assert "after human approval" in summary.headline
+
+
+# ---------------------------------------------------------------------------
+# One transaction id, one order
+# ---------------------------------------------------------------------------
+# CLAUDE.md's promise about the audit trail is that one transaction_id replays
+# the whole order in sequence. These pin the two things that promise rests on.
+
+def test_a_fresh_id_is_never_one_the_export_directory_already_holds(tmp_path, monkeypatch):
+    """Ids are checked against disk, not merely drawn at random.
+
+    The draw is forced to hand back a number that is already taken twice over,
+    so the retry loop is what has to save it. The old version returned the first
+    number it thought of and let append mode do the rest.
+    """
+    exports = tmp_path / "exports"
+    exports.mkdir()
+    (exports / "TXN-1111.jsonl").touch()
+    (exports / "TXN-2222.jsonl").touch()
+
+    draws = iter([1111, 2222, 3333])
+    monkeypatch.setattr(audit_module.random, "randint", lambda *_: next(draws))
+
+    assert audit_module.new_transaction_id(export_dir=exports) == "TXN-3333"
+
+
+def test_a_saturated_directory_still_yields_an_unused_id(tmp_path, monkeypatch):
+    """When every four-digit draw is taken, readability gives way to uniqueness.
+
+    A wider id is ugly on screen. Two orders in one file is worse.
+    """
+    exports = tmp_path / "exports"
+    exports.mkdir()
+    (exports / "TXN-4471.jsonl").touch()
+
+    monkeypatch.setattr(audit_module, "_MINT_ATTEMPTS", 3)
+    monkeypatch.setattr(audit_module.random, "randint", lambda low, high: 4471 if high == 9999 else 123456)
+
+    assert audit_module.new_transaction_id(export_dir=exports) == "TXN-123456"
+
+
+def test_two_runs_never_write_into_one_audit_file(tmp_path):
+    """A reused id must fail loudly rather than append a second order.
+
+    This is the failure we actually found in exports/: one file holding two
+    complete runs, entry numbering restarting from 01 halfway down, and nothing
+    anywhere saying so. Replaying that id returned two interleaved orders.
+    """
+    exports = tmp_path / "exports"
+
+    first = TransactionContext(transaction_id="TXN-SAME")
+    audit_module.AuditLogger(first, export_dir=exports).decision(
+        STAGE_AUTHORISATION, "the first run"
+    )
+
+    second = TransactionContext(transaction_id="TXN-SAME")
+    clashing = audit_module.AuditLogger(second, export_dir=exports)
+
+    with pytest.raises(FileExistsError, match="already exists"):
+        clashing.decision(STAGE_AUTHORISATION, "the second run")
+
+    replayed = audit_module.replay("TXN-SAME", export_dir=exports)
+    assert len(replayed) == 1
+    assert replayed[0].reasoning == "the first run"
