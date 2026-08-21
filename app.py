@@ -566,6 +566,30 @@ def render_request() -> None:
 
     ui.rule()
     _brief_readback(ctx)
+    _what_the_agent_did(ctx)
+
+
+def _what_the_agent_did(ctx) -> None:
+    """The compact rail, under the read-back: what just happened to this request.
+
+    WHY IT IS HERE AND NOT ONLY ON THE RECORD. This is the screen someone is
+    looking at when they press send, so it is the screen that owes them an
+    answer about what the agent then did on their behalf. Sending a sentence
+    into a box and getting a recommendation back two tabs away leaves the middle
+    invisible, and the middle is the part we are asking anyone to trust.
+
+    Compact - what happened and when, no sentences. The full rail with every
+    reason on it is on the record, which is where somebody goes when they want
+    to interrogate a step rather than watch one.
+
+    Read off the same audit entries the record uses, so this cannot drift from
+    it and cannot be running ahead of what was actually written down.
+    """
+    if not ctx.audit:
+        return
+    ui.rule()
+    ui.section("What we did with it")
+    ui.trace(ctx.audit, reasons=False)
 
 
 def _context_picker(request) -> None:
@@ -1062,18 +1086,6 @@ def _escalation_options(outcome) -> None:
 # Screen 4 — Activity
 # ---------------------------------------------------------------------------
 
-# What each event type is called on screen. The internal names are for the
-# JSONL export and for finance systems; a person reading the page gets English.
-_EVENT_WORDS = {
-    "DECISION": "Decided",
-    "ASSUMPTION": "Assumed",
-    "ESCALATION": "Asked you",
-    "FALLBACK": "Switched",
-    "ACTION": "Did",
-    "MARKET_SIGNAL": "Noticed",
-}
-
-
 def _order_record(ctx) -> None:
     """The order this trail is about, at the top of the trail.
 
@@ -1144,10 +1156,7 @@ def render_activity() -> None:
     ui.rule()
     ui.section("What happened")
     st.caption(f"{len(ctx.audit)} events · notifying {', '.join(log.notify_list())}")
-
-    for entry in log.entries():
-        word = _EVENT_WORDS.get(entry.event_type.value, entry.event_type.value)
-        st.markdown(f"**{word}** · {entry.timestamp.strftime('%H:%M:%S')} — {entry.reasoning}")
+    ui.trace(log.entries())
 
     ui.rule()
 

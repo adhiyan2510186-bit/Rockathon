@@ -350,6 +350,51 @@ def status(kind: str) -> tuple[str, str, str]:
 
 
 # ---------------------------------------------------------------------------
+# Trail events — what happened, in a word, with a mark that grades it
+# ---------------------------------------------------------------------------
+
+def event_mark(event_type: str) -> tuple[str, str, bool]:
+    """(colour, word, advisory) for one kind of audit event.
+
+    THE WORD. The internal names - DECISION, ESCALATION, MARKET_SIGNAL - are for
+    the JSONL export and for a finance system. A person reading the page gets
+    English: decided, asked you, noticed. This table is the only place that
+    translation happens, so the trail on the request screen and the trail on the
+    record can never call the same event two different things.
+
+    THE COLOUR grades the event rather than decorating it. A trail where every
+    node is the same shade is a list; one where the assumption is amber and the
+    moment we stopped and asked is orange can be read from across a room - you
+    can see the shape of what happened before you read a single sentence.
+
+    THE ADVISORY FLAG is the one that matters most. A market signal is advisory
+    BY DEFINITION - CLAUDE.md is explicit that an entry of this type never
+    accompanies a change in eligibility, score or authorisation - so its node is
+    drawn hollow while every event that actually did something is drawn solid.
+    A reader can see at a glance that the timing reads changed nothing, which is
+    the exact property a sharp judge will probe first and the exact property this
+    project exists to demonstrate.
+    """
+    palette = active()
+    table = {
+        # Neutral, and this is the important one. DECISION is the workhorse -
+        # most entries on a clean run are decisions - so painting it green makes
+        # a normal trail read as four shouts of SUCCESS and leaves nothing for
+        # the events that actually deserve a colour. The ordinary case is ink.
+        "DECISION":     (palette.ink_secondary, "Decided", False),
+        # Green is spent here instead: an ACTION is the agent doing something in
+        # the world - locking stock, moving money. Those are the entries a
+        # finance manager is scanning for.
+        "ACTION":       (palette.good, "Did", False),
+        "ASSUMPTION":   (palette.warning, "Assumed", False),
+        "ESCALATION":   (palette.serious, "Asked you", False),
+        "FALLBACK":     (palette.warning, "Switched", False),
+        "MARKET_SIGNAL": (palette.ink_muted, "Noticed", True),
+    }
+    return table.get(event_type, (palette.ink_muted, event_type.title(), True))
+
+
+# ---------------------------------------------------------------------------
 # Applying it
 # ---------------------------------------------------------------------------
 

@@ -198,6 +198,63 @@ def urgency_chips(signal) -> None:
 
 
 # ---------------------------------------------------------------------------
+# The trail — what happened, in the order it happened
+# ---------------------------------------------------------------------------
+
+def trace(entries: Sequence, reasons: bool = True) -> None:
+    """Every recorded event as one rail, read straight off the audit log.
+
+    NOTHING HERE IS NARRATED. Each step is an entry some stage wrote at the
+    moment it happened - its own timestamp, its own one-sentence reason, its own
+    actor. This function reads six fields and draws them. It does not know what
+    a stage is, it cannot reorder anything, and there is no code path by which
+    the picture and the saved file could disagree, because they are the same
+    list.
+
+    That matters more than it sounds. A progress display that is written
+    separately from the record is a story about the run; this one IS the record,
+    which is the difference between showing the work and illustrating it.
+
+    THE STAGE FIELD IS NEVER READ. Every entry carries one - "5 · decision &
+    authorisation" - and it is exactly the vocabulary CLAUDE.md bans from the
+    buyer's screen. It stays in the JSONL for the finance system. What a person
+    gets is the word from theme.event_mark and the sentence the stage wrote.
+
+    `reasons=False` gives the compact rail: what happened and when, without the
+    sentences. Used where the trail is context beside something else rather than
+    the thing being read.
+    """
+    if not entries:
+        return
+
+    rows = []
+    for entry in entries:
+        colour, word, advisory = theme.event_mark(entry.event_type.value)
+        # "User" rather than "You", and never a name. CLAUDE.md: the record says
+        # a person acted, without pretending we know which person is signed in.
+        actor = entry.actor.value.title()
+        is_user = entry.actor.value.upper() == "USER"
+
+        classes = "step step-advisory" if advisory else "step"
+        actor_class = "step-actor step-actor-user" if is_user else "step-actor"
+        why = (
+            f'<div class="step-why">{escape(entry.reasoning)}</div>'
+            if reasons and entry.reasoning else ""
+        )
+        rows.append(
+            f'<div class="{classes}" style="--step-colour:{colour}">'
+            f'<span class="step-node"></span>'
+            f'<div class="step-body"><div class="step-head">'
+            f'<span class="step-word">{escape(word)}</span>'
+            f'<span class="{actor_class}">{escape(actor)}</span>'
+            f'<span class="step-time">{entry.timestamp.strftime("%H:%M:%S")}</span>'
+            f"</div>{why}</div></div>"
+        )
+
+    st.markdown(f'<div class="trail">{"".join(rows)}</div>', unsafe_allow_html=True)
+
+
+# ---------------------------------------------------------------------------
 # Identity — who is selling it, and what it actually is
 # ---------------------------------------------------------------------------
 

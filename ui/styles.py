@@ -637,6 +637,81 @@ def css(p: "Palette") -> str:
   }}
   [data-testid="stChatMessage"] p {{ font-size: 0.8125rem; line-height: 1.55; }}
 
+  /* ---- the trail -------------------------------------------------------- */
+  /* WHAT HAPPENED, IN THE ORDER IT HAPPENED, WITH A LINE JOINING IT UP.
+     The same list used to be a run of bold sentences, and a run of bold
+     sentences has no shape: you cannot see from six feet away that the agent
+     decided four things, assumed one, and stopped once to ask. A rail with
+     graded nodes on it can be read before it is read.
+
+     The connector is drawn by each step rather than by the container, because a
+     single line behind the whole list has to guess where the first and last
+     nodes are. `:last-child` drops the tail so the rail stops at the final node
+     instead of dangling below it, which is the detail that separates a timeline
+     from a list with a line next to it.
+
+     The node is 18px and the rail is 1px, offset to the node's centre. Those two
+     numbers have to agree or the line enters each node off-centre - the kind of
+     wrongness nobody can name and everybody sees. */
+  .trail {{ display: flex; flex-direction: column; margin: 0.25rem 0 0.5rem; }}
+  .step {{
+      position: relative; display: grid;
+      grid-template-columns: 1.125rem 1fr; gap: 0.75rem;
+      padding-bottom: 1rem;
+  }}
+  .step:last-child {{ padding-bottom: 0; }}
+  /* left is the node's centre: an 18px node starting at 0 has its middle at 9px,
+     so 0.5625rem and not 0.5rem. One pixel out and the rail enters every node
+     off-centre down the whole column. */
+  .step::before {{
+      content: ""; position: absolute; left: 0.5625rem; top: 1.25rem; bottom: 0;
+      width: 1px; background: var(--border-strong);
+  }}
+  .step:last-child::before {{ display: none; }}
+  /* Solid node: this event did something. Hollow node: it was advisory and
+     changed nothing. See theme.event_mark - the market signal is the whole
+     reason this distinction is drawn rather than described. */
+  .step-node {{
+      width: 1.125rem; height: 1.125rem; border-radius: 999px; flex: none;
+      margin-top: 0.125rem; box-sizing: border-box;
+      border: 2px solid var(--step-colour);
+      background: var(--step-colour);
+      box-shadow: 0 0 0 3px var(--canvas);
+  }}
+  .step-advisory .step-node {{ background: var(--canvas); }}
+  .step-body {{ min-width: 0; }}
+  .step-head {{
+      display: flex; align-items: center; gap: 0.5rem;
+      flex-wrap: wrap; line-height: 1.2;
+  }}
+  .step-word {{ font-size: 0.8125rem; font-weight: 600; color: var(--ink); }}
+  .step-time {{
+      font-family: var(--mono); font-size: 0.6875rem; color: var(--ink-faint);
+      font-variant-numeric: tabular-nums; letter-spacing: -0.01em;
+  }}
+  /* THE ACTOR BADGE IS A WEIGHT DIFFERENCE, NOT A COLOUR ONE, AND THAT IS THE
+     WHOLE POINT OF THIS FILE'S COLOUR RULE HOLDING.
+     Marking "a person did this" with the brand violet would be brand colour
+     encoding data, which is the one thing the palette rule forbids. So the
+     agent's steps get an outline badge and the rare human one gets a filled
+     badge in plain ink - same hue, opposite weight. The moment a person stepped
+     in is still the loudest thing on the rail, and no colour changed meaning to
+     do it. */
+  .step-actor {{
+      font-size: 0.625rem; font-weight: 500; letter-spacing: 0.07em;
+      text-transform: uppercase; padding: 0.1875rem 0.4375rem;
+      border-radius: 999px; border: 1px solid var(--border-strong);
+      color: var(--ink-faint); white-space: nowrap;
+  }}
+  .step-actor-user {{
+      background: var(--ink); border-color: var(--ink); color: var(--canvas);
+      font-weight: 600;
+  }}
+  .step-why {{
+      font-size: 0.8125rem; color: var(--ink-muted);
+      line-height: 1.5; margin-top: 0.25rem; max-width: 68ch;
+  }}
+
   /* ---- motion ----------------------------------------------------------- */
   /* TWO ANIMATIONS IN THE WHOLE APP, AND EACH ONE HAS TO EARN ITS KEYFRAMES.
 
