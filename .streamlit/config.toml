@@ -1,40 +1,46 @@
-# Both themes are DECLARED, and neither is pinned.
+# The app is dark, and it is dark on every machine.
 #
-# Leaving `base` unset keeps Streamlit's Settings -> Appearance switcher
-# available, so a viewer picks Light, Dark or System. ui/theme.py reads that
-# choice back at runtime via st.context.theme.type and styles our own cards and
-# charts to match, so the app and the widgets never disagree.
+# This used to declare [theme.light] and [theme.dark] and let the viewer's OS
+# pick. That reads well in a config file and fails on stage: whether the judges
+# see the interface we designed or a washed-out light version of it comes down
+# to a setting on a laptop we have never touched. So the theme is DECLARED here,
+# once, and applies everywhere.
 #
-# The dark values are NOT the light values inverted. They are the same hues
-# re-stepped for a dark surface and validated as a set against it. An automatic
-# flip is how a palette that passed every accessibility gate on white quietly
-# fails all of them on black.
+# `theme.base` below is the ONE line that decides. ui/theme.py reads the same
+# line to pick its palette, so Streamlit's widgets and our cards can never end
+# up in different modes - which is exactly what happened while this followed the
+# browser instead. Set it to "light" and the whole interface switches, ours
+# included.
+#
+# Every colour below is the same value as its twin in ui/theme.py. Streamlit
+# themes its own widgets from here; we theme our cards from there; if the two
+# lists drift, the buttons stop matching the panels they sit in.
+#
+# borderColor is the flat equivalent of the rgba(255,255,255,.07) hairline our
+# stylesheet uses, because Streamlit's option does not take an alpha channel.
 
 [theme]
-font = "ui-sans-serif, -apple-system, 'Segoe UI', system-ui, sans-serif"
-baseRadius = "0.6rem"
+base = "dark"
+backgroundColor = "#0a0a0b"
+secondaryBackgroundColor = "#131316"
+textColor = "#ededef"
+borderColor = "#26262a"
+primaryColor = "#9085e9"
+linkColor = "#9085e9"
+font = "'Inter Tight', Inter, -apple-system, 'Segoe UI', system-ui, sans-serif"
+baseRadius = "0.375rem"
 showWidgetBorder = true
 
-[theme.light]
-primaryColor = "#4a3aa7"
-backgroundColor = "#f6f6f4"
-secondaryBackgroundColor = "#fcfcfb"
-textColor = "#0b0b0b"
-borderColor = "#e4e4e0"
-linkColor = "#4a3aa7"
-
-[theme.dark]
-primaryColor = "#9085e9"
-backgroundColor = "#111110"
-secondaryBackgroundColor = "#1a1a19"
-textColor = "#ffffff"
-borderColor = "#34342f"
-linkColor = "#9085e9"
+# The sidebar sits one step up from the page, not one step down. It is a panel
+# resting on the canvas, and the hairline on its edge is what separates them.
+[theme.sidebar]
+backgroundColor = "#131316"
+secondaryBackgroundColor = "#1a1a1e"
+borderColor = "#26262a"
 
 # No chartCategoricalColors here on purpose. It only themes Streamlit's own
 # built-in charts, and we draw all three of ours with Plotly from the palette in
-# ui/theme.py - which is per-mode, as this option is not. Setting it would be a
-# line of config that themes nothing.
+# ui/theme.py. Setting it would be a line of config that themes nothing.
 
 # Re-run automatically when a source file changes, instead of showing a
 # "Source file changed" prompt nobody notices mid-demo.
@@ -43,8 +49,7 @@ runOnSave = true
 
 [client]
 # "viewer" keeps the options menu (top right) with the things a USER needs -
-# including the light/dark theme toggle under Settings - while hiding the
-# developer items (rerun, clear cache, deploy). "minimal" hides the menu
-# altogether, which also hides the theme toggle.
+# print, record - while hiding the developer items (rerun, clear cache, deploy)
+# that would make the app look like a dev tool on stage.
 toolbarMode = "viewer"
 showErrorDetails = true

@@ -49,7 +49,10 @@ import plotly.graph_objects as go
 from agent.models import Product, ScoredProduct
 from ui import theme
 
-_FONT_FAMILY = "ui-sans-serif, -apple-system, 'Segoe UI', system-ui, sans-serif"
+# The same stack the rest of the interface uses. A chart set in a different face
+# from the table beside it is one of those things nobody can name and everybody
+# notices.
+_FONT_FAMILY = "'Inter Tight', Inter, -apple-system, 'Segoe UI', system-ui, sans-serif"
 
 
 def _base_layout(p, height: int, **kwargs) -> dict:
@@ -57,15 +60,19 @@ def _base_layout(p, height: int, **kwargs) -> dict:
 
     Takes the palette rather than reading a module constant, so a chart drawn in
     dark mode is drawn on the dark surface its colours were validated against.
+
+    The paper is TRANSPARENT rather than the panel colour, so a chart sits
+    directly on whatever is behind it instead of drawing a second faintly
+    different rectangle inside the section it already lives in.
     """
     layout = dict(
         height=height,
         margin=dict(l=8, r=8, t=8, b=8),
-        paper_bgcolor=p.surface,
-        plot_bgcolor=p.surface,
-        font=dict(family=_FONT_FAMILY, color=p.ink_secondary, size=12),
-        hoverlabel=dict(bgcolor=p.surface, bordercolor=p.border_strong,
-                        font=dict(color=p.ink, size=12)),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(family=_FONT_FAMILY, color=p.ink_muted, size=12),
+        hoverlabel=dict(bgcolor=p.surface_2, bordercolor=p.border_strong,
+                        font=dict(family=_FONT_FAMILY, color=p.ink, size=12)),
         showlegend=False,
     )
     layout.update(kwargs)
@@ -73,11 +80,16 @@ def _base_layout(p, height: int, **kwargs) -> dict:
 
 
 def _axis(p, **kwargs) -> dict:
-    """A deliberately quiet axis. Gridlines a shade above the surface, no spikes."""
+    """A deliberately quiet axis: horizontal gridlines at hairline weight, nothing else.
+
+    No axis line, no ticks, no spikes. The data should be the darkest thing on
+    the chart - if the chrome is competing with the series, the chart is
+    decorated rather than drawn.
+    """
     axis = dict(
         showgrid=True, gridcolor=p.border, gridwidth=1,
         zeroline=False, showline=False, ticks="",
-        tickfont=dict(size=11, color=p.ink_muted),
+        tickfont=dict(size=11, color=p.ink_faint),
     )
     axis.update(kwargs)
     return axis
@@ -120,25 +132,26 @@ def score_composition(ranked: Sequence[ScoredProduct]) -> go.Figure:
             orientation="h",
             marker=dict(
                 color=colour,
-                # A 2px surface-coloured gap between segments, so adjacent fills
-                # never blend into one another.
-                line=dict(color=p.surface, width=2),
+                # A 2px gap in the page colour between segments, so adjacent
+                # fills never blend into one another.
+                line=dict(color=p.canvas, width=2),
             ),
             text=text,
             textposition="inside",
             insidetextanchor="middle",
-            textfont=dict(color="#ffffff", size=11),
+            textfont=dict(family=_FONT_FAMILY, color="#ffffff", size=11),
             hovertemplate=(f"<b>{criterion}</b><br>contributes %{{x:.1f}} points"
                            "<extra>%{y}</extra>"),
         )
 
     fig.update_layout(**_base_layout(
         p,
-        height=58 * len(products) + 70,
+        height=52 * len(products) + 58,
         barmode="stack",
-        bargap=0.42,
-        xaxis=_axis(p, title=dict(text="score contribution", font=dict(size=11)), range=[0, 100]),
-        yaxis=_axis(p, showgrid=False, tickfont=dict(size=12, color=p.ink)),
+        bargap=0.5,
+        xaxis=_axis(p, title=dict(text="score contribution",
+                                  font=dict(size=11, color=p.ink_faint)), range=[0, 100]),
+        yaxis=_axis(p, showgrid=False, tickfont=dict(size=13, color=p.ink)),
     ))
     return fig
 
@@ -167,23 +180,27 @@ def price_history(products: Sequence[Product]) -> go.Figure | None:
             mode="lines+markers",
             name=product.name,
             line=dict(color=colour, width=2),
-            marker=dict(size=8, color=colour, line=dict(color=p.surface, width=2)),
+            marker=dict(size=7, color=colour, line=dict(color=p.canvas, width=2)),
             hovertemplate="₹%{y:.2f} per unit on %{x|%d %b}<extra>" + product.name + "</extra>",
         )
         # Direct label at the last point, so identity never depends on colour.
         fig.add_annotation(
             x=product.price_history[-1].on, y=product.price_history[-1].value,
             text=f"  {product.name}", showarrow=False,
-            xanchor="left", font=dict(size=11, color=p.ink_secondary),
+            xanchor="left", font=dict(family=_FONT_FAMILY, size=11, color=p.ink_muted),
         )
 
     fig.update_layout(**_base_layout(
         p,
         height=250,
         xaxis=_axis(p, showgrid=False),
-        yaxis=_axis(p, title=dict(text="₹ per unit", font=dict(size=11)), tickformat=".2f"),
+        yaxis=_axis(p, tickformat=".2f", automargin=True),
         hovermode="x unified",
-        margin=dict(l=8, r=110, t=8, b=8),   # room for the direct labels
+        # Right margin holds the direct labels; top margin keeps the highest
+        # tick off the ceiling. No y-axis title: the line above the chart
+        # already says "Price per unit", and printing it twice - once rotated
+        # and clipped - is how a chart ends up looking cramped.
+        margin=dict(l=8, r=110, t=20, b=8),
     ))
     return fig
 
@@ -213,20 +230,21 @@ def stock_burndown(products: Sequence[Product], quantity: int) -> go.Figure | No
             mode="lines+markers",
             name=product.name,
             line=dict(color=colour, width=2),
-            marker=dict(size=8, color=colour, line=dict(color=p.surface, width=2)),
+            marker=dict(size=7, color=colour, line=dict(color=p.canvas, width=2)),
             hovertemplate="%{y:,.0f} units on %{x|%d %b}<extra>" + product.name + "</extra>",
         )
         fig.add_annotation(
             x=product.stock_history[-1].on, y=product.stock_history[-1].value,
             text=f"  {product.name}", showarrow=False,
-            xanchor="left", font=dict(size=11, color=p.ink_secondary),
+            xanchor="left", font=dict(family=_FONT_FAMILY, size=11, color=p.ink_muted),
         )
 
     # The buyer's requirement. Dashed and grey so it reads as a threshold rather
     # than a fourth product.
     fig.add_hline(
         y=quantity, line=dict(color=p.ink_muted, width=1.5, dash="dot"),
-        annotation=dict(text=f"you need {quantity:,}", font=dict(size=11, color=p.ink_secondary)),
+        annotation=dict(text=f"you need {quantity:,}",
+                        font=dict(family=_FONT_FAMILY, size=11, color=p.ink_muted)),
         annotation_position="top left",
     )
 
@@ -234,8 +252,8 @@ def stock_burndown(products: Sequence[Product], quantity: int) -> go.Figure | No
         p,
         height=250,
         xaxis=_axis(p, showgrid=False),
-        yaxis=_axis(p, title=dict(text="units in stock", font=dict(size=11)), tickformat=",.0f"),
+        yaxis=_axis(p, tickformat=",.0f", automargin=True),
         hovermode="x unified",
-        margin=dict(l=8, r=110, t=8, b=8),
+        margin=dict(l=8, r=110, t=20, b=8),
     ))
     return fig

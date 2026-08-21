@@ -433,16 +433,19 @@ def render_sidebar() -> None:
     harness.
     """
     with st.sidebar:
-        st.markdown("### Procurement")
+        # No heading here. The product's name is already in the page header two
+        # inches away, and a sidebar that repeats it is a second title competing
+        # with the first.
         ctx = st.session_state["ctx"]
-        if ctx is not None:
-            st.caption(f"Order {ctx.transaction_id} · {len(ctx.audit)} events")
+        st.caption(
+            f"{len(ctx.audit)} events on this order" if ctx is not None
+            else "No order in progress"
+        )
 
         if st.button("New order", width="stretch", key="new_order"):
             reset()
             st.rerun()
 
-        st.markdown("")
         st.caption(f"Approval needed above ₹{config.authorisation_limit_inr():,.0f}")
 
         with st.expander("Suppliers"):
@@ -1107,8 +1110,11 @@ st.set_page_config(page_title="Procurement", page_icon="📦", layout="wide")
 theme.inject()
 init_state()
 
-st.markdown("# Procurement")
-theme.brandbar()
+# The header carries the current order reference on its right. It is the one
+# number a buyer needs from every screen - it is what they quote on the phone -
+# so it belongs in the chrome rather than being hunted for on the trail.
+_ctx = st.session_state["ctx"]
+theme.app_header("Procurement", _ctx.transaction_id if _ctx is not None else "")
 
 render_sidebar()
 

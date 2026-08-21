@@ -6,24 +6,40 @@ app.py used to carry its own inline styling decisions, which is how four screens
 end up looking like four different products. Every colour, every chip and every
 card in the app now comes from here.
 
+THE SURFACE IS DARK, AND LAYERED IN A NARROW BAND
+-------------------------------------------------
+Four neutrals do all the structural work: the page, the panel sitting on it, the
+hovered row, and the selected row. They are only a few percent apart on purpose.
+Big jumps between greys read as unrelated boxes; a narrow band reads as one
+surface with things resting on it.
+
+Separation is ALWAYS a hairline or a fill shift, never a shadow and never a
+gradient. On a near-black page a drop shadow is invisible, so a UI that leans on
+one just looks flat and slightly muddy. A 1px white line at 7% opacity is
+visible, costs nothing, and never blurs an edge.
+
 THREE COLOUR ROLES, NEVER MIXED
 -------------------------------
 This is the rule that keeps the palette honest, and it is worth saying out loud:
 
-  BRAND      one violet. Chrome only - primary buttons, the hero's edge, card
-             tints. It never encodes data, so it can never be mistaken for one.
+  BRAND      one violet. Chrome only - the active tab, primary buttons, the
+             recommendation's edge. It never encodes data, so it can never be
+             mistaken for one.
   CATEGORICAL four hues, one per soft criterion. Reliability is always the same
              blue whether it contributed everything or nothing.
   STATUS     four reserved colours for urgency. Never reused as a series colour,
              so a status red can never impersonate "product number four".
 
-A colour that means two things means nothing.
+A colour that means two things means nothing. That rule is also why the brand
+stayed violet rather than moving to the blue our house style would otherwise
+reach for: our reliability series is blue, and a blue button beside a blue
+reliability chip would make one colour mean two things.
 
 WHERE THE PALETTE COMES FROM - AND WHY WE DID NOT INVENT IT
 ------------------------------------------------------------
-These are not colours we liked the look of. They are a published, pre-validated
-categorical palette, used unchanged and IN THE DOCUMENTED ORDER, because a
-categorical palette has to clear real gates: adjacent series must stay
+The four series hues are not colours we liked the look of. They are a published,
+pre-validated categorical palette, used unchanged and IN THE DOCUMENTED ORDER,
+because a categorical palette has to clear real gates: adjacent series must stay
 distinguishable under colour-vision deficiency AND to normal vision, and each
 must hold contrast against the surface it sits on. Picking four colours that
 "look distinct" to us is how a chart becomes unreadable for roughly one man in
@@ -35,15 +51,19 @@ is why line charts plot at most three products.
 
 DARK MODE IS SELECTED, NOT FLIPPED
 ----------------------------------
-The dark column below is NOT the light palette with the lightness inverted. It
-is the same eight hues re-stepped for a dark surface and validated as a set
-against it. An automatic flip is how a palette that passed every gate on white
-quietly fails all of them on black.
+The dark palette below is NOT the light one with the lightness inverted. It is
+the same eight hues re-stepped for a dark surface and validated as a set against
+it. An automatic flip is how a palette that passed every gate on white quietly
+fails all of them on black.
 
-Streamlit's own chrome is themed to match from .streamlit/config.toml, which
-declares [theme.light] and [theme.dark] with these same values. We read the
-viewer's choice back at runtime with `st.context.theme.type` so our CSS and our
-charts agree with the widgets around them.
+DARK IS THE APP, NOT A PREFERENCE
+---------------------------------
+The app ships dark on every machine. `.streamlit/config.toml` says so once, in
+`theme.base`, and `active()` below reads that same line - so Streamlit's widgets
+and our cards can never end up in different modes. LIGHT is still here, complete
+and validated, and flipping that one config line switches the whole interface to
+it. What is gone is the guess: we no longer let a setting on somebody else's
+laptop decide what the judges see.
 
 THE RELIEF RULE, AND HOW WE SATISFY IT
 --------------------------------------
@@ -52,6 +72,13 @@ The documented mitigation is visible direct labels or a table view. We ship
 BOTH: every score bar is directly labelled and the full comparison table is on
 the same screen. Colour never carries meaning alone here - and every status is
 shown as colour AND icon AND word.
+
+THE TYPE SCALE IS SIX SIZES AND NOTHING ELSE
+--------------------------------------------
+11 / 12 / 13 / 15 / 20 / 28 px, with 13 doing most of the work. Hierarchy comes
+from weight and from the three ink tokens, not from inventing a seventh size.
+Nine font sizes is what a screen looks like when every size was chosen locally.
+Numbers anywhere that can change are tabular, or the layout twitches on update.
 """
 
 from __future__ import annotations
@@ -63,18 +90,21 @@ import streamlit as st
 
 @dataclass(frozen=True)
 class Palette:
-    """Every colour one mode needs. Two instances exist: LIGHT and DARK."""
+    """Every colour one mode needs. Two instances exist: DARK and LIGHT."""
 
     name: str
 
-    surface: str        # cards, charts - the colour the palette was validated on
-    canvas: str         # page background, one step behind surface
+    canvas: str         # page background - the thing everything else sits on
+    surface: str        # panel, card, chart - the colour the palette was validated on
+    surface_2: str      # hovered row, input fill, secondary button
+    surface_3: str      # selected row, active control
     border: str
     border_strong: str
 
     ink: str            # primary text
     ink_secondary: str  # labels, captions
     ink_muted: str      # de-emphasised; never for anything load-bearing
+    ink_faint: str      # timestamps, disabled - never for anything to be read
 
     series: tuple[str, str, str, str]   # categorical, fixed order, never cycled
     accent: str                          # brand. Chrome only, never data.
@@ -107,45 +137,63 @@ class Palette:
         return f"rgba({r}, {g}, {b}, {alpha})"
 
 
-LIGHT = Palette(
-    name="light",
-    surface="#fcfcfb",
-    canvas="#f6f6f4",
-    border="#e4e4e0",
-    border_strong="#cfcfc9",
-    ink="#0b0b0b",
-    ink_secondary="#52514e",
-    ink_muted="#83827c",
-    series=("#2a78d6", "#eb6834", "#1baf7a", "#eda100"),   # blue orange aqua yellow
-    accent="#4a3aa7",
-)
-
+# The default. Four neutrals within a narrow band, hairlines between them.
 DARK = Palette(
     name="dark",
-    surface="#1a1a19",
-    canvas="#111110",
-    border="#34342f",
-    border_strong="#4a4a44",
-    ink="#ffffff",
-    ink_secondary="#c3c2b7",
-    ink_muted="#8e8d84",
-    series=("#3987e5", "#d95926", "#199e70", "#c98500"),   # same hues, re-stepped
+    canvas="#0a0a0b",
+    surface="#131316",
+    surface_2="#1a1a1e",
+    surface_3="#232328",
+    border="rgba(255, 255, 255, 0.07)",
+    border_strong="rgba(255, 255, 255, 0.13)",
+    ink="#ededef",            # off-white, not #fff - pure white vibrates at 28px
+    ink_secondary="#a8a8b0",
+    ink_muted="#8a8a94",      # the dimmest ink still allowed to carry a sentence
+    ink_faint="#55555e",
+    series=("#3987e5", "#d95926", "#199e70", "#c98500"),   # blue orange aqua yellow
     accent="#9085e9",
+)
+
+# Same structure inverted, same accent, same scale. Borders on, shadows off -
+# the discipline transfers even when the polarity does not.
+LIGHT = Palette(
+    name="light",
+    canvas="#ffffff",
+    surface="#fafafa",
+    surface_2="#f1f1f2",
+    surface_3="#e9e9eb",
+    border="#e6e6e6",
+    border_strong="#d4d4d6",
+    ink="#0a0a0a",
+    ink_secondary="#45454a",
+    ink_muted="#6b6b6b",
+    ink_faint="#96969c",
+    series=("#2a78d6", "#eb6834", "#1baf7a", "#eda100"),   # same hues, re-stepped
+    accent="#4a3aa7",
 )
 
 
 def active() -> Palette:
-    """The palette matching whatever the viewer has Streamlit set to.
+    """The palette matching the theme this app is actually running in.
 
-    `st.context.theme.type` is 'light', 'dark', or None when Streamlit has not
-    resolved a theme yet (which happens outside a browser session, e.g. in
-    tests). Light is the fallback, because a wrong guess toward light is merely
-    plain, whereas a wrong guess toward dark is unreadable on white.
+    Read from `theme.base` in config.toml - the same single line Streamlit reads
+    to paint its own widgets. One source, so our cards and Streamlit's buttons
+    can never end up in different modes.
+
+    This used to read `st.context.theme.type` instead, and that was a real bug we
+    watched happen: on a machine set to light, our stylesheet went light while
+    Streamlit's chrome went dark, and the page came out half and half. That
+    property reports the BROWSER's preference, which is not the same question as
+    "what theme is this app painted in" - and this build of Streamlit offers the
+    viewer no theme switcher at all, so the browser's opinion was never going to
+    be the answer.
+
+    The fallback exists for callers outside a Streamlit runtime, e.g. tests.
     """
     try:
-        return DARK if st.context.theme.type == "dark" else LIGHT
+        return LIGHT if st.get_option("theme.base") == "light" else DARK
     except Exception:
-        return LIGHT
+        return DARK
 
 
 # ---------------------------------------------------------------------------
@@ -220,159 +268,315 @@ def urgency(key: str) -> tuple[str, str, str]:
 # ---------------------------------------------------------------------------
 # The stylesheet
 # ---------------------------------------------------------------------------
+#
+# Everything below is written against the six-size type scale and a 4px spacing
+# unit. Two habits are worth naming because they are what stop a dark UI looking
+# assembled rather than designed:
+#
+#   * one radius per element class, held everywhere - 6px on anything you click
+#     or read as a tag, 10px on anything that is a panel. Mixed radii on adjacent
+#     elements is the loudest sloppiness tell there is.
+#   * every interactive thing has hover, :focus-visible and disabled. A missing
+#     hover state is the fastest way for an interface to feel dead.
 
 def _css(p: Palette) -> str:
     """Build the stylesheet for one palette. Colour appears only where it means something."""
     return f"""
 <style>
-  /* ---- page ------------------------------------------------------------ */
-  .stApp {{ background: {p.canvas}; }}
-  .block-container {{ padding-top: 2.2rem; max-width: 1180px; }}
+  @import url('https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600&display=swap');
 
-  h1, h2, h3, h4 {{ color: {p.ink}; letter-spacing: -0.015em; }}
-  h1 {{ font-size: 1.55rem !important; font-weight: 640 !important; }}
-
-  /* A brand-tinted rule under the page title, so the app has an identity
-     without a logo. Chrome, not data. */
-  .brandbar {{
-      height: 3px; width: 64px; border-radius: 2px; margin: 0.1rem 0 1.1rem;
-      background: linear-gradient(90deg, {p.accent}, {p.tint(p.accent, 0.15)});
+  :root {{
+      --canvas: {p.canvas};
+      --surface: {p.surface};
+      --surface-2: {p.surface_2};
+      --surface-3: {p.surface_3};
+      --border: {p.border};
+      --border-strong: {p.border_strong};
+      --ink: {p.ink};
+      --ink-2: {p.ink_secondary};
+      --ink-muted: {p.ink_muted};
+      --ink-faint: {p.ink_faint};
+      --accent: {p.accent};
+      --font: 'Inter Tight', Inter, -apple-system, 'Segoe UI', system-ui, sans-serif;
+      --mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
   }}
 
+  /* ---- page ------------------------------------------------------------ */
+  .stApp {{ background: var(--canvas); font-family: var(--font); }}
+  /* The top padding clears Streamlit's own floating toolbar. Without it our
+     header scrolls up underneath the menu button and the first thing on the
+     page is half a logo. */
+  .block-container {{ padding-top: 3.5rem; padding-bottom: 4rem; max-width: 1120px; }}
+
+  /* Six sizes, and hierarchy carried by weight and ink rather than by a
+     seventh. 600 is the weight ceiling anywhere in the app. */
+  h1, h2, h3, h4 {{ font-family: var(--font); color: var(--ink); }}
+  h1 {{ font-size: 1.75rem !important; font-weight: 600 !important;
+        letter-spacing: -0.02em; line-height: 1.15; }}
+  h4 {{ font-size: 0.9375rem !important; font-weight: 600 !important;
+        letter-spacing: -0.01em; margin: 0 0 0.5rem !important; }}
+
+  /* Captions are the one place prose appears, so they get a reading measure.
+     A caption running the full 1120px is the commonest readability failure in
+     a wide dashboard. */
+  [data-testid="stCaptionContainer"] {{
+      max-width: 62ch; font-size: 0.8125rem; line-height: 1.55; color: var(--ink-muted);
+  }}
+  [data-testid="stCaptionContainer"] p {{ font-size: 0.8125rem; margin-bottom: 0; }}
+  .stMarkdown p {{ font-size: 0.8125rem; line-height: 1.55; color: var(--ink-2); }}
+  .stMarkdown strong {{ color: var(--ink); font-weight: 600; }}
+
+  /* ---- app header ------------------------------------------------------- */
+  /* A mark, the product name, and a hairline. No logo, no gradient rule - the
+     identity is the surface, not an ornament stuck on top of it. */
+  .apphead {{
+      display: flex; align-items: center; gap: 0.625rem;
+      padding-bottom: 1rem; margin-bottom: 1rem;
+      border-bottom: 1px solid var(--border);
+  }}
+  .apphead-mark {{
+      width: 1.5rem; height: 1.5rem; border-radius: 6px; flex: none;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: var(--accent); color: #fff;
+      font-size: 0.75rem; font-weight: 600;
+  }}
+  .apphead-name {{
+      font-size: 0.9375rem; font-weight: 600; color: var(--ink);
+      letter-spacing: -0.01em;
+  }}
+  .apphead-note {{
+      margin-left: auto; font-size: 0.75rem; color: var(--ink-faint);
+      font-variant-numeric: tabular-nums;
+  }}
+
+  /* ---- tabs ------------------------------------------------------------- */
   .stTabs [data-baseweb="tab-list"] {{
-      gap: 0.35rem; border-bottom: 1px solid {p.border}; padding-bottom: 0;
+      gap: 1.25rem; border-bottom: 1px solid var(--border);
+      padding: 0; margin-bottom: 1.5rem; background: transparent;
   }}
   .stTabs [data-baseweb="tab"] {{
-      height: 2.6rem; padding: 0 1rem; font-size: 0.92rem; font-weight: 520;
-      color: {p.ink_secondary};
+      height: 2.25rem; padding: 0 0 0.5rem; background: transparent;
+      font-size: 0.8125rem; font-weight: 500; color: var(--ink-muted);
+      transition: color 140ms ease-out;
   }}
-  .stTabs [aria-selected="true"] {{ color: {p.ink}; font-weight: 620; }}
+  .stTabs [data-baseweb="tab"]:hover {{ color: var(--ink-2); }}
+  .stTabs [aria-selected="true"] {{ color: var(--ink); font-weight: 500; }}
+  .stTabs [data-baseweb="tab-highlight"] {{ background: var(--accent); height: 2px; }}
+  .stTabs [data-baseweb="tab-border"] {{ display: none; }}
 
-  /* ---- cards ----------------------------------------------------------- */
-  .card {{
-      background: {p.surface}; border: 1px solid {p.border}; border-radius: 12px;
-      padding: 1.15rem 1.3rem; margin-bottom: 0.85rem;
-  }}
-  .card-tight {{ padding: 0.85rem 1rem; }}
+  /* ---- panels ----------------------------------------------------------- */
+  /* One level of nesting, ever. A bordered card inside a bordered panel inside
+     a bordered section is what an interface looks like when it was assembled
+     from components rather than designed.
 
-  /* The recommendation card. A brand wash and one accent edge, so the eye
-     lands here first without anything shouting. */
+     There is exactly one panel class, because there is exactly one kind of
+     panel. A generic `.card` used to live here beside it, styled and never
+     used by anything - which is how two panel treatments end up on one screen
+     the first time somebody reaches for the wrong one. */
+
+  /* The recommendation panel. One 2px edge in the accent, and nothing else -
+     no wash, no gradient, no shadow. The eye lands here because of the edge and
+     the 28px line, not because the box was decorated. */
   .hero {{
-      background: linear-gradient(180deg, {p.tint(p.accent, 0.07)}, {p.surface} 70%);
-      border: 1px solid {p.border};
-      border-left: 3px solid {p.accent}; border-radius: 12px;
-      padding: 1.35rem 1.5rem; margin-bottom: 0.9rem;
+      background: var(--surface); border: 1px solid var(--border);
+      border-left: 2px solid var(--accent); border-radius: 10px;
+      padding: 1.25rem 1.5rem; margin-bottom: 1rem;
   }}
   .hero-eyebrow {{
-      font-size: 0.72rem; font-weight: 620; letter-spacing: 0.07em;
-      text-transform: uppercase; color: {p.accent}; margin-bottom: 0.4rem;
+      font-size: 0.6875rem; font-weight: 500; letter-spacing: 0.06em;
+      text-transform: uppercase; color: var(--accent); margin-bottom: 0.5rem;
   }}
-  .hero-title {{ font-size: 1.5rem; font-weight: 650; color: {p.ink}; line-height: 1.2; }}
-  .hero-sub {{ font-size: 0.95rem; color: {p.ink_secondary}; margin-top: 0.35rem; }}
+  .hero-title {{
+      font-size: 1.75rem; font-weight: 600; color: var(--ink);
+      line-height: 1.15; letter-spacing: -0.02em;
+      font-variant-numeric: tabular-nums;
+  }}
+  .hero-sub {{
+      font-size: 0.8125rem; color: var(--ink-muted); margin-top: 0.5rem;
+      line-height: 1.55; max-width: 62ch;
+  }}
 
-  /* An escalation is the same card in a different key - never a red alarm
-     banner. Being asked to approve a large order is the system working. */
-  .hero-escalated {{
-      border-left-color: {p.serious};
-      background: linear-gradient(180deg, {p.tint(p.serious, 0.10)}, {p.surface} 70%);
-  }}
+  /* An escalation is the same panel in a different key - never a red alarm
+     banner. Being asked to approve a large order is the system working, and
+     colouring it like an error teaches the buyer to dread the exact moment we
+     are proudest of. */
+  .hero-escalated {{ border-left-color: {p.serious}; }}
   .hero-escalated .hero-eyebrow {{ color: {p.serious}; }}
-  .hero-done {{
-      border-left-color: {p.good};
-      background: linear-gradient(180deg, {p.tint(p.good, 0.10)}, {p.surface} 70%);
-  }}
+  .hero-done {{ border-left-color: {p.good}; }}
   .hero-done .hero-eyebrow {{ color: {p.good}; }}
 
   /* ---- figures (number-first tiles) ------------------------------------ */
+  /* min-height rather than height:100% so the four tiles bottom out level
+     whether or not each one has a note under its number. Ragged tile bottoms in
+     a row of four is the sort of 6px wrongness nobody can name and everybody
+     sees. */
   .figure {{
-      background: {p.surface}; border: 1px solid {p.border}; border-radius: 12px;
-      padding: 0.85rem 1rem; margin-bottom: 0.85rem;
-      border-top: 2px solid {p.tint(p.accent, 0.45)};
+      background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+      padding: 0.75rem 1rem 0.875rem; min-height: 6rem;
   }}
   .figure-label {{
-      font-size: 0.74rem; font-weight: 560; letter-spacing: 0.04em;
-      text-transform: uppercase; color: {p.ink_muted};
+      font-size: 0.6875rem; font-weight: 500; letter-spacing: 0.06em;
+      text-transform: uppercase; color: var(--ink-faint); margin-bottom: 0.375rem;
   }}
   .figure-value {{
-      font-size: 1.42rem; font-weight: 640; color: {p.ink};
-      font-variant-numeric: tabular-nums; line-height: 1.25;
+      font-size: 1.25rem; font-weight: 600; color: var(--ink);
+      font-variant-numeric: tabular-nums; line-height: 1.2;
+      letter-spacing: -0.01em;
   }}
-  .figure-note {{ font-size: 0.8rem; color: {p.ink_secondary}; }}
+  .figure-note {{
+      font-size: 0.75rem; color: var(--ink-muted); margin-top: 0.25rem; line-height: 1.45;
+  }}
 
   /* ---- chips ----------------------------------------------------------- */
-  .chip-row {{ display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.15rem 0 0.2rem; }}
+  /* Small rounded rects rather than pills, deliberately. A pill reads as a
+     marketing tag; a 6px rect reads as a value in a tool. */
+  .chip-row {{ display: flex; flex-wrap: wrap; gap: 0.375rem; margin: 0.25rem 0; }}
   .chip {{
-      display: inline-flex; align-items: center; gap: 0.35rem;
-      font-size: 0.79rem; font-weight: 520; line-height: 1;
-      padding: 0.34rem 0.6rem; border-radius: 999px;
-      border: 1px solid {p.border_strong}; background: {p.surface};
-      color: {p.ink_secondary}; white-space: nowrap;
+      display: inline-flex; align-items: center; gap: 0.375rem;
+      font-size: 0.75rem; font-weight: 500; line-height: 1;
+      padding: 0.3125rem 0.5rem; border-radius: 6px;
+      border: 1px solid var(--border); background: var(--surface-2);
+      color: var(--ink-2); white-space: nowrap;
+      font-variant-numeric: tabular-nums;
   }}
-  .chip-dot {{ width: 7px; height: 7px; border-radius: 999px; flex: none; }}
+  .chip-dot {{ width: 6px; height: 6px; border-radius: 999px; flex: none; }}
   /* A tinted chip carries a real signal. The text stays in an ink token - a
      coloured dot beside it carries the identity, never the words themselves. */
-  .chip-strong {{ color: {p.ink}; font-weight: 580; }}
+  .chip-strong {{ color: var(--ink); font-weight: 500; }}
 
   /* ---- supplier badge --------------------------------------------------- */
-  /* The mark carries the colour, the words carry the meaning. Same discipline
-     as the chips: colour is never the only thing saying who this is. */
+  /* Row anatomy borrowed straight from a market terminal: square mark, bold
+     identifier, muted descriptor. The mark carries the colour, the words carry
+     the meaning - colour is never the only thing saying who this is. */
   .vendor {{
       display: inline-flex; align-items: center; gap: 0.5rem;
-      padding: 0.28rem 0.7rem 0.28rem 0.32rem; border-radius: 999px;
-      border: 1px solid {p.border_strong}; background: {p.surface};
+      padding: 0.3125rem 0.625rem 0.3125rem 0.3125rem; border-radius: 6px;
+      border: 1px solid var(--border); background: var(--surface-2);
   }}
   .vendor-mark {{
-      width: 1.4rem; height: 1.4rem; border-radius: 7px; flex: none;
+      width: 1.125rem; height: 1.125rem; border-radius: 5px; flex: none;
       display: inline-flex; align-items: center; justify-content: center;
-      font-size: 0.72rem; font-weight: 700; color: #ffffff; letter-spacing: 0;
+      font-size: 0.6875rem; font-weight: 600; color: #ffffff;
   }}
-  .vendor-name {{ font-size: 0.86rem; font-weight: 620; color: {p.ink}; }}
+  .vendor-name {{ font-size: 0.8125rem; font-weight: 600; color: var(--ink); }}
   .vendor-kind {{
-      font-size: 0.7rem; font-weight: 560; letter-spacing: 0.05em;
-      text-transform: uppercase; color: {p.ink_muted};
+      font-size: 0.6875rem; font-weight: 500; letter-spacing: 0.05em;
+      text-transform: uppercase; color: var(--ink-faint);
   }}
 
   /* ---- spec badges ------------------------------------------------------ */
   /* Dashed border: the supplier lists it. Solid with a tick: it is one of the
      things the buyer asked for, so it had to be there for this to qualify. */
   .spec {{
-      display: inline-flex; align-items: center; gap: 0.3rem;
-      font-size: 0.78rem; font-weight: 520; line-height: 1;
-      padding: 0.32rem 0.55rem; border-radius: 7px;
-      border: 1px dashed {p.border_strong}; background: {p.surface};
-      color: {p.ink_secondary}; white-space: nowrap;
+      display: inline-flex; align-items: center; gap: 0.3125rem;
+      font-size: 0.75rem; font-weight: 500; line-height: 1;
+      padding: 0.3125rem 0.5rem; border-radius: 6px;
+      border: 1px dashed var(--border-strong); background: transparent;
+      color: var(--ink-muted); white-space: nowrap;
   }}
   .spec-met {{
-      border-style: solid; border-color: {p.tint(p.good, 0.55)};
-      background: {p.tint(p.good, 0.08)}; color: {p.ink};
+      border-style: solid; border-color: {p.tint(p.good, 0.35)};
+      background: {p.tint(p.good, 0.08)}; color: var(--ink);
   }}
-  .spec-tick {{ color: {p.good}; font-weight: 700; }}
+  .spec-tick {{ color: {p.good}; font-weight: 600; }}
 
   /* ---- key/value grid --------------------------------------------------- */
+  /* Label above value, no rules between - proximity does the grouping. The old
+     left border on every cell was six vertical lines competing with the panel
+     border that already contains them. */
   .kv {{
-      display: grid; grid-template-columns: repeat(auto-fit, minmax(126px, 1fr));
-      gap: 0.75rem 1.1rem; margin: 0.2rem 0 0.1rem;
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 1rem 1.5rem; margin: 0.25rem 0;
   }}
-  .kv-item {{ border-left: 2px solid {p.border}; padding-left: 0.6rem; }}
+  .kv-item {{ min-width: 0; }}
   .kv-key {{
-      font-size: 0.7rem; font-weight: 560; letter-spacing: 0.05em;
-      text-transform: uppercase; color: {p.ink_muted};
+      font-size: 0.6875rem; font-weight: 500; letter-spacing: 0.06em;
+      text-transform: uppercase; color: var(--ink-faint); margin-bottom: 0.25rem;
   }}
   .kv-val {{
-      font-size: 0.95rem; font-weight: 620; color: {p.ink};
-      font-variant-numeric: tabular-nums;
+      font-size: 0.8125rem; font-weight: 500; color: var(--ink);
+      font-variant-numeric: tabular-nums; line-height: 1.4;
   }}
-  .kv-mono {{ font-family: ui-monospace, "SFMono-Regular", Menlo, monospace; }}
+  .kv-mono {{ font-family: var(--mono); font-size: 0.75rem; letter-spacing: -0.01em; }}
 
-  /* ---- misc ------------------------------------------------------------ */
-  .rule {{ height: 1px; background: {p.border}; margin: 1.1rem 0; border: 0; }}
-  .provenance {{
-      font-size: 0.75rem; color: {p.ink_muted}; font-style: italic; margin-top: 0.3rem;
+  /* ---- controls --------------------------------------------------------- */
+  /* Every one of these gets hover, focus-visible and disabled. Focus is an
+     accent ring at 2px offset rather than a removed outline, because removing
+     the outline without replacing it breaks the app for keyboard use. */
+  .stButton > button {{
+      background: var(--surface-2); border: 1px solid var(--border);
+      color: var(--ink-2); border-radius: 6px;
+      font-size: 0.8125rem; font-weight: 500; padding: 0.375rem 0.875rem;
+      transition: background 140ms ease-out, color 140ms ease-out,
+                  border-color 140ms ease-out;
+  }}
+  .stButton > button:hover {{
+      background: var(--surface-3); border-color: var(--border-strong); color: var(--ink);
+  }}
+  .stButton > button:focus-visible {{
+      outline: 2px solid var(--accent); outline-offset: 2px;
+  }}
+  .stButton > button:disabled, .stButton > button:disabled:hover {{
+      background: var(--surface); color: var(--ink-faint);
+      border-color: var(--border); cursor: not-allowed;
   }}
   .stButton > button[kind="primary"] {{
-      background: {p.accent}; border-color: {p.accent}; font-weight: 580;
+      background: var(--accent); border-color: var(--accent);
+      color: #ffffff; font-weight: 500;
   }}
-  [data-testid="stChatMessage"] {{ background: transparent; padding: 0.35rem 0; }}
+  .stButton > button[kind="primary"]:hover {{
+      filter: brightness(1.1); border-color: var(--accent); color: #ffffff;
+  }}
+  .stButton > button[kind="primary"]:disabled {{ filter: none; opacity: 0.45; }}
+
+  [data-testid="stChatInput"] {{ border-color: var(--border); }}
+  [data-testid="stChatInput"]:focus-within {{ border-color: var(--border-strong); }}
+
+  /* ---- drill-downs ------------------------------------------------------ */
+  /* Collapsed by default and quiet when collapsed. Ten open-looking panels
+     stacked down a page is a wall; ten hairlines is a contents list. */
+  [data-testid="stExpander"] {{
+      border: 1px solid var(--border); border-radius: 10px;
+      background: var(--surface); margin-bottom: 0.5rem;
+  }}
+  [data-testid="stExpander"] summary {{
+      font-size: 0.8125rem; font-weight: 500; color: var(--ink-muted);
+      transition: color 140ms ease-out;
+  }}
+  [data-testid="stExpander"] summary:hover {{ color: var(--ink); }}
+
+  /* ---- tables ----------------------------------------------------------- */
+  /* Tabular figures everywhere a value can change, or the columns twitch as the
+     pool changes. Row height and hairlines are the separation - no zebra. */
+  [data-testid="stDataFrame"] {{ font-variant-numeric: tabular-nums; }}
+  [data-testid="stDataFrame"] * {{ font-family: var(--font) !important; }}
+
+  /* ---- code / audit payloads -------------------------------------------- */
+  .stCode, pre, code {{ font-family: var(--mono) !important; }}
+  .stCode > pre {{
+      background: var(--surface-2) !important; border: 1px solid var(--border);
+      border-radius: 6px; font-size: 0.75rem; line-height: 1.6;
+  }}
+
+  /* ---- sidebar ---------------------------------------------------------- */
+  [data-testid="stSidebar"] {{
+      background: var(--surface); border-right: 1px solid var(--border);
+  }}
+  [data-testid="stSidebar"] .block-container {{ padding-top: 1.5rem; }}
+
+  /* ---- misc ------------------------------------------------------------- */
+  .rule {{ height: 1px; background: var(--border); margin: 1.5rem 0; border: 0; }}
+  .provenance {{
+      font-size: 0.75rem; color: var(--ink-faint); margin-top: 0.5rem;
+  }}
+  [data-testid="stChatMessage"] {{
+      background: transparent; padding: 0.25rem 0; gap: 0.625rem;
+  }}
+  [data-testid="stChatMessage"] p {{ font-size: 0.8125rem; line-height: 1.55; }}
+
+  @media (prefers-reduced-motion: reduce) {{
+      * {{ transition: none !important; animation: none !important; }}
+  }}
 </style>
 """
 
@@ -382,6 +586,21 @@ def inject() -> None:
     st.markdown(_css(active()), unsafe_allow_html=True)
 
 
-def brandbar() -> None:
-    """The small accent rule under the page title."""
-    st.markdown('<div class="brandbar"></div>', unsafe_allow_html=True)
+def app_header(name: str, note: str = "") -> None:
+    """The product's name, a mark, and a hairline. That is the whole chrome.
+
+    Replaces the old page title plus gradient rule. A gradient bar under a
+    heading is decoration that says nothing; a mark and a hairline say what this
+    is and where the header ends, which is all a header owes anyone. `note` is
+    the right-aligned status - the current order reference, when there is one.
+    """
+    from html import escape
+
+    tail = f'<span class="apphead-note">{escape(note)}</span>' if note else ""
+    st.markdown(
+        f'<div class="apphead">'
+        f'<span class="apphead-mark">{escape(name[:1].upper())}</span>'
+        f'<span class="apphead-name">{escape(name)}</span>'
+        f"{tail}</div>",
+        unsafe_allow_html=True,
+    )

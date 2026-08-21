@@ -757,13 +757,28 @@ SECTION 8.5 - THE INTERFACE: DESIGN DECISIONS THAT ARE ACTUALLY ENGINEERING
                 not as a nice-to-have. Colour never carries meaning alone
                 anywhere in this app."
 
-8.5.4  WE PINNED THE APP TO LIGHT MODE
-    The trap:   Streamlit follows whatever laptop it is running on.
-    We do:      .streamlit/config.toml pins base="light".
-    THE LINE:   "Our palette was validated against a light surface. Validating on
-                light tells you nothing about how it renders on dark. Pinning
-                means the colours you are seeing are the colours we checked - on
-                any machine we demo from."
+8.5.4  WE PINNED THE THEME, AND THEN WE PINNED IT IN ONE PLACE
+    The trap:   Streamlit follows whatever laptop it is running on, so the
+                interface a judge sees is decided by a setting on a machine we
+                have never touched.
+    Naive:      Declare both a light and a dark theme and let the viewer's OS
+                choose. It reads well in a config file. It means we do not know
+                what the demo looks like until we are standing in front of it.
+    We do:      One theme, declared once, in .streamlit/config.toml. Dark.
+    The bug we hit: we had our own stylesheet reading `st.context.theme.type`
+                while Streamlit painted its widgets from config. Those are two
+                different questions - "what does this browser prefer?" and "what
+                theme is this app painted in?" - and on a light-mode laptop they
+                gave two different answers. The page came out half dark chrome
+                and half light cards. Both halves were individually correct.
+    The fix:    ui/theme.py:active() now reads the same `theme.base` line
+                Streamlit reads. One source, one answer.
+    THE LINE:   "The palette was validated against the surface it is drawn on,
+                so the surface is not allowed to be a surprise. And when we found
+                our stylesheet and Streamlit disagreeing about which mode we were
+                in, we did not add a third setting to reconcile them - we deleted
+                one of the two sources. Two places that both decide the same
+                thing is not redundancy, it is a bug waiting for a demo."
 
 8.5.5  TWO CHARTS, NEVER ONE WITH TWO Y-AXES
     The trap:   Price and stock over the same dates. Obvious to overlay.
@@ -1112,5 +1127,5 @@ differently, and we had a reason. Same shape every time:
 Skip anything that is just a feature description. This file is only for the
 places where we can show judgement.
 
-Last updated: after the brief parser stopped inverting "don't care about price"
-and the filter stopped enforcing a price cap we invented ourselves (8.8.8, 8.8.9).
+Last updated: after the interface was re-tokenised to one dark surface and the
+theme stopped being decided in two places at once (8.5.4).
