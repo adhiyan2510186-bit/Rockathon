@@ -89,10 +89,17 @@ def css(p: "Palette") -> str:
       /* ---- depth ----------------------------------------------------------
          A panel is not a flat rectangle any more. It is a translucent sheet
          resting above the canvas, and three things say so together: the surface
-         at 72% so the backdrop shows through it, a blur so what shows through is
-         softened rather than legible, and a 1px highlight along the top edge
-         where the light would land. Take any one away and the other two read as
-         a mistake - a see-through box, or a box with a stripe on it. */
+         at 72% so the backdrop shows through it, a 1px highlight along the top
+         edge where the light would land, and a shadow underneath. Take any one
+         away and the other two read as a mistake - a see-through box, or a box
+         with a stripe on it.
+
+         The BLUR is a fourth thing and it is deliberately not on all of them.
+         A blur costs a GPU pass per element per frame and only has an effect
+         where there is something behind the panel worth softening. Two surfaces
+         qualify - the recommendation and the sidebar, both of which lie across
+         the canvas pools and the grid. A figure tile sitting on flat canvas
+         would pay the whole cost to blur nothing, so it does not ask. */
       --glass-fill: {p.tint(p.surface, 0.72)};
       --glass-fill-2: {p.tint(p.surface_2, 0.72)};
       --blur: 14px;
@@ -137,7 +144,15 @@ def css(p: "Palette") -> str:
      that dissolves before it gets there reads as depth, and the vignette is the
      only thing between those two outcomes. It costs one gradient, no mask, no
      pseudo-element, and nothing that can fight Streamlit for the stacking
-     order - which the pseudo-element version very much can. */
+     order - which the pseudo-element version very much can.
+
+     NO `background-attachment: fixed`, AND THAT IS A FIX, NOT AN OMISSION.
+     It used to be here and it froze the renderer. Streamlit does not scroll the
+     page - it scrolls an inner container, and `.stApp` itself is exactly one
+     viewport tall and never moves. So `fixed` had nothing to hold still, while
+     still forcing all six layers to repaint underneath every translucent panel
+     on every scroll frame. It was paying full price for no effect at all, which
+     is the worst trade in the sheet. */
   .stApp {{
       background:
           radial-gradient(70rem 24rem at 50% -8rem, var(--accent-faint), transparent 70%),
@@ -146,7 +161,6 @@ def css(p: "Palette") -> str:
           repeating-linear-gradient(0deg,  var(--grid) 0 1px, transparent 1px 48px),
           repeating-linear-gradient(90deg, var(--grid) 0 1px, transparent 1px 48px),
           var(--canvas);
-      background-attachment: fixed;
       font-family: var(--font);
   }}
   /* The top padding clears Streamlit's own floating toolbar. Without it our
@@ -271,14 +285,17 @@ def css(p: "Palette") -> str:
      WHAT A PANEL IS MADE OF, AND WHY IT IS FOUR THINGS AND NOT ONE
      --------------------------------------------------------------
      Every panel in this app is the same recipe, held in `--glass-*` at the top
-     of the sheet: the surface at 72% so the canvas shows through it, a blur so
-     what shows through is softened rather than readable, a 1px highlight along
-     the top edge where light would land, and a shadow underneath.
+     of the sheet: the surface at 72% so the canvas shows through it, a 1px
+     highlight along the top edge where light would land, and a shadow
+     underneath. The recommendation and the sidebar add a blur on top of that,
+     because those two lie across the canvas pools and so have something behind
+     them worth softening; the rest sit on flat canvas and would be paying a GPU
+     pass per frame to blur nothing.
 
-     They only work as a set. A translucent panel with no blur is a see-through
-     box; a highlight with no shadow is a box with a stripe on it. Together they
-     say the panel is a sheet lying above the page, which is the one thing a
-     flat rectangle on a flat page cannot say.
+     The three that are always present only work as a set. A highlight with no
+     shadow is a box with a stripe on it. Together they say the panel is a sheet
+     lying above the page, which is the one thing a flat rectangle on a flat
+     page cannot say.
 
      The hairline is still on every panel and still does the same job it always
      did. Depth tells you a panel is a separate object; the border tells you
@@ -376,8 +393,6 @@ def css(p: "Palette") -> str:
       background:
           linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.012)),
           var(--glass-fill);
-      backdrop-filter: blur(var(--blur)) saturate(1.15);
-      -webkit-backdrop-filter: blur(var(--blur)) saturate(1.15);
       border: 1px solid var(--border); border-radius: 10px;
       padding: 0.75rem 1rem 0.875rem; min-height: 6rem;
       box-shadow: inset 0 1px 0 var(--sheen), var(--lift);
@@ -405,38 +420,80 @@ def css(p: "Palette") -> str:
   }}
 
   /* ---- chips ----------------------------------------------------------- */
-  /* Small rounded rects rather than pills, deliberately. A pill reads as a
-     marketing tag; a 6px rect reads as a value in a tool. */
+  /* PILLS, AND ONE RADIUS FOR EVERY TAG IN THE APP.
+     A chip, a spec badge, a supplier badge and a status tag are all the same
+     kind of object - a short fact wearing a container - so they all take the
+     same fully-round edge. The alternative is what was here before: a 6px rect
+     that had to be held identical in four separate rules, which is exactly how
+     two tags on one row end up 2px apart in the corner and nobody can say why.
+     A round edge cannot drift.
+
+     Still no hover on any of them. These carry a fact and do nothing when
+     clicked, and unlike a figure tile there is nothing here for depth to
+     clarify - a tag is already obviously a tag. */
   .chip-row {{ display: flex; flex-wrap: wrap; gap: 0.375rem; margin: 0.25rem 0; }}
   .chip {{
       display: inline-flex; align-items: center; gap: 0.375rem;
       font-size: 0.75rem; font-weight: 500; line-height: 1;
-      padding: 0.3125rem 0.5rem; border-radius: 6px;
-      border: 1px solid var(--border); background: var(--surface-2);
-      color: var(--ink-2); white-space: nowrap;
+      padding: 0.375rem 0.6875rem; border-radius: 999px;
+      border: 1px solid var(--border);
+      background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0)),
+          var(--glass-fill-2);
+      color: var(--ink-2); white-space: nowrap; cursor: default;
       font-variant-numeric: tabular-nums;
   }}
-  /* Chips deliberately have NO hover state, unlike the tiles above. Nothing here
-     is clickable, and a tag that lights up under the cursor is a tag people try
-     to click - the fastest way to teach a buyer that this screen is broken. */
   .chip-dot {{ width: 6px; height: 6px; border-radius: 999px; flex: none; }}
   /* A tinted chip carries a real signal. The text stays in an ink token - a
      coloured dot beside it carries the identity, never the words themselves. */
   .chip-strong {{ color: var(--ink); font-weight: 500; }}
 
+  /* ---- status tags ------------------------------------------------------ */
+  /* Did it qualify, is it waiting on someone, did it happen. One shape, five
+     states, and every one of them says its state three ways at once - a colour,
+     a mark, and a word. That is not belt and braces: two of the four status
+     colours sit under 3:1 on a light surface, so a tag that leaned on colour
+     alone would be unreadable for some people and invisible in a photograph of
+     the screen. The word is what makes the colour safe to use.
+
+     `.status-live` is the only thing in this app that moves on its own. See the
+     pulse below. */
+  .status {{
+      display: inline-flex; align-items: center; gap: 0.4375rem;
+      font-size: 0.75rem; font-weight: 500; line-height: 1;
+      padding: 0.375rem 0.75rem; border-radius: 999px;
+      white-space: nowrap; cursor: default;
+      border: 1px solid var(--status-colour);
+      background: linear-gradient(180deg, var(--status-wash), transparent);
+      color: var(--ink);
+  }}
+  .status-mark {{
+      width: 7px; height: 7px; border-radius: 999px; flex: none;
+      background: var(--status-colour);
+  }}
+  .status-word {{ font-variant-numeric: tabular-nums; }}
+
   /* ---- supplier badge --------------------------------------------------- */
   /* Row anatomy borrowed straight from a market terminal: square mark, bold
      identifier, muted descriptor. The mark carries the colour, the words carry
      the meaning - colour is never the only thing saying who this is. */
+  /* The mark stays flush in the rounded end, so the left padding is the mark's
+     own inset and nothing more. `--vendor-colour` is set inline per supplier by
+     ui/components.py from theme.vendor_colour() - the badge never picks a hue. */
   .vendor {{
       display: inline-flex; align-items: center; gap: 0.5rem;
-      padding: 0.3125rem 0.625rem 0.3125rem 0.3125rem; border-radius: 6px;
-      border: 1px solid var(--border); background: var(--surface-2);
+      padding: 0.25rem 0.75rem 0.25rem 0.25rem; border-radius: 999px;
+      border: 1px solid var(--vendor-colour, var(--border));
+      background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0)),
+          var(--vendor-wash, var(--glass-fill-2));
+      cursor: default;
   }}
   .vendor-mark {{
-      width: 1.125rem; height: 1.125rem; border-radius: 5px; flex: none;
+      width: 1.25rem; height: 1.25rem; border-radius: 999px; flex: none;
       display: inline-flex; align-items: center; justify-content: center;
       font-size: 0.6875rem; font-weight: 600; color: #ffffff;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25);
   }}
   .vendor-name {{ font-size: 0.8125rem; font-weight: 600; color: var(--ink); }}
   .vendor-kind {{
@@ -450,9 +507,9 @@ def css(p: "Palette") -> str:
   .spec {{
       display: inline-flex; align-items: center; gap: 0.3125rem;
       font-size: 0.75rem; font-weight: 500; line-height: 1;
-      padding: 0.3125rem 0.5rem; border-radius: 6px;
+      padding: 0.375rem 0.6875rem; border-radius: 999px;
       border: 1px dashed var(--border-strong); background: transparent;
-      color: var(--ink-muted); white-space: nowrap;
+      color: var(--ink-muted); white-space: nowrap; cursor: default;
   }}
   .spec-met {{
       border-style: solid; border-color: {p.tint(p.good, 0.35)};
@@ -529,8 +586,6 @@ def css(p: "Palette") -> str:
   [data-testid="stExpander"] {{
       border: 1px solid var(--border); border-radius: 10px;
       background: var(--glass-fill); margin-bottom: 0.5rem;
-      backdrop-filter: blur(var(--blur)) saturate(1.1);
-      -webkit-backdrop-filter: blur(var(--blur)) saturate(1.1);
       box-shadow: inset 0 1px 0 var(--sheen);
       transition: border-color var(--dur) var(--ease),
                   box-shadow var(--dur) var(--ease);
@@ -582,6 +637,61 @@ def css(p: "Palette") -> str:
   }}
   [data-testid="stChatMessage"] p {{ font-size: 0.8125rem; line-height: 1.55; }}
 
+  /* ---- motion ----------------------------------------------------------- */
+  /* TWO ANIMATIONS IN THE WHOLE APP, AND EACH ONE HAS TO EARN ITS KEYFRAMES.
+
+     `rise` is arrival. A panel that appears fully formed and a panel that
+     settles into place carry the same information, but the second one tells you
+     WHERE to look, which on a screen that has just changed underneath you is
+     worth 300ms.
+
+     It is deliberately on almost nothing. Streamlit re-runs the whole script on
+     every click, so an entrance animation applied broadly replays every time
+     anyone ticks a checkbox and the page develops a twitch. It goes on the
+     recommendation panel and on trail steps - the two things whose arrival is
+     genuinely an event - and nowhere else. */
+  @keyframes rise {{
+      from {{ opacity: 0; transform: translateY(8px); }}
+      to   {{ opacity: 1; transform: translateY(0); }}
+  }}
+  .hero {{ animation: rise var(--dur-enter) var(--ease) both; }}
+  .step {{ animation: rise var(--dur-enter) var(--ease) both; }}
+  /* Steps arrive in the order they happened rather than all at once. 40ms is
+     enough to read as a sequence and short enough that eight of them are done
+     inside a third of a second. Capped at eight, because past that the last
+     step would arrive late enough to look like a stall. */
+  .step:nth-child(1) {{ animation-delay: 0ms; }}
+  .step:nth-child(2) {{ animation-delay: 40ms; }}
+  .step:nth-child(3) {{ animation-delay: 80ms; }}
+  .step:nth-child(4) {{ animation-delay: 120ms; }}
+  .step:nth-child(5) {{ animation-delay: 160ms; }}
+  .step:nth-child(6) {{ animation-delay: 200ms; }}
+  .step:nth-child(7) {{ animation-delay: 240ms; }}
+  .step:nth-child(n+8) {{ animation-delay: 280ms; }}
+
+  /* `pulse` is the only thing in this interface that moves on its own, and it
+     means exactly one thing: THIS IS WAITING ON A PERSON. It rides on the
+     status tag's own colour, so a waiting tag pulses in the same amber it is
+     already drawn in and nothing has to agree with anything.
+
+     Where it is NOT used matters more than where it is. It never appears on a
+     finished order or a saved record. A record that throbs implies something is
+     still happening to it, and an audit trail that implies live activity it does
+     not have is lying in the one place this product cannot afford to.
+
+     A CSS ring rather than an emoji. An emoji renders in a different typeface on
+     every machine, cannot take the palette, and cannot be animated - which on a
+     projector we have never seen before is three ways to look unfinished. */
+  @keyframes pulse-ring {{
+      0%   {{ box-shadow: 0 0 0 0 var(--status-colour); opacity: 1; }}
+      70%  {{ box-shadow: 0 0 0 7px transparent; opacity: 0.85; }}
+      100% {{ box-shadow: 0 0 0 0 transparent; opacity: 1; }}
+  }}
+  .status-live .status-mark {{ animation: pulse-ring 2s var(--ease) infinite; }}
+
+  /* Last rule in the sheet, on purpose - anything added below it would escape
+     it. Two declarations switch off every transition and every animation above,
+     including both of the ones just defined. */
   @media (prefers-reduced-motion: reduce) {{
       * {{ transition: none !important; animation: none !important; }}
   }}

@@ -145,6 +145,42 @@ def chips(items: Iterable[tuple[str, str | None]], strong_first: bool = False) -
         st.markdown(f'<div class="chip-row">{"".join(parts)}</div>', unsafe_allow_html=True)
 
 
+def status_html(kind: str, text: str = "", live: bool = False) -> str:
+    """One status tag as HTML, for callers that need to place it inside a row.
+
+    Split from `status_pill` below because a tag is wanted in two shapes: on its
+    own, and sitting beside a supplier badge or a heading. Returning the string
+    is what lets the second case exist without every caller writing its own span
+    and inventing its own padding.
+
+    `live` turns on the pulse, and it is the caller's job to only ask for it
+    while something is genuinely still waiting on a person. See ui/styles.py.
+    """
+    colour, mark, word = theme.status(kind)
+    palette = theme.active()
+    classes = "status status-live" if live else "status"
+    return (
+        f'<span class="{classes}" style="--status-colour:{colour};'
+        f'--status-wash:{palette.tint(colour, 0.14)}">'
+        f'<span class="status-mark"></span>'
+        f'<span class="status-word">{escape(text or word)}</span></span>'
+    )
+
+
+def status_pill(kind: str, text: str = "", live: bool = False) -> None:
+    """Where this got to, as one tag: qualified, waiting, ordered, stopped.
+
+    The word overrides the default when a screen has something more specific to
+    say ("Declined" rather than "Stopped"), but the colour and the mark stay
+    tied to the kind - so a caller can change the sentence and cannot
+    accidentally make a stopped order green.
+    """
+    st.markdown(
+        f'<div class="chip-row">{status_html(kind, text, live)}</div>',
+        unsafe_allow_html=True,
+    )
+
+
 def urgency_chips(signal) -> None:
     """The timing read for one product: the verdict chip first, then its evidence.
 
@@ -177,12 +213,20 @@ def source_badge(product, extra: str = "") -> None:
     The colour comes from theme.vendor_colour, which is a separate ramp from the
     chart palette on purpose. See ui/theme.py.
     """
+    palette = theme.active()
     colour = theme.vendor_colour(product.source)
     mark = escape(product.source[:1].upper())
     tail = f'<span class="vendor-kind">{escape(extra)}</span>' if extra else ""
+    # The badge is tinted in the supplier's own hue rather than the neutral every
+    # other tag uses, because this is the one tag on the row that answers "who".
+    # Both custom properties are set here rather than in the sheet: the stylesheet
+    # cannot know how many suppliers there are, and theme.vendor_colour is the
+    # only thing allowed to decide which hue each one gets.
+    style = (f'--vendor-colour:{palette.tint(colour, 0.55)};'
+             f'--vendor-wash:{palette.tint(colour, 0.13)}')
 
     st.markdown(
-        f'<div class="chip-row"><span class="vendor">'
+        f'<div class="chip-row"><span class="vendor" style="{style}">'
         f'<span class="vendor-mark" style="background:{colour}">{mark}</span>'
         f'<span class="vendor-name">{escape(product.source)}</span>'
         f'<span class="vendor-kind">{escape(theme.vendor_kind(product.source_type))}</span>'

@@ -315,6 +315,41 @@ def urgency(key: str) -> tuple[str, str, str]:
 
 
 # ---------------------------------------------------------------------------
+# Status — where a thing got to, in five words a buyer already owns
+# ---------------------------------------------------------------------------
+
+def status(kind: str) -> tuple[str, str, str]:
+    """(colour, mark, word) for one state a product or an order can be in.
+
+    FIVE STATES AND NO MORE. Every one of them answers a question a buyer
+    actually asks - did this qualify, is anyone waiting on me, did it happen -
+    and none of them names a part of our machinery. There is no "escalated"
+    here: a buyer is not told their order was escalated, they are told it needs
+    their approval, which is the same fact in a word they already use.
+
+    Colour AND mark AND word, always all three, for the same reason urgency()
+    above does it: two of the four status colours are deliberately low-contrast
+    on a light surface, so a tag that leaned on colour alone would be unreadable
+    for some readers and would vanish entirely in a photograph of the screen.
+
+    The words live here rather than in the screen that prints them because the
+    same five states are shown on the recommendation, the approval and the
+    record, and three copies of a wording is how one of them ends up saying
+    something the other two do not.
+    """
+    palette = active()
+    table = {
+        "qualified": (palette.good, "✓", "Qualified"),
+        "excluded":  (palette.ink_muted, "✕", "Not considered"),
+        "waiting":   (palette.serious, "●", "Needs your approval"),
+        "approved":  (palette.good, "✓", "Approved"),
+        "placed":    (palette.good, "✓", "Ordered"),
+        "stopped":   (palette.critical, "✕", "Stopped"),
+    }
+    return table.get(kind, table["excluded"])
+
+
+# ---------------------------------------------------------------------------
 # Applying it
 # ---------------------------------------------------------------------------
 
