@@ -501,6 +501,48 @@ different from what the order said while it was happening."*
 
 ---
 
+## 11 · The logo is read from disk once per process, not once per click
+
+**The claim.** The brand mark is decoded and base64-encoded a single time, when
+`ui/theme.py` is first imported. Every render after that - and there are a lot of
+them - is a string that already exists in memory.
+
+**Where.**
+- `ui/theme.py` — `_mark_uri()`, called once at module scope into `MARK_URI`.
+- `ui/theme.py` — `app_header()` and `sidebar_brand()` interpolate that constant.
+- `tools/make_logo_mark.py` — the crop and the background cut, done offline and
+  committed as `assets/logo_mark.png`. The app never runs this.
+
+**What the naive version does.** Two versions, and the first one is what almost
+everybody writes:
+
+1. `st.image("assets/Evets_LOGO.jpeg")` inside the header function. Streamlit
+   re-runs `app.py` top to bottom on **every** interaction, and the header is on
+   screen from all four tabs - so that is a file read and an image decode per
+   click, forever, for a picture that never changes. It also breaks the header:
+   the lockup is one flex row emitted as a single block of HTML, and `st.image`
+   arrives in a Streamlit container of its own.
+2. Key the background out at runtime with Pillow. Same per-click cost, plus
+   numpy over a million pixels, to recompute a result that is identical every
+   time. Deterministic work with a fixed input belongs in a build step.
+
+**Measured.** The constant is 20,402 characters, built from a 15,285-byte PNG,
+one time per process. The generator itself is where the real numbers are, and
+all three were measured rather than guessed:
+
+| Step | Before | After |
+| ---- | ------ | ----- |
+| Cutting the JPEG's compression haze (`FLOOR`) | 80,396 B | 35,789 B |
+| Choosing 128px over 256px, given a 32px draw | 35,789 B | 15,285 B |
+| Alpha quantisation, tested and **rejected** | 15,546 B | 14,268 B |
+
+That last row is the honest one. Quantising alpha bought 8% and cost a step of
+cleverness in a file someone has to read, so it is not in the code. Resolution
+was the lever; we measured before picking, and picked the smallest size that is
+still generous for retina.
+
+---
+
 ## How to add to this file
 
 Log the win **when you write the code**, not at the end. Each entry needs:

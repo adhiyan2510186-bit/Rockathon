@@ -1493,6 +1493,44 @@ A: "Real vendor integrations - auth, pagination, rate limits, and vendors whose
                  in progress - it gets its own screen and a way back."
 
 
+8.8.22  THE TRAP: A LOGO IS A PICTURE, AND AN INTERFACE NEEDS A MARK
+    The logo we were handed is a 1024x1024 JPEG: the glyph, the word EVETS
+    under it, a navy background, and about sixty percent empty canvas. It is a
+    good logo. It is not a usable interface asset, and the three reasons are
+    each invisible until you look.
+
+    The navy is opaque, and our page is #0a0b0e while our sidebar is #131316 -
+    so one tile is wrong against both surfaces, in two different directions.
+    The wordmark is baked in, and the header already writes "Evets" as text
+    beside the mark, so the whole picture prints the product name twice. And
+    the glyph occupies barely a third of the file, so shrinking the square to
+    the 32 pixels the header allows lands the actual mark at about twelve.
+
+    What the obvious build does: st.image("assets/logo.jpeg", width=40) in the
+    header. It takes one line, it "works", and it ships a navy tile with the
+    name written twice - re-read from disk on every click, because Streamlit
+    re-runs the file top to bottom every time anyone presses anything.
+
+    What we do: derive the mark from the logo. tools/make_logo_mark.py crops to
+    the glyph's measured bounding box, turns the navy into real transparency,
+    and repaints the glyph flat mint so no navy bleeds into the soft edges. It
+    runs once, by hand, and its output is committed. The app reads that file a
+    single time at import.
+
+    Two details we would defend if asked. The mark keeps the logo's mint even
+    though our accent is violet - a brand mark is the one element on a screen
+    whose entire job is to be recognised, so it keeps the colour it was drawn
+    in, and it sits on no plate, because mint on violet is two brand colours
+    fighting inside 32 pixels. And the generator is a checked-in file rather
+    than something someone did once in a notebook: "where did this asset come
+    from?" should have a file for an answer. That is the same rule we hold the
+    price history to.
+
+    THE LINE:   "The logo goes in the header, the sidebar signature and the
+                 browser tab - and nowhere else. A mark you see once is
+                 branding; a mark you see on all four screens is a watermark."
+
+
 ================================================================================
 MAINTENANCE
 ================================================================================
@@ -1512,4 +1550,5 @@ guarding them stayed green, discovering the page background we were about to
 build had been in the stylesheet all along, and making "no delivery deadline"
 an answer the system can hold rather than a question it asks forever, and
 giving the app an account and a real list of the orders it has placed rather
-than a convincing set of ones it has not (8.8.14 - 8.8.21).
+than a convincing set of ones it has not, and turning the logo we were handed
+into a mark an interface can actually wear (8.8.14 - 8.8.22).

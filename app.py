@@ -1433,7 +1433,14 @@ def _record_screen(ctx, log, summary) -> None:
 # Page
 # ---------------------------------------------------------------------------
 
-st.set_page_config(page_title=theme.PRODUCT_NAME, page_icon="📦", layout="wide")
+# The tab icon is the real mark rather than an emoji. On stage there is never
+# just one tab open, and a box emoji is what every other packaging tool in the
+# world also picked.
+st.set_page_config(
+    page_title=theme.PRODUCT_NAME,
+    page_icon=str(theme.LOGO_MARK_PATH),
+    layout="wide",
+)
 theme.inject()
 init_state()
 

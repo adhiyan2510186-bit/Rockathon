@@ -261,17 +261,42 @@ def css(p: "Palette") -> str:
 
   /* ---- app header ------------------------------------------------------- */
   /* A mark, the name, what the name stands for, and a hairline. That is the
-     whole chrome - there is still no logo and still no decorative rule. The
-     mark is the one place a gradient is spent: a brand mark is the single
-     element on the page whose only job IS to be recognised, and a flat violet
-     square is a placeholder in a way a stepped one is not. */
+     whole chrome - there is still no decorative rule, no gradient bar, nothing
+     that is on the page only to be looked at.
+
+     The mark is the real logo now, and it is the ONE element here allowed to
+     carry its own colour. Our accent is violet and the glyph is mint, and that
+     is deliberate rather than an oversight: a brand mark is the single thing on
+     a screen whose entire job is to be recognised, so it keeps the colour it
+     was drawn in. It also sits on nothing - no plate, no gradient behind it -
+     because a mint glyph on a violet tile is two brand colours fighting inside
+     32 pixels.
+
+     `object-fit: contain` is what guarantees the mark can never stretch: the
+     source is square and the box is square, and if either ever stops being
+     square the image letterboxes instead of distorting.
+
+     The selector is `.apphead .apphead-mark` rather than `.apphead-mark` for a
+     reason worth knowing. Streamlit styles every image inside a markdown block
+     with a rule of its own - `object-fit: scale-down`, among others - and that
+     rule is a class plus an element, so it outranks a bare class of ours and
+     silently wins. Two of our own class names outrank it back. We deliberately
+     do NOT name Streamlit's class: it is a generated hash that changes when they
+     rebuild, so a stylesheet that mentions it is a stylesheet that breaks on
+     upgrade without telling anyone. */
   .apphead {{
       display: flex; align-items: center; gap: 0.6875rem;
       padding-bottom: 1rem; margin-bottom: 1.25rem;
       border-bottom: 1px solid var(--border);
   }}
-  .apphead-mark {{
-      width: 2rem; height: 2rem; border-radius: 9px; flex: none;
+  .apphead .apphead-mark {{
+      width: 2rem; height: 2rem; flex: none;
+      display: block; object-fit: contain; max-width: 100%;
+  }}
+  /* The letter we drew before the logo existed, kept as the fallback for a
+     missing asset file. Never seen while assets/logo_mark.png is in place. */
+  .apphead-mark-letter {{
+      border-radius: 9px;
       display: inline-flex; align-items: center; justify-content: center;
       background: linear-gradient(145deg, {p.accent}, {p.tint(p.accent, 0.62)});
       box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
@@ -311,8 +336,12 @@ def css(p: "Palette") -> str:
       margin-top: 1.5rem; padding-top: 0.875rem;
       border-top: 1px solid var(--border);
   }}
-  .sidebrand-mark {{
-      width: 1.25rem; height: 1.25rem; border-radius: 6px; flex: none;
+  .sidebrand .sidebrand-mark {{
+      width: 1.25rem; height: 1.25rem; flex: none;
+      display: block; object-fit: contain; max-width: 100%;
+  }}
+  .sidebrand-mark-letter {{
+      border-radius: 6px;
       display: inline-flex; align-items: center; justify-content: center;
       background: linear-gradient(145deg, {p.accent}, {p.tint(p.accent, 0.62)});
       color: #fff; font-size: 0.625rem; font-weight: 600;

@@ -118,7 +118,9 @@ Numbers anywhere that can change are tabular, or the layout twitches on update.
 
 from __future__ import annotations
 
+import base64
 from dataclasses import dataclass
+from pathlib import Path
 
 import streamlit as st
 
@@ -135,6 +137,48 @@ from ui import styles
 PRODUCT_NAME = "Evets"
 PRODUCT_EXPANSION = "Enterprise Vendor Evaluation & Transparent Sourcing"
 PRODUCT_TAGLINE = "Autonomy you can audit"
+
+
+# ---------------------------------------------------------------------------
+# The mark
+# ---------------------------------------------------------------------------
+# The glyph from our logo, cut out of the original by tools/make_logo_mark.py.
+# See that file for what was done to it and why - the short version is that the
+# logo as drawn has a navy background and the word EVETS baked into it, and this
+# is the glyph alone on transparency.
+LOGO_MARK_PATH = Path(__file__).resolve().parent.parent / "assets" / "logo_mark.png"
+
+
+def _mark_uri() -> str:
+    """The mark as a data: URI, built once when this module is imported.
+
+    ONCE is the whole point. Streamlit re-runs app.py top to bottom on every
+    single click, and the header renders on every one of those runs - so
+    anything done inside `app_header()` is done again every time a buyer presses
+    a button. Reading and encoding a file there would be a disk hit per click on
+    the one function that is on screen from all four tabs. Here, it is one read
+    for the life of the process and every later render is a string that already
+    exists.
+
+    A data: URI rather than `st.image` for a plainer reason: the header is a
+    single flex row emitted as one block of HTML, and `st.image` would arrive in
+    its own Streamlit container and break the row. Streamlit also serves no
+    static directory unless you turn one on, so <img src="assets/..."> would
+    simply 404.
+
+    If the file is missing we return "" and the callers fall back to the letter
+    they drew before. A logo that failed to load should cost us a logo, not the
+    demo.
+    """
+    try:
+        return "data:image/png;base64," + base64.b64encode(
+            LOGO_MARK_PATH.read_bytes()
+        ).decode("ascii")
+    except OSError:
+        return ""
+
+
+MARK_URI = _mark_uri()
 
 
 @dataclass(frozen=True)
@@ -448,9 +492,14 @@ def app_header(note: str = "") -> None:
     from html import escape
 
     tail = f'<span class="apphead-note">{escape(note)}</span>' if note else ""
+    mark = (
+        f'<img class="apphead-mark" src="{MARK_URI}" alt="">' if MARK_URI
+        else f'<span class="apphead-mark apphead-mark-letter">'
+             f'{escape(PRODUCT_NAME[:1].upper())}</span>'
+    )
     st.markdown(
         f'<div class="apphead">'
-        f'<span class="apphead-mark">{escape(PRODUCT_NAME[:1].upper())}</span>'
+        f'{mark}'
         f'<span class="apphead-brand">'
         f'<span class="apphead-name">{escape(PRODUCT_NAME)}</span>'
         f'<span class="apphead-expansion">{escape(PRODUCT_EXPANSION)}</span>'
@@ -502,9 +551,14 @@ def sidebar_brand() -> None:
     """
     from html import escape
 
+    mark = (
+        f'<img class="sidebrand-mark" src="{MARK_URI}" alt="">' if MARK_URI
+        else f'<span class="sidebrand-mark sidebrand-mark-letter">'
+             f'{escape(PRODUCT_NAME[:1].upper())}</span>'
+    )
     st.markdown(
         f'<div class="sidebrand">'
-        f'<span class="sidebrand-mark">{escape(PRODUCT_NAME[:1].upper())}</span>'
+        f'{mark}'
         f'<span class="sidebrand-text">'
         f'<span class="sidebrand-name">{escape(PRODUCT_NAME)}</span>'
         f'<span class="sidebrand-tag">{escape(PRODUCT_TAGLINE)}</span>'
