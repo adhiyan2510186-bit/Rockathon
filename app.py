@@ -96,24 +96,24 @@ DEMO_BRIEF = (
 RECENT_REQUESTS: tuple[tuple[str, str, str], ...] = (
     (
         "start_recent",
-        "5,000 kraft mailer boxes  ·  max Rs 22/unit  ·  within 10 days",
+        "**5,000 kraft mailer boxes**  \nmax Rs 22/unit · within 10 days",
         DEMO_BRIEF,
     ),
     (
         "start_recent_furniture",
-        "12 ergonomic task chairs  ·  max Rs 7,000 each  ·  within 14 days",
+        "**12 ergonomic task chairs**  \nmax Rs 7,000 each · within 14 days",
         "12 ergonomic task chairs, mesh back, adjustable height, max Rs 7,000 each, "
         "delivered within 14 days. Reliability matters a lot.",
     ),
     (
         "start_recent_laptops",
-        "8 developer laptops  ·  max Rs 65,000 each  ·  within 12 days",
+        "**8 developer laptops**  \nmax Rs 65,000 each · within 12 days",
         "8 developer laptops, 16GB RAM, 512GB SSD, max Rs 65,000 each, "
         "delivered within 12 days. Reliability matters a lot.",
     ),
     (
         "start_recent_headsets",
-        "25 noise-cancelling headsets  ·  max Rs 4,000 each  ·  within 12 days",
+        "**25 noise-cancelling headsets**  \nmax Rs 4,000 each · within 12 days",
         # Deliberately says nothing about what matters. It is a complete,
         # buyable brief that still leaves the most important question open, and
         # it is the one shortcut that makes the agent ask something back.
@@ -661,10 +661,25 @@ def _empty_request_state() -> None:
     # Honest scope: this is a stub with hardcoded entries. There is no request
     # history in this build, and nothing here reads one.
     st.caption("Recent requests")
-    for key, label, brief_text in RECENT_REQUESTS:
-        if st.button(label, width="content", key=key):
-            handle_message(brief_text)
-            st.rerun()
+
+    # A 2x2 grid of cards rather than four buttons down the left edge. Four
+    # stacked buttons of different widths is a list of links; a grid of equal
+    # cards is a set of things you can pick from, which is what these are.
+    #
+    # They are still `st.button` with the same keys they always had. The tests
+    # select on those keys, and a div with a click handler is not a button to a
+    # keyboard or a screen reader - so the control is restyled, never replaced.
+    # The marker span is what the stylesheet hooks onto; it renders nothing.
+    with st.container():
+        st.markdown('<span class="recent-anchor"></span>', unsafe_allow_html=True)
+        for row_start in range(0, len(RECENT_REQUESTS), 2):
+            for column, (key, label, brief_text) in zip(
+                st.columns(2), RECENT_REQUESTS[row_start:row_start + 2]
+            ):
+                with column:
+                    if st.button(label, width="stretch", key=key):
+                        handle_message(brief_text)
+                        st.rerun()
 
 
 def _weight_note(ctx) -> str:
@@ -1023,29 +1038,47 @@ def _outcome_trail(ctx) -> None:
     ui.rule()
     ui.section("Order progress")
 
+    # Built as a list first and drawn once, rather than printed line by line as
+    # the code walks the outcome. Printing as we go is how the payment step
+    # ended up styled differently from the confirmation step above it - they were
+    # written at different times by different hands.
+    steps: list[tuple[str, str, str, list[str]]] = []
+
     if confirmation.confirmed:
-        st.markdown(f"**Supplier confirmed** — {confirmation.headline}")
-        st.caption(f"Held under {confirmation.lock_reference}")
+        steps.append((
+            "approved", "Supplier confirmed", confirmation.headline,
+            [f"Held under {confirmation.lock_reference}"],
+        ))
     else:
-        st.markdown(f"**Supplier could not confirm** — {confirmation.headline}")
-        if confirmation.escalation is not None:
-            _escalation_options(confirmation.escalation)
+        steps.append(("stopped", "Supplier could not confirm", confirmation.headline, []))
 
     if payment is not None:
-        st.markdown("")
         if payment.paid:
-            st.markdown(f"**Payment taken** — ₹{payment.amount_inr:,.0f}")
+            steps.append(("placed", "Payment taken", f"₹{payment.amount_inr:,.0f}", []))
         else:
-            st.markdown(f"**Payment failed** — {payment.headline}")
+            steps.append(("stopped", "Payment failed", payment.headline, []))
 
         # Retries are worth showing: a first decline followed by a success is the
         # system recovering, and hiding it would make the log look nicer than the
-        # run actually was.
+        # run actually was. They sit UNDER the payment step rather than beside it,
+        # because the decline and the retry are one event, not two.
         if payment.declines:
-            for attempt in payment.attempts:
-                st.caption(f"Attempt {attempt.attempt}: {attempt.outcome.label} — {attempt.reason}")
-        if payment.escalation is not None:
-            _escalation_options(payment.escalation)
+            # The reason is only present on a decline, so it is appended rather
+            # than interpolated. Formatting it in unconditionally left the
+            # successful retry reading "Attempt 2: went through - " with a dash
+            # pointing at nothing.
+            steps[-1][3].extend(
+                f"Attempt {attempt.attempt}: {attempt.outcome.label}"
+                + (f" — {attempt.reason}" if attempt.reason else "")
+                for attempt in payment.attempts
+            )
+
+    ui.outcome_steps(steps)
+
+    if not confirmation.confirmed and confirmation.escalation is not None:
+        _escalation_options(confirmation.escalation)
+    if payment is not None and payment.escalation is not None:
+        _escalation_options(payment.escalation)
 
     if summary is not None:
         st.markdown("")

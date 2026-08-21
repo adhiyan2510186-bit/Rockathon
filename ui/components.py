@@ -254,6 +254,44 @@ def trace(entries: Sequence, reasons: bool = True) -> None:
     st.markdown(f'<div class="trail">{"".join(rows)}</div>', unsafe_allow_html=True)
 
 
+def outcome_steps(items: Sequence[tuple[str, str, str, Sequence[str]]]) -> None:
+    """What happened after approval, as the same rail the record uses.
+
+    Each item is `(status kind, title, note, sub-lines)`. The kind drives the
+    node colour through theme.status, so a step that stopped is the same orange
+    as the tag that says so elsewhere - one vocabulary of colour across the app,
+    not a second one invented for this screen.
+
+    WHY THE SAME RAIL AS THE AUDIT TRAIL. Confirmation, payment and close are
+    literally the tail of the same sequence: they are the events the record will
+    show, seen while they are still the freshest thing that happened. Drawing
+    them as a different kind of list would suggest they are a different kind of
+    thing, and then a reader has to work out that "Payment taken" here and "Did"
+    on the record are one event.
+
+    Sub-lines are indented under their step rather than promoted to steps of
+    their own. A payment that declined and then succeeded is ONE thing that
+    happened; two nodes would make a recovery read as two separate events, which
+    would flatter us in the wrong direction.
+    """
+    rows = []
+    for kind, title, note, subs in items:
+        colour, _mark, _word = theme.status(kind)
+        note_html = f'<div class="step-why">{escape(note)}</div>' if note else ""
+        sub_html = "".join(
+            f'<div class="step-sub">{escape(sub)}</div>' for sub in subs
+        )
+        rows.append(
+            f'<div class="step" style="--step-colour:{colour}">'
+            f'<span class="step-node"></span>'
+            f'<div class="step-body">'
+            f'<div class="step-head"><span class="step-word">{escape(title)}</span></div>'
+            f"{note_html}{sub_html}</div></div>"
+        )
+
+    st.markdown(f'<div class="trail">{"".join(rows)}</div>', unsafe_allow_html=True)
+
+
 # ---------------------------------------------------------------------------
 # Identity — who is selling it, and what it actually is
 # ---------------------------------------------------------------------------

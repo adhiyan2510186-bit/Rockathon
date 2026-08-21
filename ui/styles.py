@@ -94,15 +94,31 @@ def css(p: "Palette") -> str:
          away and the other two read as a mistake - a see-through box, or a box
          with a stripe on it.
 
-         The BLUR is a fourth thing and it is deliberately not on all of them.
-         A blur costs a GPU pass per element per frame and only has an effect
-         where there is something behind the panel worth softening. Two surfaces
-         qualify - the recommendation and the sidebar, both of which lie across
-         the canvas pools and the grid. A figure tile sitting on flat canvas
-         would pay the whole cost to blur nothing, so it does not ask. */
+         THERE IS NO backdrop-filter ANYWHERE, AND IT WAS TAKEN OUT ON PURPOSE.
+         Glass panels normally reach for one, and two of ours had one. What we
+         actually observed, twice, is the renderer going unresponsive for tens
+         of seconds during ordinary use - once mid-scroll, once after approval -
+         on the laptop this will be demonstrated from: an Intel UHD 620 at 1.5x
+         scaling, compositing a blurred region behind a full-height sidebar.
+
+         Being straight about the evidence: that is two reproductions of a stall,
+         not a clean frame-rate benchmark. We tried to take one and the harness
+         for it stalled the page by itself, which tells us the machine is close
+         to its limit here but does not give us a number. So the honest claim is
+         the small one - the blur was present when the page hung, the page has
+         not hung since it went, and we did not measure the difference.
+
+         What that cost us is close to nothing, which is why the trade was easy.
+         A blur only shows you anything if what is behind the panel has detail
+         to smear. Behind ours is a near-black canvas carrying soft gradients
+         and a 3%-opacity grid; there is nothing there to soften. The glass read
+         is carried by the other three properties - the fill is translucent so
+         the grid genuinely passes through the panel, the top edge catches a
+         highlight, and the shadow lifts it off the page.
+
+         A stutter on a projector costs more than an effect nobody can see. */
       --glass-fill: {p.tint(p.surface, 0.72)};
       --glass-fill-2: {p.tint(p.surface_2, 0.72)};
-      --blur: 14px;
       --sheen: {sheen};
       --sheen-hi: {sheen_hi};
       --lift: {lift};
@@ -287,15 +303,12 @@ def css(p: "Palette") -> str:
      Every panel in this app is the same recipe, held in `--glass-*` at the top
      of the sheet: the surface at 72% so the canvas shows through it, a 1px
      highlight along the top edge where light would land, and a shadow
-     underneath. The recommendation and the sidebar add a blur on top of that,
-     because those two lie across the canvas pools and so have something behind
-     them worth softening; the rest sit on flat canvas and would be paying a GPU
-     pass per frame to blur nothing.
+     underneath. No blur on any of them - see the note by --glass-fill for why
+     the one we had was measured out again.
 
-     The three that are always present only work as a set. A highlight with no
-     shadow is a box with a stripe on it. Together they say the panel is a sheet
-     lying above the page, which is the one thing a flat rectangle on a flat
-     page cannot say.
+     The three only work as a set. A highlight with no shadow is a box with a
+     stripe on it. Together they say the panel is a sheet lying above the page,
+     which is the one thing a flat rectangle on a flat page cannot say.
 
      The hairline is still on every panel and still does the same job it always
      did. Depth tells you a panel is a separate object; the border tells you
@@ -318,8 +331,6 @@ def css(p: "Palette") -> str:
           linear-gradient(100deg, var(--hero-tint), transparent 42%),
           linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.015)),
           var(--glass-fill);
-      backdrop-filter: blur(var(--blur)) saturate(1.15);
-      -webkit-backdrop-filter: blur(var(--blur)) saturate(1.15);
       border: 1px solid var(--border);
       border-left: 2px solid var(--accent); border-radius: 10px;
       padding: 1.25rem 1.5rem; margin-bottom: 1rem;
@@ -621,8 +632,6 @@ def css(p: "Palette") -> str:
       background:
           linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0)),
           var(--glass-fill);
-      backdrop-filter: blur(18px) saturate(1.2);
-      -webkit-backdrop-filter: blur(18px) saturate(1.2);
       border-right: 1px solid var(--border);
   }}
   [data-testid="stSidebar"] .block-container {{ padding-top: 1.5rem; }}
@@ -710,6 +719,75 @@ def css(p: "Palette") -> str:
   .step-why {{
       font-size: 0.8125rem; color: var(--ink-muted);
       line-height: 1.5; margin-top: 0.25rem; max-width: 68ch;
+  }}
+  /* A sub-line under a step: a retry attempt, a lock reference. Indented under
+     its own step rather than made into a step of its own, because a payment
+     that declined and then succeeded is ONE thing that happened, and splitting
+     it into two nodes would make a recovery look like two separate events. */
+  .step-sub {{
+      font-size: 0.75rem; color: var(--ink-faint); line-height: 1.5;
+      margin-top: 0.1875rem;
+  }}
+  .step-ref {{ font-family: var(--mono); letter-spacing: -0.01em; }}
+
+  /* ---- repeat-order cards ----------------------------------------------- */
+  /* THESE ARE STREAMLIT BUTTONS AND THEY HAVE TO STAY STREAMLIT BUTTONS.
+     The test suite selects them by key, and a div with an onclick is not a
+     button to a keyboard or a screen reader. So rather than rebuilding the
+     control, the control is restyled in place.
+
+     The hook is an empty marker span that app.py drops into the same container
+     as the buttons; `:has()` then reaches back up to the block and down to the
+     buttons inside it. This is the one selector in the sheet that depends on
+     Streamlit's DOM shape, which is why it is called out here - if a Streamlit
+     upgrade ever moves the wrapper, these cards quietly become plain buttons
+     and nothing else breaks. That is the correct way round for a demo. */
+  .recent-anchor {{ display: none; }}
+  [data-testid="stElementContainer"]:has(.recent-anchor) {{ display: none; }}
+  [data-testid="stVerticalBlock"]:has(.recent-anchor) .stButton > button {{
+      width: 100%; min-height: 4rem; height: 100%;
+      display: flex; align-items: center; justify-content: flex-start;
+      text-align: left; white-space: normal; line-height: 1.45;
+      padding: 0.875rem 1rem; border-radius: 10px;
+      background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.012)),
+          var(--glass-fill);
+      border: 1px solid var(--border);
+      border-left: 2px solid var(--border-strong);
+      box-shadow: inset 0 1px 0 var(--sheen), var(--lift);
+      color: var(--ink-2);
+      transition: transform var(--dur) var(--ease),
+                  box-shadow var(--dur) var(--ease),
+                  border-color var(--dur) var(--ease),
+                  color var(--dur) var(--ease);
+  }}
+  /* The left edge is the tell. It is neutral at rest and brand under the
+     cursor, so the card being pointed at is the one wearing the accent - the
+     same 2px edge the recommendation panel uses to say "this is the one". */
+  [data-testid="stVerticalBlock"]:has(.recent-anchor) .stButton > button:hover {{
+      transform: translateY(-2px); color: var(--ink);
+      border-color: var(--border-strong); border-left-color: var(--accent);
+      box-shadow: inset 0 1px 0 var(--sheen-hi), var(--glow);
+  }}
+  [data-testid="stVerticalBlock"]:has(.recent-anchor) .stButton > button:focus-visible {{
+      outline: 2px solid var(--accent); outline-offset: 2px;
+  }}
+  /* Streamlit centres a button's label with a flex row INSIDE the button, so
+     setting text-align on the button itself does nothing - the label is a
+     centred flex item that happens to have left-aligned text in it. The label
+     has to be told to fill its row before the alignment means anything. */
+  [data-testid="stVerticalBlock"]:has(.recent-anchor) .stButton > button > div {{
+      width: 100%; justify-content: flex-start;
+  }}
+  [data-testid="stVerticalBlock"]:has(.recent-anchor) .stButton p {{
+      text-align: left; margin: 0; font-size: 0.8125rem; line-height: 1.5;
+  }}
+  /* The item is the thing being reordered; the terms are how it was bought last
+     time. Two weights, one card, so the eye picks four items out of the grid
+     before it reads a single price. */
+  [data-testid="stVerticalBlock"]:has(.recent-anchor) .stButton strong {{
+      display: block; color: var(--ink); font-weight: 600; font-size: 0.875rem;
+      margin-bottom: 0.125rem;
   }}
 
   /* ---- motion ----------------------------------------------------------- */
