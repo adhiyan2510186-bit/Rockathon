@@ -993,6 +993,76 @@ SECTION 8.8 - MORE THAN ONE KIND OF PURCHASE
                  had not moved the ranking we would not have asked, because a
                  question that cannot change the answer is just friction."
 
+
+8.8.8  THE TRAP: EVERY WAY OF SAYING "NO" IS BUILT OUT OF THE WORD "YES"
+    We tested our parser on briefs that told it what to care about. Nobody had
+    tested one that told it what NOT to care about. So we typed "40 headsets,
+    over-ear, within 12 days. Don't care about price."
+
+    The parser scored price UP. It scanned the clause for strength words, found
+    "care about" sitting inside "don't care about", and recorded price as
+    mattering - on that category, a rise from the 0.25 default to 0.30. The
+    agent had taken the one instruction the buyer gave it and applied its
+    opposite. Nothing crashed, no gate misfired, and the approval screen printed
+    a confident weight next to the word "user-stated".
+
+    The deeper fault was that we could not have got it right even in principle.
+    Our phrase table had three labels and the weakest was nice_to_have at 0.15,
+    so there was no value in the system that meant "this criterion should not
+    count". A dismissal had nowhere to land.
+
+    What we do: a fourth label, does_not_matter, at 0.00 in config.yaml - and it
+    is the only weight allowed to be zero, which the config validator now says
+    out loud. Then the offline parser checks negation cues BEFORE any strength
+    phrase, because that ordering is the whole fix: in English every dismissal
+    is an endorsement with a "not" in front of it, so a matcher that looks for
+    endorsements first will always read them backwards. The Gemini prompt learnt
+    the same rule, and we checked both paths return does_not_matter on the same
+    sentence.
+
+    Zero is the honest number. It does not mean we ignored the criterion; it
+    means the buyer removed it, and the score breakdown shows a 0.00 next to
+    "user-stated (does not matter)" rather than hiding it.
+
+    THE LINE: "Ask it for the cheapest option and it works. Tell it you don't
+    care about price and it used to make price matter MORE - because the words
+    'care about' are inside 'don't care about'. Every way of saying no in
+    English is built out of the word yes. We check the negation first now, and
+    we added a weight of zero, because until we did there was no number in the
+    system that meant 'the buyer took this off the table'."
+
+
+8.8.9  THE TRAP: WE INVENTED A NUMBER AND THEN ENFORCED IT
+    Type "40 headsets, over-ear, within 12 days" - a complete, buyable brief -
+    and the agent used to silently throw away every headset over Rs 5,000.
+
+    That ceiling came from our config file. The buyer never said it, never saw
+    it, and could not argue with it. And we knew it was a guess: stage 1 already
+    marked the field ASSUMED and wrote an audit entry saying so. Then stage 3
+    read the value, ignored the mark, and used it as a pass/fail gate. The pool
+    came back thin and the screen blamed the vendors.
+
+    Naive: a price cap is a hard constraint, so apply it. It is in the config,
+    so it must be the policy.
+
+    What we do: the filter reads the provenance flag it was already writing. A
+    stated ceiling still excludes products above it. An assumed one excludes
+    nothing - price falls through to stage 4 and is SCORED instead, so expensive
+    costs a product points rather than its place in the pool. The chip on screen
+    says "no price ceiling given" instead of printing a limit we made up, and
+    the audit entry records price_gate_applied: false so the log never claims a
+    check that did not run.
+
+    Nothing gets bought recklessly as a result: with no ceiling, an expensive
+    winner pushes the order total past the authorisation limit and stage 5
+    escalates to a human. The safety net is the limit, which is real - not the
+    guess, which was not.
+
+    THE LINE: "We were already recording that the price cap was our assumption
+    and not the buyer's instruction. We just weren't reading our own note - the
+    filter took the guess and enforced it like policy. An assumption is allowed
+    to fill in a blank. It is not allowed to disqualify anybody."
+
 ================================================================================
 SECTION 9 - LIKELY QUESTIONS, AND THE SHORT ANSWER
 ================================================================================
@@ -1042,5 +1112,5 @@ differently, and we had a reason. Same shape every time:
 Skip anything that is just a feature description. This file is only for the
 places where we can show judgement.
 
-Last updated: after the audit view got the supplier badge, the spec badges and the
-worked-out score sum (8.5.12, 8.5.13).
+Last updated: after the brief parser stopped inverting "don't care about price"
+and the filter stopped enforcing a price cap we invented ourselves (8.8.8, 8.8.9).

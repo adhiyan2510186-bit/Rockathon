@@ -165,8 +165,8 @@ def check_scope(text: str, audit: AuditLogger | None = None) -> ScopeOutcome:
                 "Message is not a procurement brief, so no discovery was started.",
                 {"user_message": text[:200], "action": "declined, scope stated"},
             )
-    elif check.verdict == "incomplete":
-        missing = [field for field in check.missing_fields if field in REQUIRED_FOR_DISCOVERY]
+    elif check.verdict == "incomplete" and _blockers(check):
+        missing = _blockers(check)
         question = check.question or _default_question(missing)
         verdict = ScopeVerdict(verdict="incomplete", message=question, missing_fields=missing)
         if audit:
@@ -180,6 +180,23 @@ def check_scope(text: str, audit: AuditLogger | None = None) -> ScopeOutcome:
         verdict = ScopeVerdict(verdict="in_scope", message="", missing_fields=[])
 
     return ScopeOutcome(verdict=verdict, source=source, note=note)
+
+
+def _blockers(check: _ScopeCheck) -> list[str]:
+    """The missing fields that are actually worth stopping the user for.
+
+    The model is asked about three fields but can name others, and anything with
+    a declared default in config.yaml is not a blocker — we fill it in and log it
+    as an assumption instead of interrupting.
+
+    This filter used to be applied to the field list while the model's QUESTION
+    was passed through untouched, which let the two disagree: a run could report
+    nothing missing and still stop to ask about a price ceiling, leaving the user
+    answering a question the agent had already decided it did not need. Now an
+    empty list after filtering means there is nothing to ask, and check_scope
+    proceeds.
+    """
+    return [field for field in check.missing_fields if field in REQUIRED_FOR_DISCOVERY]
 
 
 def _default_question(missing: list[str]) -> str:
@@ -274,12 +291,17 @@ def _to_brief(raw_text: str, extraction: _Extraction, audit: AuditLogger | None)
     # phrase we have no weight for, dropping it means the criterion falls back to
     # its category default — a documented number — instead of stage 2 inventing
     # one at runtime.
+    #
+    # A duplicate criterion keeps the FIRST reading, matching the offline parser's
+    # rule. This used to be a plain dict comprehension, which silently kept the
+    # LAST — so if the model returned reliability twice, the two parsers could
+    # disagree about the same sentence, and neither of them said so. Contradictory
+    # input deserves one documented rule, applied the same way on both paths.
     known = set(config.priority_phrase_labels())
-    priorities = {
-        item.criterion: item.phrase
-        for item in extraction.stated_priorities
-        if item.phrase in known
-    }
+    priorities: dict[str, str] = {}
+    for item in extraction.stated_priorities:
+        if item.phrase in known and item.criterion not in priorities:
+            priorities[item.criterion] = item.phrase
 
     return Brief(
         raw_text=raw_text,
@@ -421,7 +443,22 @@ def _extraction_task() -> str:
         "A preference does not have to name the criterion to be one. 'As cheap as "
         "possible' and 'the cheapest you can find' are price at the strongest "
         "label; 'whatever is most reliable' is reliability; 'we need these fast' "
-        "is delivery. A superlative about the purchase is a stated priority.\n\n"
+        "is delivery. A superlative about the purchase is a stated priority.\n"
+        # Added because the schema had no way to express this at all. The weakest
+        # label used to be nice_to_have, so a buyer who dismissed a criterion
+        # outright could only be recorded as mildly wanting it - and the offline
+        # parser did worse, reading "don't care about price" as price MATTERING
+        # because the words "care about" sit inside it. A criterion the buyer
+        # waved away must be able to score zero, or we are quietly overruling the
+        # one instruction they gave us.
+        "A preference can also be NEGATIVE, and that is still a stated priority. "
+        "'Don't care about price', 'price is not a concern', 'no preference on "
+        "delivery' and 'we're not fussy about the warranty' all mean the buyer "
+        "wants that criterion to carry no weight - pick the label whose own name "
+        "says the criterion does not matter. Choose the label by reading its "
+        "name; the names mean what they say. "
+        "Saying nothing about a criterion is different and is NOT a "
+        "priority: leave it out entirely.\n\n"
         "Leave a numeric field null if the user did not state it. Never guess a "
         "number. Put physical or technical requirements - materials, "
         "dimensions, sizes, capacities - in specs.\n\n"
@@ -501,11 +538,41 @@ _PRIORITY_WORDS: dict[str, tuple[str, ...]] = {
 
 # Strongest phrasing first — "matters a lot" also contains "matters", so order
 # decides the answer and the strongest reading must win.
+#
+# The superlatives in the first row were added to match what the Gemini prompt
+# already tells the model. Without them "5,000 boxes, as cheap as possible" came
+# back with NO priority at all: "cheap" found the price criterion, and then not
+# one strength phrase matched, so the only thing the buyer actually said was
+# dropped and the category default silently took its place. A missed spec ends in
+# an honest refusal; a missed priority ends in a confident recommendation ranked
+# against something they never asked for.
 _PHRASE_PATTERNS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("matters_a_lot", ("matters a lot", "really matters", "very important", "critical",
-                       "top priority", "non-negotiable", "matters most", "hugely")),
+                       "top priority", "non-negotiable", "matters most", "hugely",
+                       "cheapest", "as cheap as possible", "as much as possible",
+                       "as low as possible", "as fast as possible", "asap",
+                       "is everything", "most important", "above all",
+                       "budget is tight", "tight budget", "absolutely")),
     ("matters", ("matters", "important", "care about", "priority", "prefer")),
     ("nice_to_have", ("nice to have", "would be nice", "bonus", "if possible", "ideally")),
+)
+
+# Checked BEFORE any strength phrase, because a dismissal reads like an
+# endorsement to a substring matcher. "Don't care about price" contains "care
+# about", so the old code scored price at 0.30 — up from the 0.25 default on some
+# categories. The parser did the exact opposite of what the buyer said, and
+# nothing on screen looked wrong.
+#
+# These are cues about the CLAUSE, not about a criterion, so they live apart from
+# _PRIORITY_WORDS: the clause still has to name a criterion before we record
+# anything, or "whatever you think" would zero a column nobody mentioned.
+_NEGATION_CUES: tuple[str, ...] = (
+    "don't care", "dont care", "do not care", "not care", "couldn't care",
+    "no preference", "not fussed", "not bothered", "not worried",
+    "not a concern", "isn't a concern", "is not a concern", "no concern",
+    "doesn't matter", "does not matter", "dont matter", "not important",
+    "not fussy", "no strong", "whatever", "don't mind", "dont mind",
+    "do not mind", "least of", "not a priority", "no issue with",
 )
 
 # The offline parser's idea of where a product name stops. Everything in
@@ -531,6 +598,65 @@ _LEAD_IN: frozenset[str] = frozenset({
 })
 
 
+# Trade shorthand for order sizes. "10k boxes" is how a real reorder gets typed.
+_SCALE_SUFFIXES: dict[str, int] = {
+    "k": 1_000, "thousand": 1_000,
+    "m": 1_000_000, "million": 1_000_000,
+    "lakh": 100_000, "lakhs": 100_000,
+}
+
+# Enough English to read an order size written out in words. Deliberately small:
+# this only runs when the sentence contains no digit at all, so it is a rescue
+# path for "two hundred chairs", not a general number parser.
+_WORD_NUMBERS: dict[str, int] = {
+    "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7,
+    "eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12,
+    "thirteen": 13, "fourteen": 14, "fifteen": 15, "sixteen": 16,
+    "seventeen": 17, "eighteen": 18, "nineteen": 19, "twenty": 20,
+    "thirty": 30, "forty": 40, "fifty": 50, "sixty": 60, "seventy": 70,
+    "eighty": 80, "ninety": 90, "dozen": 12,
+}
+
+_WORD_SCALES: dict[str, int] = {
+    "hundred": 100, "thousand": 1_000, "lakh": 100_000, "lakhs": 100_000,
+    "million": 1_000_000,
+}
+
+
+def _word_number(segment: str) -> int | None:
+    """Read an order size written in words ("two hundred" -> 200), or None.
+
+    Stops at the first word that is not part of the number, so "two hundred
+    chairs" reads 200 and does not wander into the rest of the sentence. "and" is
+    allowed through the middle ("one thousand and fifty") because it is how the
+    number is spoken, not a break in it.
+    """
+    total = 0
+    current = 0
+    started = False
+
+    for word in re.findall(r"[a-z]+", segment):
+        if word in _WORD_NUMBERS:
+            current += _WORD_NUMBERS[word]
+            started = True
+        elif word in _WORD_SCALES:
+            scale = _WORD_SCALES[word]
+            # "hundred" multiplies what we are holding; "thousand" and above bank
+            # it, so "two hundred thousand" is 200,000 rather than 100,000 + 2.
+            if scale >= 1_000:
+                total += max(current, 1) * scale
+                current = 0
+            else:
+                current = max(current, 1) * scale
+            started = True
+        elif word == "and" and started:
+            continue
+        elif started:
+            break
+
+    return (total + current) or None
+
+
 def _noun_phrase(segment: str) -> str:
     """Read a product name out of one stretch of the sentence, or return "".
 
@@ -548,6 +674,28 @@ def _noun_phrase(segment: str) -> str:
             break
         kept.append(word)
     return " ".join(kept[:5])
+
+
+def _clause_strength(clause: str) -> str | None:
+    """How strongly this clause speaks about whatever criterion it names.
+
+    Returns a phrase LABEL, or None when the clause mentions a criterion without
+    saying anything about how much it counts ("delivered within 10 days" names
+    delivery and states a requirement, not a preference).
+
+    Negation is tested FIRST and that ordering is the whole point of the
+    function. Every dismissal in English is built out of endorsement words with a
+    "not" in front, so a matcher that scans for endorsements first reads "don't
+    care about price" as "care about price" and scores the criterion UP. Checking
+    the negation cues before the strength phrases is what stops the parser
+    inverting the one instruction the buyer gave us.
+    """
+    if any(cue in clause for cue in _NEGATION_CUES):
+        return "does_not_matter"
+    for label, phrases in _PHRASE_PATTERNS:
+        if any(phrase in clause for phrase in phrases):
+            return label
+    return None
 
 
 def _offline_scope(text: str) -> _ScopeCheck:
@@ -644,10 +792,29 @@ def _offline_extract(text: str) -> _Extraction:
     # --- quantity ----------------------------------------------------------
     # With price, delivery and dimensions removed, the first remaining number is
     # the quantity in every brief shaped like ours ("5,000 kraft mailer boxes").
+    #
+    # The trailing scale word is why this is not just `(\d[\d,]*)` any more.
+    # "reorder 10k mailer boxes" used to parse as a quantity of TEN, which is the
+    # worst class of bug we have: the agent goes on to price, rank, authorise and
+    # buy ten boxes instead of ten thousand, and every screen looks healthy while
+    # it does. The \b after the optional suffix is what keeps "5,000 kraft" at
+    # 5,000 - the "k" of kraft is not followed by a boundary, so it backtracks
+    # out rather than multiplying the order by a thousand.
     quantity: int | None = None
-    quantity_match = re.search(r"(\d[\d,]*)", working)
+    quantity_match = re.search(
+        r"(\d[\d,]*(?:\.\d+)?)\s*(k|m|lakh|lakhs|thousand|million)?\b", working
+    )
     if quantity_match:
-        quantity = int(quantity_match.group(1).replace(",", ""))
+        magnitude = _SCALE_SUFFIXES.get(quantity_match.group(2) or "", 1)
+        quantity = int(float(quantity_match.group(1).replace(",", "")) * magnitude)
+    else:
+        # No digits anywhere. "Two hundred chairs, delivered within 10 days" used
+        # to be declined as NOT A PURCHASE REQUEST - the 10 belonged to the
+        # delivery window, so once that was removed nothing numeric was left and
+        # the scope gate concluded there was no order in the sentence. Refusing a
+        # real brief outright is worse than misreading one, because there is no
+        # screen for the user to correct.
+        quantity = _word_number(working)
 
     # --- category, when no keyword matched -----------------------------------
     # Keep the USER'S OWN WORDS instead of leaving the field blank. Blank means
@@ -678,15 +845,24 @@ def _offline_extract(text: str) -> _Extraction:
     # We look clause by clause, so "reliability matters a lot" attaches the
     # strength to reliability and not to a criterion mentioned elsewhere in the
     # sentence.
+    #
+    # The splitter no longer breaks on "-". It used to, which tore hyphenated
+    # words in half mid-clause, so "non-negotiable" could never match its own
+    # matters_a_lot phrase - the clause ended at the hyphen.
+    #
+    # First mention of a criterion wins, as before. Two clauses disagreeing about
+    # the same criterion is genuinely ambiguous input and we would rather apply
+    # one documented rule than invent a cleverer one nobody can predict.
     priorities: list[_StatedPriority] = []
-    for clause in re.split(r"[.;,—\-]{1,2}|\band\b", lowered):
+    for clause in re.split(r"[.;,—]{1,2}|\band\b", lowered):
         for criterion, keywords in _PRIORITY_WORDS.items():
-            if any(word in clause for word in keywords):
-                for label, phrases in _PHRASE_PATTERNS:
-                    if any(phrase in clause for phrase in phrases):
-                        if criterion not in {item.criterion for item in priorities}:
-                            priorities.append(_StatedPriority(criterion=criterion, phrase=label))
-                        break
+            if not any(word in clause for word in keywords):
+                continue
+            if criterion in {item.criterion for item in priorities}:
+                continue
+            label = _clause_strength(clause)
+            if label is not None:
+                priorities.append(_StatedPriority(criterion=criterion, phrase=label))
 
     return _Extraction(
         category=category,

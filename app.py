@@ -68,7 +68,7 @@ from agent import (
     vendor,
     weights as weights_module,
 )
-from agent.models import TransactionContext, TransactionStatus
+from agent.models import FieldStatus, TransactionContext, TransactionStatus
 from ui import charts, components as ui, theme
 
 DEMO_BRIEF = (
@@ -343,10 +343,33 @@ def rank_and_authorise() -> None:
         return
 
     # -- ranking: pure Python, same answer every run ------------------------
+    # The price cap does double duty: stage 3 filters on it, and stage 4 measures
+    # the price score against it (ranking._margin). Those two jobs used to be the
+    # same number for the same reason. They are not any more — stage 3 now
+    # declines to filter on a cap we invented — so it is worth saying which job
+    # this line is doing. This is the YARDSTICK, not the gate.
+    #
+    # The declared category ceiling stays the yardstick even when it is ours
+    # rather than the buyer's, and that is deliberate. We tried measuring against
+    # the dearest product that qualified instead, and one Rs 59,900 outlier in a
+    # pool of Rs 3,000 headsets squashed every sane product into the same 0.97
+    # and deleted price from the ranking. A documented category ceiling gives
+    # honest separation among the products a buyer would actually consider, and
+    # lets the outlier score zero, which is what it deserves.
+    #
+    # The fallback below is for the one case that makes the yardstick meaningless:
+    # nothing in the pool is under it at all, so every product would tie on zero.
+    scoring_cap = brief.max_price_per_unit_inr
+    if (
+        brief.field_status.get("max_price_per_unit_inr") is FieldStatus.ASSUMED
+        and all(p.price_per_unit_inr >= scoring_cap for p in ctx.eligible)
+    ):
+        scoring_cap = max(p.price_per_unit_inr for p in ctx.eligible)
+
     ctx.ranked = ranking.rank(
         ctx.eligible,
         ctx.weights,
-        brief.max_price_per_unit_inr,
+        scoring_cap,
         brief.max_delivery_days,
         log,
     )
@@ -592,15 +615,33 @@ def _brief_readback(ctx) -> None:
     brief = ctx.brief
     palette = theme.active()
 
+    # A ceiling the buyer stated is a requirement. A ceiling we filled in from
+    # config is not, and since stage 3 no longer filters on it, showing it as one
+    # would be the screen claiming a check that never ran.
+    cap_stated = (
+        brief.field_status.get("max_price_per_unit_inr") is not FieldStatus.ASSUMED
+    )
+    price_chip = (
+        f"max ₹{brief.max_price_per_unit_inr:.2f}/unit" if cap_stated
+        else "no price ceiling given"
+    )
+
     ui.section("What we understood")
     ui.chips([
         (f"{brief.quantity:,} {config.unit_noun(brief.category)}", palette.accent),
         (brief.category, None),
         *[(spec, None) for spec in brief.specs],
-        (f"max ₹{brief.max_price_per_unit_inr:.2f}/unit", None),
+        (price_chip, None),
         (f"within {brief.max_delivery_days} days", None),
     ])
-    st.caption("Any product missing one of these is not considered.")
+    if cap_stated:
+        st.caption("Any product missing one of these is not considered.")
+    else:
+        st.caption(
+            "Any product missing one of these is not considered. You set no price "
+            "limit, so nothing was ruled out on cost — price still counts towards "
+            "the ranking below."
+        )
 
     if ctx.weights:
         st.markdown("")
@@ -629,7 +670,12 @@ def _brief_readback(ctx) -> None:
             "category": brief.category,
             "quantity": brief.quantity,
             "specs": brief.specs,
-            "max_price_per_unit_inr": brief.max_price_per_unit_inr,
+            "max_price_per_unit_inr": (
+                brief.max_price_per_unit_inr if cap_stated
+                else f"none stated — not used as a filter (our {brief.category} "
+                     f"default of ₹{brief.max_price_per_unit_inr:.2f} was recorded "
+                     f"as an assumption, not applied as a limit)"
+            ),
             "max_delivery_days": brief.max_delivery_days,
         })
         if ctx.weights:

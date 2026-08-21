@@ -241,10 +241,22 @@ categories:
 # LLM extracts which phrase the user used for a given criterion (Stage 1);
 # Python looks up the numeric weight here. The LLM never invents or computes
 # the number itself.
+#
+# does_not_matter is 0.00 ON PURPOSE, and it is the only weight here that may be
+# zero. Without it there is no way for a buyer to say "I don't care about price"
+# — the weakest label we had was nice_to_have (0.15), which on most categories is
+# still a DOWN-weight of something they explicitly dismissed rather than a
+# removal of it. Worse, the offline parser used to read "don't care about price"
+# as price *mattering*, because the words "care about" appear inside it.
+#
+# A zero weight is honest: it means this criterion contributed nothing to the
+# ranking, and the approval screen says exactly that. It is not the same as an
+# unstated criterion, which gets the documented category default instead.
 priority_phrase_weights:
   matters_a_lot: 0.45
   matters: 0.30
   nice_to_have: 0.15
+  does_not_matter: 0.00
 
 # ---------------------------------------------------------------------------
 # Stage 2 — weight rounding step

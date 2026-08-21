@@ -140,11 +140,18 @@ def _validate(raw: dict[str, Any]) -> None:
 
     # Stage 2 rescales around whichever criterion the user prioritised, so a
     # stated weight of 1.0 or more would leave nothing for the other criteria.
+    #
+    # Zero IS allowed, and the bound used to be `0 <` until does_not_matter
+    # existed. A buyer who says "I don't care about price" has stated a
+    # preference, and the honest number for it is 0.00 — the criterion took no
+    # part in the ranking. Anything above zero would be us quietly overruling
+    # them. Zero is safe to rescale around for the same reason 0.15 is: it only
+    # ever leaves MORE room for the other three, never less.
     for phrase, weight in raw["priority_phrase_weights"].items():
-        if not 0 < weight < 1:
+        if not 0 <= weight < 1:
             raise ConfigError(
-                f"priority_phrase_weights['{phrase}'] is {weight}; it must be between 0 and 1 "
-                f"so the remaining criteria still have room to be rescaled."
+                f"priority_phrase_weights['{phrase}'] is {weight}; it must be at least 0 and "
+                f"below 1 so the remaining criteria still have room to be rescaled."
             )
 
     # A step of 0 would divide by zero when rounding; a step above 0.25 would

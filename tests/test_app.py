@@ -378,6 +378,58 @@ def test_a_category_we_do_not_stock_is_declined_by_name():
     assert "packaging" in surface and "furniture" in surface and "laptops" in surface
 
 
+def test_a_brief_with_no_price_ceiling_ranks_instead_of_rejecting():
+    """The buyer set no limit, so nothing may be excluded for costing too much.
+
+    Stage 1 still fills a cap in from config.yaml so nothing downstream holds a
+    None, but it marks the field ASSUMED and stage 3 declines to gate on it.
+    Before this, "40 headsets, over-ear, within 12 days" silently binned every
+    headset over our invented Rs 5,000 and the screen blamed the vendors.
+    """
+    app = _fresh()
+    app.chat_input[0].set_value("40 headsets, over-ear, within 12 days").run()
+    app = _answer_context(app, "All-day calls at a desk")
+
+    assert not app.exception
+    results = app.session_state["ctx"].filter_results
+    assert results, "nothing was considered, so this proves nothing"
+    assert not any("max_price_per_unit_inr" in r.violations for r in results)
+
+    surface = _surface_text(app)
+    assert "no price ceiling given" in surface.lower()
+
+
+def test_one_luxury_outlier_does_not_flatten_the_price_column():
+    """Price still has to separate the products a buyer would actually consider.
+
+    With no stated ceiling the pool contains a Rs 59,900 pair of AirPods next to
+    Rs 3,000 headsets. Measuring price against the dearest survivor squashed
+    every sane product to the same ~0.97 and quietly deleted price from the
+    ranking, so we measure against the declared category ceiling instead and let
+    the outlier score zero — which is what it deserves against a headset budget.
+    """
+    app = _fresh()
+    app.chat_input[0].set_value("40 headsets, over-ear, within 12 days").run()
+    app = _answer_context(app, "All-day calls at a desk")
+    assert not app.exception
+
+    ranked = app.session_state["ctx"].ranked
+    assert ranked, "nothing was ranked"
+
+    price_scores = {
+        s.product.price_per_unit_inr: term.normalised
+        for s in ranked for term in s.terms if term.criterion == "price"
+    }
+    dearest = max(price_scores)
+    assert price_scores[dearest] == 0.0, "the outlier should score nothing on price"
+
+    # The affordable ones must still be told apart, not bunched at the top.
+    affordable = [v for k, v in price_scores.items() if k < dearest]
+    assert max(affordable) - min(affordable) > 0.1, (
+        f"price stopped discriminating between sane products: {sorted(affordable)}"
+    )
+
+
 def test_the_whole_demo_path_runs_without_an_exception():
     """Brief in, ranked, over the limit, approved, payment declines once, closes."""
     app = _click(_fresh(), "start_recent")

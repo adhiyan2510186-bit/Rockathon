@@ -43,7 +43,7 @@ from functools import lru_cache
 
 from agent import config, sources
 from agent.audit import STAGE_DISCOVERY, AuditLogger
-from agent.models import Brief, FilterResult, Product
+from agent.models import Brief, FieldStatus, FilterResult, Product
 
 # ---------------------------------------------------------------------------
 # Spec vocabulary
@@ -142,6 +142,23 @@ def apply_hard_gates(brief: Brief, products: list[Product]) -> list[FilterResult
     re-derived for every product. The required-spec set does not change between
     products, so rebuilding it per product was the same work repeated for no
     answer — n x m spec normalisations to learn m facts.
+
+    ONE GATE IS CONDITIONAL, AND DELIBERATELY SO
+    --------------------------------------------
+    A hard gate is a promise the BUYER made. We do not enforce a promise we wrote
+    ourselves. When a brief states no per-unit ceiling, stage 1 still fills one in
+    from config.yaml so nothing downstream is left holding a None — but it marks
+    the field ASSUMED, and this function reads that mark and declines to reject
+    anything on it.
+
+    Before this, "40 headsets, over-ear, within 12 days" silently threw out every
+    headset over Rs 5,000 — a number the buyer never said, never saw, and could
+    not argue with. The pool emptied and the screen blamed the vendors. An
+    assumption is allowed to fill a blank; it is not allowed to disqualify a
+    product.
+
+    Price does not stop mattering. It is still scored at stage 4, where being
+    expensive costs a product points instead of its place in the pool.
     """
     # --- brief-side values: constant across the whole pool, computed once
     required_specs = frozenset(spec_key(spec) for spec in brief.specs)
@@ -149,6 +166,9 @@ def apply_hard_gates(brief: Brief, products: list[Product]) -> list[FilterResult
     quantity = brief.quantity
     price_cap = brief.max_price_per_unit_inr
     delivery_cap = brief.max_delivery_days
+    cap_was_stated = (
+        brief.field_status.get("max_price_per_unit_inr") is not FieldStatus.ASSUMED
+    )
 
     results: list[FilterResult] = []
 
@@ -173,7 +193,7 @@ def apply_hard_gates(brief: Brief, products: list[Product]) -> list[FilterResult
             )
 
         # -- negotiable tier: may be surfaced as a near-miss, never relaxed silently
-        if product.price_per_unit_inr > price_cap:
+        if cap_was_stated and product.price_per_unit_inr > price_cap:
             over = product.price_per_unit_inr - price_cap
             violations["max_price_per_unit_inr"] = (
                 f"Rs {product.price_per_unit_inr:.2f} exceeds the Rs "
@@ -211,14 +231,27 @@ def run(
     results = apply_hard_gates(brief, products)
     eligible = [result for result in results if result.passed]
 
+    # Say out loud when a gate did not run. A log that reports "checked against
+    # the hard constraints" while one of them sat out is a log that overstates
+    # what happened, and this is the file that has to be trustworthy about it.
+    cap_was_stated = (
+        brief.field_status.get("max_price_per_unit_inr") is not FieldStatus.ASSUMED
+    )
+    gate_note = (
+        "" if cap_was_stated else
+        " No per-unit ceiling was stated, so nothing was rejected on price; "
+        "price was scored instead."
+    )
+
     if audit:
         audit.decision(
             STAGE_DISCOVERY,
             f"Checked {len(results)} products from {len(used)} source(s) against the "
-            f"hard constraints; {len(eligible)} qualified.",
+            f"hard constraints; {len(eligible)} qualified.{gate_note}",
             {
                 "sources": used,
                 "considered": len(results),
+                "price_gate_applied": cap_was_stated,
                 "eligible": [result.product.label for result in eligible],
                 "rejected": {
                     result.product.label: result.violations

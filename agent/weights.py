@@ -208,10 +208,21 @@ def compute(
         budget = 1.0 - stated_total
         pool = sum(defaults[criterion] for criterion in unstated)
         label = default_label
+
+        # Whether anything was stated at all, captured BEFORE the loop below
+        # starts adding to `values`. This used to read `stated_total == 0`, which
+        # was the same question until does_not_matter arrived: a buyer who says
+        # "I don't care about price" states a priority worth 0.00, so the total
+        # is zero and yet the other three genuinely were rescaled around it
+        # (headphones reliability moves 0.35 -> 0.45). Reporting those as
+        # untouched category defaults would have been a false line on the
+        # approval screen, which is the one screen that has to be true.
+        nothing_stated = not values
+
         for criterion in unstated:
             share = defaults[criterion] / pool if pool else 1.0 / len(unstated)
             values[criterion] = _round_to_step(budget * share)
-            sources[criterion] = label if stated_total == 0 else f"{label}, rescaled"
+            sources[criterion] = label if nothing_stated else f"{label}, rescaled"
 
         # -- step 4 repair: rounding can leave the total a step off 1.0 -------
         _absorb_rounding_drift(values, unstated)
