@@ -46,6 +46,23 @@ if TYPE_CHECKING:
 
 def css(p: "Palette") -> str:
     """Build the stylesheet for one palette. Colour appears only where it means something."""
+    # DEPTH IS MODE-DEPENDENT IN A WAY COLOUR IS NOT.
+    #
+    # A shadow is an absence of light. On a near-black canvas it has to be almost
+    # opaque before it registers at all; the same value over white looks like
+    # soot. So the two modes get their own strength for the same gesture, and
+    # nothing else about the panel changes. This is the only place in the sheet
+    # where a value is chosen by mode rather than read from the palette, and it
+    # is here rather than in ui/theme.py because it is not a colour - it is how
+    # hard to press one surface into another.
+    dark = p.name == "dark"
+    lift = "0 12px 32px -16px rgba(0, 0, 0, 0.85)" if dark else "0 10px 26px -18px rgba(0, 0, 0, 0.16)"
+    lift_hi = "0 20px 46px -18px rgba(0, 0, 0, 0.95)" if dark else "0 18px 38px -18px rgba(0, 0, 0, 0.22)"
+    # The 1px highlight along a panel's top edge. On dark it is white at 7%; on
+    # light the light comes from above anyway, so it is nearly pure white.
+    sheen = "rgba(255, 255, 255, 0.07)" if dark else "rgba(255, 255, 255, 0.85)"
+    sheen_hi = "rgba(255, 255, 255, 0.10)" if dark else "rgba(255, 255, 255, 0.95)"
+
     return f"""
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600&display=swap');
@@ -68,16 +85,66 @@ def css(p: "Palette") -> str:
       --accent-faint: {p.tint(p.accent, 0.04)};
       --font: 'Inter Tight', Inter, -apple-system, 'Segoe UI', system-ui, sans-serif;
       --mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+
+      /* ---- depth ----------------------------------------------------------
+         A panel is not a flat rectangle any more. It is a translucent sheet
+         resting above the canvas, and three things say so together: the surface
+         at 72% so the backdrop shows through it, a blur so what shows through is
+         softened rather than legible, and a 1px highlight along the top edge
+         where the light would land. Take any one away and the other two read as
+         a mistake - a see-through box, or a box with a stripe on it. */
+      --glass-fill: {p.tint(p.surface, 0.72)};
+      --glass-fill-2: {p.tint(p.surface_2, 0.72)};
+      --blur: 14px;
+      --sheen: {sheen};
+      --sheen-hi: {sheen_hi};
+      --lift: {lift};
+      --lift-hi: {lift_hi};
+      /* The brand halo. Used only on the two things that are asking to be acted
+         on - the recommendation and a repeat-order card under the cursor. */
+      --glow: 0 0 0 1px {p.tint(p.accent, 0.30)}, 0 10px 30px -12px {p.tint(p.accent, 0.42)};
+      /* The hairline grid on the canvas, in ink rather than a fixed white, so it
+         is faint dark lines on a light page and faint light ones on a dark one. */
+      --grid: {p.tint(p.ink, 0.035)};
+
+      /* ---- motion ---------------------------------------------------------
+         One curve and two durations for the whole app. Every transition in this
+         sheet names these rather than its own number, because motion that runs
+         at four different speeds on one screen reads as four different products
+         in exactly the way four different greys would. */
+      --ease: cubic-bezier(0.2, 0.7, 0.3, 1);
+      --dur: 180ms;
+      --dur-enter: 300ms;
   }}
 
   /* ---- page ------------------------------------------------------------ */
-  /* One very faint pool of brand colour behind the header, and nothing else on
-     the canvas. It is not a divider and it is not a card - it stops a
-     1120px-wide near-black page reading as an empty terminal, and it fades out
-     entirely before the first panel starts. */
+  /* THE CANVAS IS FIVE LAYERS, AND THE ORDER IS THE WHOLE TRICK.
+     CSS paints background layers first-listed on top, so reading down this list
+     is reading from the front of the page to the back:
+
+       1  brand pool, behind the header. The page's warmest point is where the
+          eye lands first anyway.
+       2  slate pool, low and to the right. Somewhere for the far corner of a
+          1120px page to go that is not flat black. It is the one use of
+          `backdrop` in the palette and it never touches an element.
+       3  vignette. Opaque canvas at the edges, transparent through the middle.
+          It sits ABOVE the grid and BELOW the pools, which is what lets it
+          rub the grid out at the frame without touching either pool.
+       4  the grid itself - 48px hairlines, both directions.
+       5  the flat canvas colour underneath everything.
+
+     A grid running clean to the edge of the frame reads as wallpaper. A grid
+     that dissolves before it gets there reads as depth, and the vignette is the
+     only thing between those two outcomes. It costs one gradient, no mask, no
+     pseudo-element, and nothing that can fight Streamlit for the stacking
+     order - which the pseudo-element version very much can. */
   .stApp {{
       background:
-          radial-gradient(70rem 22rem at 50% -8rem, var(--accent-faint), transparent 70%),
+          radial-gradient(70rem 24rem at 50% -8rem, var(--accent-faint), transparent 70%),
+          radial-gradient(52rem 34rem at 108% 64%, {p.tint(p.backdrop, 0.13)}, transparent 68%),
+          radial-gradient(135% 105% at 50% -5%, transparent 0 42%, var(--canvas) 100%),
+          repeating-linear-gradient(0deg,  var(--grid) 0 1px, transparent 1px 48px),
+          repeating-linear-gradient(90deg, var(--grid) 0 1px, transparent 1px 48px),
           var(--canvas);
       background-attachment: fixed;
       font-family: var(--font);
@@ -199,14 +266,31 @@ def css(p: "Palette") -> str:
      There is exactly one panel class, because there is exactly one kind of
      panel. A generic `.card` used to live here beside it, styled and never
      used by anything - which is how two panel treatments end up on one screen
-     the first time somebody reaches for the wrong one. */
+     the first time somebody reaches for the wrong one.
+
+     WHAT A PANEL IS MADE OF, AND WHY IT IS FOUR THINGS AND NOT ONE
+     --------------------------------------------------------------
+     Every panel in this app is the same recipe, held in `--glass-*` at the top
+     of the sheet: the surface at 72% so the canvas shows through it, a blur so
+     what shows through is softened rather than readable, a 1px highlight along
+     the top edge where light would land, and a shadow underneath.
+
+     They only work as a set. A translucent panel with no blur is a see-through
+     box; a highlight with no shadow is a box with a stripe on it. Together they
+     say the panel is a sheet lying above the page, which is the one thing a
+     flat rectangle on a flat page cannot say.
+
+     The hairline is still on every panel and still does the same job it always
+     did. Depth tells you a panel is a separate object; the border tells you
+     exactly where it stops. On a near-black page a shadow alone is far too
+     vague to be the thing marking an edge, which is why the border did not go
+     anywhere when the shadow arrived. */
 
   /* The recommendation panel. A 2px edge in the accent, and a wash of the same
      colour that has faded out by 40% of the width - so the eye is pulled to the
-     left edge where the eyebrow and the headline start. Still no shadow, and
-     the panel's own boundary is still the same hairline every other panel uses:
-     the wash is dead long before it reaches the border, so it never becomes the
-     thing telling you where the box ends. */
+     left edge where the eyebrow and the headline start. The wash is dead long
+     before it reaches the border, so it never becomes the thing telling you
+     where the box ends. */
   .hero {{
       /* One local variable so the edge, the eyebrow and the wash are always the
          same colour. Each variant below re-points this one line rather than
@@ -215,10 +299,23 @@ def css(p: "Palette") -> str:
       --hero-tint: var(--accent-wash);
       background:
           linear-gradient(100deg, var(--hero-tint), transparent 42%),
-          var(--surface);
+          linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.015)),
+          var(--glass-fill);
+      backdrop-filter: blur(var(--blur)) saturate(1.15);
+      -webkit-backdrop-filter: blur(var(--blur)) saturate(1.15);
       border: 1px solid var(--border);
       border-left: 2px solid var(--accent); border-radius: 10px;
       padding: 1.25rem 1.5rem; margin-bottom: 1rem;
+      box-shadow: inset 0 1px 0 var(--sheen), var(--lift);
+  }}
+  /* The recommendation is the only panel on any screen that is asking for a
+     decision, so it is the only one that answers the cursor with brand colour
+     rather than with another step of neutral depth. */
+  .hero {{
+      transition: box-shadow var(--dur) var(--ease);
+  }}
+  .hero:hover {{
+      box-shadow: inset 0 1px 0 var(--sheen-hi), var(--glow), var(--lift-hi);
   }}
   .hero-eyebrow {{
       display: flex; align-items: center; gap: 0.4375rem;
@@ -258,17 +355,41 @@ def css(p: "Palette") -> str:
      a row of four is the sort of 6px wrongness nobody can name and everybody
      sees. */
   /* The tiles are lit from the top: one step of the neutral band across the
-     tile, top lighter than bottom. It is the smallest amount of depth that
-     makes four flat rectangles read as objects sitting on the page rather than
-     four holes cut out of it - and because it is neutral, not brand, it never
-     competes with the recommendation panel beside it.
+     tile, top lighter than bottom, over the same translucent fill every panel
+     uses. Because the lighting is neutral rather than brand, four tiles in a row
+     never compete with the recommendation panel beside them.
 
-     No hover state, and that is deliberate: none of these tiles is clickable,
-     and a surface that lights up under the cursor is a surface people click. */
+     THEY LIFT UNDER THE CURSOR, AND THEY ARE NOT CLICKABLE. BOTH ON PURPOSE.
+     ------------------------------------------------------------------------
+     The obvious objection is that a surface which reacts to the cursor is a
+     surface people will click. It is a real objection and the answer is that
+     lift is not the affordance - the CURSOR is. `cursor: default` is set on
+     every one of these, so the pointer stays an arrow over a tile and turns
+     into a hand over the one thing on the screen that is actually a button.
+
+     What the lift buys is worth that. On a dark page four figures can read as
+     four holes cut out of the canvas; moving 2px toward the reader under the
+     cursor is the cheapest possible proof that they are objects lying ON the
+     page. It is the same information the shadow is giving statically, offered
+     to anyone who moves a mouse across it. */
   .figure {{
-      background: linear-gradient(180deg, var(--surface-2), var(--surface));
+      background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.012)),
+          var(--glass-fill);
+      backdrop-filter: blur(var(--blur)) saturate(1.15);
+      -webkit-backdrop-filter: blur(var(--blur)) saturate(1.15);
       border: 1px solid var(--border); border-radius: 10px;
       padding: 0.75rem 1rem 0.875rem; min-height: 6rem;
+      box-shadow: inset 0 1px 0 var(--sheen), var(--lift);
+      cursor: default;
+      transition: transform var(--dur) var(--ease),
+                  box-shadow var(--dur) var(--ease),
+                  border-color var(--dur) var(--ease);
+  }}
+  .figure:hover {{
+      transform: translateY(-2px);
+      border-color: var(--border-strong);
+      box-shadow: inset 0 1px 0 var(--sheen-hi), var(--lift-hi);
   }}
   .figure-label {{
       font-size: 0.6875rem; font-weight: 500; letter-spacing: 0.06em;
@@ -402,14 +523,26 @@ def css(p: "Palette") -> str:
 
   /* ---- drill-downs ------------------------------------------------------ */
   /* Collapsed by default and quiet when collapsed. Ten open-looking panels
-     stacked down a page is a wall; ten hairlines is a contents list. */
+     stacked down a page is a wall; ten hairlines is a contents list.
+     These ARE clickable - the whole header is the control - so unlike a figure
+     tile they get the pointer as well as the lift. */
   [data-testid="stExpander"] {{
       border: 1px solid var(--border); border-radius: 10px;
-      background: var(--surface); margin-bottom: 0.5rem;
+      background: var(--glass-fill); margin-bottom: 0.5rem;
+      backdrop-filter: blur(var(--blur)) saturate(1.1);
+      -webkit-backdrop-filter: blur(var(--blur)) saturate(1.1);
+      box-shadow: inset 0 1px 0 var(--sheen);
+      transition: border-color var(--dur) var(--ease),
+                  box-shadow var(--dur) var(--ease);
+  }}
+  [data-testid="stExpander"]:hover {{
+      border-color: var(--border-strong);
+      box-shadow: inset 0 1px 0 var(--sheen-hi), var(--lift);
   }}
   [data-testid="stExpander"] summary {{
       font-size: 0.8125rem; font-weight: 500; color: var(--ink-muted);
-      transition: color 140ms ease-out;
+      cursor: pointer;
+      transition: color var(--dur) var(--ease);
   }}
   [data-testid="stExpander"] summary:hover {{ color: var(--ink); }}
 
@@ -427,8 +560,15 @@ def css(p: "Palette") -> str:
   }}
 
   /* ---- sidebar ---------------------------------------------------------- */
+  /* The sidebar overlaps both canvas pools down its whole height, which makes it
+     the one surface in the app where the blur has the most to do. */
   [data-testid="stSidebar"] {{
-      background: var(--surface); border-right: 1px solid var(--border);
+      background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0)),
+          var(--glass-fill);
+      backdrop-filter: blur(18px) saturate(1.2);
+      -webkit-backdrop-filter: blur(18px) saturate(1.2);
+      border-right: 1px solid var(--border);
   }}
   [data-testid="stSidebar"] .block-container {{ padding-top: 1.5rem; }}
 

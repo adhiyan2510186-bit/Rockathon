@@ -143,6 +143,7 @@ class Palette:
 
     series: tuple[str, str, str, str]   # categorical, fixed order, never cycled
     accent: str                          # brand. Chrome only, never data.
+    backdrop: str                        # the cool pool on the canvas. Never on an element.
 
     # Status is fixed across both modes - all four clear 3:1 on either surface.
     good: str = "#0ca30c"
@@ -187,6 +188,11 @@ DARK = Palette(
     ink_faint="#55555e",
     series=("#3987e5", "#d95926", "#199e70", "#c98500"),   # blue orange aqua yellow
     accent="#9085e9",
+    # A cool slate, and the one colour in this file that is never allowed onto an
+    # element. It exists to give the far corner of the canvas somewhere to go
+    # that is not flat black, and it is held far enough from the brand violet
+    # that the two pools read as depth rather than as a second accent.
+    backdrop="#3a4a60",
 )
 
 # Same structure inverted, same accent, same scale. Borders on, shadows off -
@@ -205,6 +211,7 @@ LIGHT = Palette(
     ink_faint="#96969c",
     series=("#2a78d6", "#eb6834", "#1baf7a", "#eda100"),   # same hues, re-stepped
     accent="#4a3aa7",
+    backdrop="#5b6d84",
 )
 
 
