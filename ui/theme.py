@@ -6,6 +6,13 @@ app.py used to carry its own inline styling decisions, which is how four screens
 end up looking like four different products. Every colour, every chip and every
 card in the app now comes from here.
 
+THE PRODUCT HAS A NAME, AND IT LIVES IN EXACTLY ONE CONSTANT
+------------------------------------------------------------
+`PRODUCT_NAME` and `PRODUCT_EXPANSION` below are the only place the agent is
+named. Everything that shows the name - the browser tab, the header lockup, the
+opening screen, the sidebar footer - reads them from here, so the name can never
+end up spelled two ways on two screens.
+
 THE SURFACE IS DARK, AND LAYERED IN A NARROW BAND
 -------------------------------------------------
 Four neutrals do all the structural work: the page, the panel sitting on it, the
@@ -13,10 +20,19 @@ hovered row, and the selected row. They are only a few percent apart on purpose.
 Big jumps between greys read as unrelated boxes; a narrow band reads as one
 surface with things resting on it.
 
-Separation is ALWAYS a hairline or a fill shift, never a shadow and never a
-gradient. On a near-black page a drop shadow is invisible, so a UI that leans on
-one just looks flat and slightly muddy. A 1px white line at 7% opacity is
-visible, costs nothing, and never blurs an edge.
+SEPARATION IS A HAIRLINE. DECORATION IS A DIFFERENT JOB.
+--------------------------------------------------------
+Where one surface ends and the next begins is ALWAYS said with a hairline or a
+fill shift - never with a shadow and never with a gradient. On a near-black page
+a drop shadow is invisible, so a UI that leans on one just looks flat and
+slightly muddy. A 1px white line at 7% opacity is visible, costs nothing, and
+never blurs an edge.
+
+That rule is about EDGES. It is not a vow of plainness, and three things in here
+now carry a gradient on purpose, none of them structural: the brand mark, the
+primary button, and a wash inside the recommendation panel that fades out well
+before that panel's own border. Each one is brand colour used as brand colour.
+Take any of them away and every boundary on the page is exactly where it was.
 
 THREE COLOUR ROLES, NEVER MIXED
 -------------------------------
@@ -86,6 +102,18 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import streamlit as st
+
+
+# ---------------------------------------------------------------------------
+# The name
+# ---------------------------------------------------------------------------
+# One constant, read by every surface that shows the name. The expansion is
+# carried alongside it because an acronym nobody can expand is just a noise the
+# buyer has to learn - and it is the shortest honest description of what the
+# thing does, which is what a strapline is for.
+PRODUCT_NAME = "Evets"
+PRODUCT_EXPANSION = "Enterprise Vendor Evaluation & Transparent Sourcing"
+PRODUCT_TAGLINE = "Autonomy you can audit"
 
 
 @dataclass(frozen=True)
@@ -304,12 +332,26 @@ def _css(p: Palette) -> str:
       --ink-muted: {p.ink_muted};
       --ink-faint: {p.ink_faint};
       --accent: {p.accent};
+      /* Two washes of the brand, pre-mixed once so no caller invents its own
+         opacity. Anything brand-tinted in this sheet uses one of these. */
+      --accent-wash: {p.tint(p.accent, 0.10)};
+      --accent-faint: {p.tint(p.accent, 0.04)};
       --font: 'Inter Tight', Inter, -apple-system, 'Segoe UI', system-ui, sans-serif;
       --mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
   }}
 
   /* ---- page ------------------------------------------------------------ */
-  .stApp {{ background: var(--canvas); font-family: var(--font); }}
+  /* One very faint pool of brand colour behind the header, and nothing else on
+     the canvas. It is not a divider and it is not a card - it stops a
+     1120px-wide near-black page reading as an empty terminal, and it fades out
+     entirely before the first panel starts. */
+  .stApp {{
+      background:
+          radial-gradient(70rem 22rem at 50% -8rem, var(--accent-faint), transparent 70%),
+          var(--canvas);
+      background-attachment: fixed;
+      font-family: var(--font);
+  }}
   /* The top padding clears Streamlit's own floating toolbar. Without it our
      header scrolls up underneath the menu button and the first thing on the
      page is half a logo. */
@@ -320,8 +362,17 @@ def _css(p: Palette) -> str:
   h1, h2, h3, h4 {{ font-family: var(--font); color: var(--ink); }}
   h1 {{ font-size: 1.75rem !important; font-weight: 600 !important;
         letter-spacing: -0.02em; line-height: 1.15; }}
+  /* Every section heading carries a short accent tick on its left. It is 3px of
+     colour doing the job a bold rule or a boxed header would otherwise be asked
+     to do: marking where a new section starts without adding another edge to a
+     page that already has borders on everything. */
   h4 {{ font-size: 0.9375rem !important; font-weight: 600 !important;
-        letter-spacing: -0.01em; margin: 0 0 0.5rem !important; }}
+        letter-spacing: -0.01em; margin: 0 0 0.5rem !important;
+        display: flex; align-items: center; gap: 0.5rem; }}
+  h4::before {{
+      content: ""; flex: none; width: 3px; height: 0.875rem;
+      border-radius: 2px; background: var(--accent); opacity: 0.85;
+  }}
 
   /* Captions are the one place prose appears, so they get a reading measure.
      A caption running the full 1120px is the commonest readability failure in
@@ -334,27 +385,66 @@ def _css(p: Palette) -> str:
   .stMarkdown strong {{ color: var(--ink); font-weight: 600; }}
 
   /* ---- app header ------------------------------------------------------- */
-  /* A mark, the product name, and a hairline. No logo, no gradient rule - the
-     identity is the surface, not an ornament stuck on top of it. */
+  /* A mark, the name, what the name stands for, and a hairline. That is the
+     whole chrome - there is still no logo and still no decorative rule. The
+     mark is the one place a gradient is spent: a brand mark is the single
+     element on the page whose only job IS to be recognised, and a flat violet
+     square is a placeholder in a way a stepped one is not. */
   .apphead {{
-      display: flex; align-items: center; gap: 0.625rem;
-      padding-bottom: 1rem; margin-bottom: 1rem;
+      display: flex; align-items: center; gap: 0.6875rem;
+      padding-bottom: 1rem; margin-bottom: 1.25rem;
       border-bottom: 1px solid var(--border);
   }}
   .apphead-mark {{
-      width: 1.5rem; height: 1.5rem; border-radius: 6px; flex: none;
+      width: 2rem; height: 2rem; border-radius: 9px; flex: none;
       display: inline-flex; align-items: center; justify-content: center;
-      background: var(--accent); color: #fff;
-      font-size: 0.75rem; font-weight: 600;
+      background: linear-gradient(145deg, {p.accent}, {p.tint(p.accent, 0.62)});
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
+      color: #fff; font-size: 0.9375rem; font-weight: 600;
+      letter-spacing: -0.02em;
   }}
+  /* Name and expansion stack, so the strapline hangs off the name rather than
+     running along beside it and doubling the header's width. */
+  .apphead-brand {{ display: flex; flex-direction: column; gap: 0.125rem; min-width: 0; }}
   .apphead-name {{
-      font-size: 0.9375rem; font-weight: 600; color: var(--ink);
-      letter-spacing: -0.01em;
+      font-size: 1.0625rem; font-weight: 600; color: var(--ink);
+      letter-spacing: -0.02em; line-height: 1.1;
   }}
+  .apphead-expansion {{
+      font-size: 0.625rem; font-weight: 500; letter-spacing: 0.09em;
+      text-transform: uppercase; color: var(--ink-faint); line-height: 1.2;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }}
+  /* The order reference is a number people read off the screen and quote down a
+     phone, so it gets a monospace face and a container of its own rather than
+     floating as loose grey text. */
   .apphead-note {{
-      margin-left: auto; font-size: 0.75rem; color: var(--ink-faint);
-      font-variant-numeric: tabular-nums;
+      margin-left: auto; flex: none;
+      font-family: var(--mono); font-size: 0.6875rem; color: var(--ink-2);
+      font-variant-numeric: tabular-nums; letter-spacing: 0.02em;
+      padding: 0.25rem 0.5rem; border-radius: 6px;
+      border: 1px solid var(--border); background: var(--surface-2);
   }}
+  /* Below roughly a tablet the strapline is the first thing to go: the name and
+     the order reference are load bearing, 52 characters of small caps are not. */
+  @media (max-width: 640px) {{ .apphead-expansion {{ display: none; }} }}
+
+  /* The same lockup once more at the foot of the sidebar, quiet enough to read
+     as a signature rather than a second title. */
+  .sidebrand {{
+      display: flex; align-items: center; gap: 0.5rem;
+      margin-top: 1.5rem; padding-top: 0.875rem;
+      border-top: 1px solid var(--border);
+  }}
+  .sidebrand-mark {{
+      width: 1.25rem; height: 1.25rem; border-radius: 6px; flex: none;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: linear-gradient(145deg, {p.accent}, {p.tint(p.accent, 0.62)});
+      color: #fff; font-size: 0.625rem; font-weight: 600;
+  }}
+  .sidebrand-text {{ display: flex; flex-direction: column; line-height: 1.25; }}
+  .sidebrand-name {{ font-size: 0.75rem; font-weight: 600; color: var(--ink-2); }}
+  .sidebrand-tag {{ font-size: 0.6875rem; color: var(--ink-faint); }}
 
   /* ---- tabs ------------------------------------------------------------- */
   .stTabs [data-baseweb="tab-list"] {{
@@ -381,17 +471,37 @@ def _css(p: Palette) -> str:
      used by anything - which is how two panel treatments end up on one screen
      the first time somebody reaches for the wrong one. */
 
-  /* The recommendation panel. One 2px edge in the accent, and nothing else -
-     no wash, no gradient, no shadow. The eye lands here because of the edge and
-     the 28px line, not because the box was decorated. */
+  /* The recommendation panel. A 2px edge in the accent, and a wash of the same
+     colour that has faded out by 40% of the width - so the eye is pulled to the
+     left edge where the eyebrow and the headline start. Still no shadow, and
+     the panel's own boundary is still the same hairline every other panel uses:
+     the wash is dead long before it reaches the border, so it never becomes the
+     thing telling you where the box ends. */
   .hero {{
-      background: var(--surface); border: 1px solid var(--border);
+      /* One local variable so the edge, the eyebrow and the wash are always the
+         same colour. Each variant below re-points this one line rather than
+         restating the gradient, which is how a state ends up with a violet wash
+         and an orange edge. */
+      --hero-tint: var(--accent-wash);
+      background:
+          linear-gradient(100deg, var(--hero-tint), transparent 42%),
+          var(--surface);
+      border: 1px solid var(--border);
       border-left: 2px solid var(--accent); border-radius: 10px;
       padding: 1.25rem 1.5rem; margin-bottom: 1rem;
   }}
   .hero-eyebrow {{
+      display: flex; align-items: center; gap: 0.4375rem;
       font-size: 0.6875rem; font-weight: 500; letter-spacing: 0.06em;
       text-transform: uppercase; color: var(--accent); margin-bottom: 0.5rem;
+  }}
+  /* A dot in the eyebrow's own colour. The eyebrow is the only word on the
+     panel saying which of three states this is - recommended, waiting on you,
+     done - so it gets a mark that can be caught at a glance from the far side
+     of a projector. */
+  .hero-eyebrow::before {{
+      content: ""; flex: none; width: 5px; height: 5px;
+      border-radius: 999px; background: currentColor;
   }}
   .hero-title {{
       font-size: 1.75rem; font-weight: 600; color: var(--ink);
@@ -407,9 +517,9 @@ def _css(p: Palette) -> str:
      banner. Being asked to approve a large order is the system working, and
      colouring it like an error teaches the buyer to dread the exact moment we
      are proudest of. */
-  .hero-escalated {{ border-left-color: {p.serious}; }}
+  .hero-escalated {{ border-left-color: {p.serious}; --hero-tint: {p.tint(p.serious, 0.10)}; }}
   .hero-escalated .hero-eyebrow {{ color: {p.serious}; }}
-  .hero-done {{ border-left-color: {p.good}; }}
+  .hero-done {{ border-left-color: {p.good}; --hero-tint: {p.tint(p.good, 0.10)}; }}
   .hero-done .hero-eyebrow {{ color: {p.good}; }}
 
   /* ---- figures (number-first tiles) ------------------------------------ */
@@ -417,8 +527,17 @@ def _css(p: Palette) -> str:
      whether or not each one has a note under its number. Ragged tile bottoms in
      a row of four is the sort of 6px wrongness nobody can name and everybody
      sees. */
+  /* The tiles are lit from the top: one step of the neutral band across the
+     tile, top lighter than bottom. It is the smallest amount of depth that
+     makes four flat rectangles read as objects sitting on the page rather than
+     four holes cut out of it - and because it is neutral, not brand, it never
+     competes with the recommendation panel beside it.
+
+     No hover state, and that is deliberate: none of these tiles is clickable,
+     and a surface that lights up under the cursor is a surface people click. */
   .figure {{
-      background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+      background: linear-gradient(180deg, var(--surface-2), var(--surface));
+      border: 1px solid var(--border); border-radius: 10px;
       padding: 0.75rem 1rem 0.875rem; min-height: 6rem;
   }}
   .figure-label {{
@@ -446,6 +565,9 @@ def _css(p: Palette) -> str:
       color: var(--ink-2); white-space: nowrap;
       font-variant-numeric: tabular-nums;
   }}
+  /* Chips deliberately have NO hover state, unlike the tiles above. Nothing here
+     is clickable, and a tag that lights up under the cursor is a tag people try
+     to click - the fastest way to teach a buyer that this screen is broken. */
   .chip-dot {{ width: 6px; height: 6px; border-radius: 999px; flex: none; }}
   /* A tinted chip carries a real signal. The text stays in an ink token - a
      coloured dot beside it carries the identity, never the words themselves. */
@@ -527,8 +649,17 @@ def _css(p: Palette) -> str:
       background: var(--surface); color: var(--ink-faint);
       border-color: var(--border); cursor: not-allowed;
   }}
+  /* The one button on the screen that commits money gets the brand gradient and
+     a 1px inner highlight along its top edge. That highlight is the oldest trick
+     in interface design for making a control look pressable, and it costs one
+     line. Every other button on the page stays flat, which is what makes this
+     one findable without a second colour. */
   .stButton > button[kind="primary"] {{
-      background: var(--accent); border-color: var(--accent);
+      background:
+          linear-gradient(160deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0)),
+          var(--accent);
+      border-color: var(--accent);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
       color: #ffffff; font-weight: 500;
   }}
   .stButton > button[kind="primary"]:hover {{
@@ -593,21 +724,52 @@ def inject() -> None:
     st.markdown(_css(active()), unsafe_allow_html=True)
 
 
-def app_header(name: str, note: str = "") -> None:
-    """The product's name, a mark, and a hairline. That is the whole chrome.
+def app_header(note: str = "") -> None:
+    """The mark, the name, what the name stands for, and a hairline.
 
-    Replaces the old page title plus gradient rule. A gradient bar under a
-    heading is decoration that says nothing; a mark and a hairline say what this
-    is and where the header ends, which is all a header owes anyone. `note` is
-    the right-aligned status - the current order reference, when there is one.
+    A gradient bar under a heading is decoration that says nothing; a mark, a
+    name and a hairline say what this is and where the header ends, which is all
+    a header owes anyone. The expansion of the acronym earns its line because
+    "Evets" on its own tells a first-time viewer nothing, and the four words
+    under it are also the shortest true description of the job.
+
+    The name is not a parameter any more. It used to be passed in as a string
+    from app.py, which is one call site away from the tab, the opening screen and
+    the sidebar each spelling it their own way. It comes from PRODUCT_NAME now.
+    `note` is the right-aligned status - the current order reference, when there
+    is one.
     """
     from html import escape
 
     tail = f'<span class="apphead-note">{escape(note)}</span>' if note else ""
     st.markdown(
         f'<div class="apphead">'
-        f'<span class="apphead-mark">{escape(name[:1].upper())}</span>'
-        f'<span class="apphead-name">{escape(name)}</span>'
-        f"{tail}</div>",
+        f'<span class="apphead-mark">{escape(PRODUCT_NAME[:1].upper())}</span>'
+        f'<span class="apphead-brand">'
+        f'<span class="apphead-name">{escape(PRODUCT_NAME)}</span>'
+        f'<span class="apphead-expansion">{escape(PRODUCT_EXPANSION)}</span>'
+        f"</span>{tail}</div>",
+        unsafe_allow_html=True,
+    )
+
+
+def sidebar_brand() -> None:
+    """The same lockup, small, at the foot of the sidebar.
+
+    A signature rather than a second title: it sits below every control, above
+    the fold of nothing, and says which product this panel belongs to. The
+    tagline goes here rather than in the header because a strapline at the top of
+    every screen is advertising, and a strapline at the bottom of the panel is a
+    signature.
+    """
+    from html import escape
+
+    st.markdown(
+        f'<div class="sidebrand">'
+        f'<span class="sidebrand-mark">{escape(PRODUCT_NAME[:1].upper())}</span>'
+        f'<span class="sidebrand-text">'
+        f'<span class="sidebrand-name">{escape(PRODUCT_NAME)}</span>'
+        f'<span class="sidebrand-tag">{escape(PRODUCT_TAGLINE)}</span>'
+        f"</span></div>",
         unsafe_allow_html=True,
     )

@@ -494,6 +494,10 @@ def render_sidebar() -> None:
                     "file, using the switches above."
                 )
 
+        # Signs the panel off. Still not a heading - it sits under every control
+        # rather than above them, so it cannot compete with the page header.
+        theme.sidebar_brand()
+
 
 def _language_switch() -> None:
     """Choose who reads the brief: the model, or the word matcher on this machine.
@@ -619,7 +623,7 @@ def _empty_request_state() -> None:
     """
     st.markdown("")
     ui.hero(
-        "Procurement",
+        theme.PRODUCT_NAME,
         "What do you need to buy?",
         "Type your request in the box below — how many, what specification, "
         "your budget and your deadline.",
@@ -1172,7 +1176,7 @@ def render_activity() -> None:
 # Page
 # ---------------------------------------------------------------------------
 
-st.set_page_config(page_title="Procurement", page_icon="📦", layout="wide")
+st.set_page_config(page_title=theme.PRODUCT_NAME, page_icon="📦", layout="wide")
 theme.inject()
 init_state()
 
@@ -1180,7 +1184,7 @@ init_state()
 # number a buyer needs from every screen - it is what they quote on the phone -
 # so it belongs in the chrome rather than being hunted for on the trail.
 _ctx = st.session_state["ctx"]
-theme.app_header("Procurement", _ctx.transaction_id if _ctx is not None else "")
+theme.app_header(_ctx.transaction_id if _ctx is not None else "")
 
 render_sidebar()
 

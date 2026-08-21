@@ -78,10 +78,15 @@ ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
 # What we say when someone asks us something that is not a purchasing brief.
 # CLAUDE.md, stage 0: state the scope, stay ready for the next message. We do not
 # lecture and we do not attempt a half-answer outside our lane.
+#
+# It is also the one line where the agent introduces itself by name, because it
+# is the one moment a person has clearly not understood what they are talking to.
+# Nowhere else does it announce itself: a tool that says its own name in every
+# reply is a chatbot, not a colleague.
 SCOPE_STATEMENT = (
-    "I handle procurement briefs only: what to buy, how many, your price ceiling "
-    "and your delivery window. I can't help with that one, but send me a buying "
-    "brief and I'll take it from there."
+    "I'm Evets, and I handle procurement briefs only: what to buy, how many, "
+    "your price ceiling and your delivery window. I can't help with that one, "
+    "but send me a buying brief and I'll take it from there."
 )
 
 # Fields discovery genuinely cannot start without. Everything else either has a
