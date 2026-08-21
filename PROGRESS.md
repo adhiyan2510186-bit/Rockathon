@@ -1,7 +1,7 @@
 # PROGRESS.md — where we are, so we can restart cold
 
 Read CLAUDE.md first (the rules). Read this second (the state).
-Last updated: 2026-08-20.
+Last updated: 2026-08-21, after an audit sweep of the whole repo.
 
 ---
 
@@ -14,6 +14,50 @@ python -m pip install -r requirements.txt
 The Gemini API key lives in `.env` (NOT in git — copy `.env.example` and paste
 the key in). If `.env` is missing, the language step falls back to the offline
 parser and the UI says so plainly.
+
+---
+
+## The audit sweep (2026-08-21) — what changed and why
+
+A full read of the repo before freezing the demo. The build was in good shape:
+every test green, the golden table holding, the market-signal guardrail
+structurally enforced. Five things were not.
+
+**Two of them made the audit trail say something untrue**, which is the one
+failure this project cannot afford:
+
+1. **The closing entry claimed human approval for orders the agent cleared
+   alone.** Stage 8 looked for any USER decision in the trail — and the buyer's
+   answer to the usage-context question is one. So every furniture order inside
+   the limit closed saying "after human approval". Fixed by asking *where* the
+   decision was made, not just who made it. `agent/close.py`, `tests/test_close.py`.
+2. **Two runs could merge into one transaction file.** Four random digits, no
+   collision check, append mode. Not hypothetical — 39 files in `exports/` held
+   duplicate entry numbers. Ids are now checked against the directory, and the
+   first write is exclusive. `agent/audit.py`.
+
+**Then the screen.** The Activity list was printing `act_now`, "hard
+constraints", "6 source(s)" and "structured requirements using the offline
+parser" at a buyer. None of the reasoning was removed — it is the product. It
+stopped naming which module produced it. Urgency labels now live on the enum so
+the engine and the interface cannot drift apart again.
+
+**The test that should have caught that was measuring the wrong surface** — it
+read paragraphs and captions only, missed every expander and button label, and
+silently included drill-down contents it claimed to exclude. Both fixed, and it
+now runs on the closed order too.
+
+**Housekeeping.** The suite no longer writes into `exports/`; declines record a
+reason; tracebacks stay off the projector.
+
+Three things were checked and deliberately left alone: the float-equality risk
+in the ranker and the substitution-threshold bypass are both unreachable with
+the current catalogs, and the orphan `labels` category is doing its job. The
+de-duplication work (escalation.py's three parallel rooms, score-gap arithmetic
+in four places, seven dead symbols) is listed and untouched — the demo path is
+frozen.
+
+Full pain-point write-ups: `presentation.txt` 8.8.11 – 8.8.13.
 
 ---
 
@@ -30,7 +74,7 @@ parser and the UI says so plainly.
 | 7 | `agent/language.py` | 0-2 — the only file that calls Gemini | DONE |
 | 8 | `agent/weights.py` | 2 — phrase label -> weights, pure Python | DONE |
 | 9 | `data/` mock catalogs + `agent/discovery.py` | 3 — two schemas -> one Product | DONE |
-| 10 | `agent/ranking.py` + `tests/test_ranking.py` | 4 — the golden 58.0/48.7/33.7 | **DONE — 14 tests green** |
+| 10 | `agent/ranking.py` + `tests/test_ranking.py` | 4 — the golden 58.0/48.7/33.7 | **DONE — 241 tests green** |
 | 11 | `agent/escalation.py` | one handler, four call sites | **DONE** |
 | 12 | `agent/authorisation.py` | 5 — the limit check | **DONE** |
 | 13 | `agent/vendor.py` | 6 — confirmation & lock, with failure switches | **DONE** |
@@ -520,8 +564,12 @@ Two different methods, and mixing them up breaks the numbers:
 
 ## The golden test is live: `python -m pytest tests/ -q`
 
-**14 tests, all green.** Run this before every commit that touches ranking,
+**241 tests, all green.** Run this before every commit that touches ranking,
 weights, config or the catalogs.
+
+The suite gets its own throwaway export directory (`tests/conftest.py`), so a
+run leaves nothing behind in `exports/`. It used to leave a file per
+transaction, and there were 1,337 of them.
 
 **Why it matters is the demo, not the deck.** Judges watch the run, not the
 slides, so "the code disagrees with the deck" is the wrong reason to care about
@@ -570,8 +618,11 @@ making its point.
 
 ## Decisions already made (do not re-litigate)
 
-- **Model: `gemini-3.6-flash`.** `gemini-2.5-flash` returns 404 for new API
-  keys — Google redirects callers to the 3.x line. Verified 2026-08-19.
+- **Model: `gemini-3.5-flash-lite`** (`config.yaml`, `llm.model`). We moved off
+  `gemini-3.6-flash` because its free tier is twenty calls a day and one brief
+  costs two. **Unverified as of 2026-08-21** — confirm it resolves before the
+  demo, because `allow_offline_fallback` turns a bad model id into a quiet
+  "offline mode - model unavailable" that looks exactly like a rate limit.
 - **Free tier is roughly 10 requests/minute**, hence the offline fallback
   parser. We degrade honestly and label it in the UI; we never fake a call.
 - **Constraint classes are a fixed table in `models.py`**, not something the
@@ -659,7 +710,8 @@ limit to argue with — and the audit entry says so in those words.
 from config.yaml. The two disagree on purpose: config knows default weights and a
 Rs 3 cap for `labels`, but no vendor stocks a single labels product. Asking the
 catalogs means the agent tells a user what it can really buy rather than what it
-has opinions about. Today that answer is `['packaging']`.
+has opinions about. Today that answer is `['furniture', 'headphones',
+'laptops', 'packaging']` — 57 products across six sources.
 
 **A second bug fell out of testing the first.** `_normalise_category()` mapped any
 unrecognised category onto the literal string `"default"` — so the new sentence
@@ -680,9 +732,9 @@ approve/decline buttons, because there is nothing to approve.
 ### The sentence to say out loud
 
 > "Wording - we handle a lot of it, because that is the one job the LLM does.
-> Scope - we are deliberately narrow: one product line, packaging category, mock
-> catalogs. The narrowness is in the data, not the language - and the agent
-> says which one it is instead of pretending it searched."
+> Scope - we are deliberately narrow: four product lines, mock catalogs. The
+> narrowness is in the data, not the language - and the agent says which one it
+> is instead of pretending it searched."
 
 ### Looked like a bug, is not
 

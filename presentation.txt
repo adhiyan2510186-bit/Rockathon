@@ -828,8 +828,10 @@ SECTION 8.5 - THE INTERFACE: DESIGN DECISIONS THAT ARE ACTUALLY ENGINEERING
     We do:      The dark column is the SAME eight hues re-stepped for a dark
                 surface and validated as a set against it. Streamlit's chrome is
                 themed from the same values in .streamlit/config.toml, and
-                ui/theme.py reads the viewer's choice back at runtime so our
-                cards and our charts agree with the widgets around them.
+                ui/theme.py reads theme.base back from that one file so our
+                cards and our charts agree with the widgets around them. It is
+                declared once, in config, not read off the viewer's machine -
+                see 8.5.4 for why that distinction cost us a rehearsal.
     THE LINE:   "Our dark mode is a second validated palette, not an inversion.
                  A palette that passed every contrast gate on white will fail
                  all of them on black if you just flip it."
@@ -1152,6 +1154,90 @@ A: "Real vendor integrations - auth, pagination, rate limits, and vendors whose
     catalog is already out of date by the time we act on it."
 
 
+8.8.11  THE TRAP: OUR AUDIT TRAIL CLAIMED A HUMAN APPROVED WHAT NOBODY SAW
+    Our whole pitch is that the record can be trusted. So the closing entry has
+    a field, approved_by_human, and it answered by looking for any decision in
+    the trail with the actor USER. That reads as obviously correct. It was
+    wrong, and it was wrong on the demo path.
+
+    A furniture order sits inside the authorisation limit deliberately, so the
+    agent proceeds alone - that is the beat where we show the boundary working.
+    But furniture also triggers the usage-context question, and the buyer's
+    answer to it is recorded as a USER decision too. Because it is theirs. So
+    the close found a USER decision, concluded a person had signed, and wrote
+    "after human approval" into the finance record for a purchase no person ever
+    saw.
+
+    Naive: infer authorisation from the actor. Every USER entry looks like
+    consent when you are only looking at who wrote it.
+
+    What we do: ask WHERE the decision was made, not merely who made it. A USER
+    decision at stage 2 is a preference. Only a USER decision at the
+    authorisation gate is somebody taking the purchase on themselves. Two tests
+    hold both directions, because a fix that always answers "no" passes the
+    first one.
+
+    THE LINE:   "The dangerous bug in an audit trail is not the one that
+                 crashes. It is the one that produces a confident, readable,
+                 well-formatted sentence that is not true - and ours said a
+                 human had approved something no human had seen."
+
+
+8.8.12  THE TRAP: TWO ORDERS QUIETLY BECAME ONE TRANSACTION
+    We promise that one transaction id replays a whole order in sequence. The
+    id was four random digits, and the log was opened in append mode. Both
+    choices are individually reasonable. Together they mean a repeat id does not
+    fail - it appends a second order into the first one's file. Replay then
+    returns two interleaved runs, and the entry numbering restarts from 01
+    halfway down.
+
+    We did not reason our way to this. We found it: 1,337 files in exports/
+    against 9,000 possible ids, and 39 of them holding duplicate entry numbers.
+    One file had two complete orders seven seconds apart.
+
+    Naive: switch to a UUID. That fixes it and costs the thing the short id was
+    for - a judge being able to read TXN-4471 off the screen and say it out
+    loud.
+
+    What we do: keep four digits, and check the directory before handing one
+    out. The id stays readable; the guarantee stops depending on luck. And the
+    first write uses "x" rather than "a", so a collision that somehow survives
+    that fails loudly instead of corrupting the record we are presenting as
+    evidence.
+
+    THE LINE:   "Append mode is how a log that cannot lose data ends up merging
+                 two stories into one. We would rather the write fail in front
+                 of you than the file read cleanly and be wrong."
+
+
+8.8.13  THE TRAP: THE TEST GUARDING OUR SCREEN MEASURED THE WRONG SCREEN
+    We have a test that fails if pipeline vocabulary reaches the default
+    surface, because Meena has never heard of stage 4. It passed. The screen was
+    printing "act_now", "hard constraints", "6 source(s)" and "structured
+    requirements using the offline parser" the whole time.
+
+    Two holes, both invisible. It collected paragraphs and captions only - so
+    expander and button LABELS, which are visible while the drill-down is shut,
+    were never checked, and that is exactly where the leaks were. And it claimed
+    to exclude drill-down contents while doing no such thing: Streamlit's test
+    harness flattens the tree, so every word inside every breakdown counted as
+    surface. That second hole is why nobody could add a banned word to the list
+    without the drill-downs failing - the guard had been quietly load-bearing in
+    the wrong direction.
+
+    Naive: trust a green test. A test that measures the wrong thing is worse
+    than no test, because it buys silence.
+
+    What we do: subtract drill-down contents by identity, add the labels, and
+    run it on the closed order as well as the approval screen. Then fix what it
+    finds. The reasoning did not get deleted - it is the product. It stopped
+    naming which module produced it.
+
+    THE LINE:   "Our product bar test was green while the screen said 'act_now'.
+                 We had written the assertion and never checked what it could
+                 see."
+
+
 ================================================================================
 MAINTENANCE
 ================================================================================
@@ -1164,5 +1250,7 @@ differently, and we had a reason. Same shape every time:
 Skip anything that is just a feature description. This file is only for the
 places where we can show judgement.
 
-Last updated: after the language step got an off switch that actually stops the
-request being sent, rather than one that spends it and looks away (8.8.10).
+Last updated: after an audit sweep found the closing entry claiming human
+approval for orders the agent cleared alone, two runs sharing one transaction
+file, and a product-bar test that was green while the screen said "act_now"
+(8.8.11 - 8.8.13).
