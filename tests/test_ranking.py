@@ -288,3 +288,112 @@ def test_scores_stay_within_zero_and_one_hundred():
         assert 0.0 <= item.score <= 100.0
         for term in item.terms:
             assert 0.0 <= term.normalised <= 1.0
+
+
+# ---------------------------------------------------------------------------
+# No deadline: delivery is still ranked, and still ranked the right way round
+# ---------------------------------------------------------------------------
+
+def build_open_deadline_pipeline():
+    """The demo brief with the ten-day window removed and nothing else changed."""
+    extraction = language._offline_extract(DEMO_BRIEF)
+    brief = language._to_brief(DEMO_BRIEF, extraction, audit=None)
+    brief = brief.model_copy(update={"max_delivery_days": None})
+    computed = weights.compute(brief)
+    results = discovery.run(brief)
+    eligible = [result.product for result in results if result.passed]
+    ranked = ranking.rank(
+        eligible, computed, brief.max_price_per_unit_inr, brief.max_delivery_days
+    )
+    return brief, results, ranked
+
+
+def test_the_fastest_supplier_wins_delivery_when_there_is_no_deadline():
+    """THE DIRECTION TEST, and the reason it exists.
+
+    With no window to measure a margin against, delivery falls back to min-max
+    across the pool - and min-max is written for criteria where MORE is better.
+    Delivery is days: fewer is better. Hand it the raw fraction and the slowest
+    supplier scores 1.0, the fastest 0.0, the ranking quietly inverts, and
+    nothing on the screen looks wrong because every number is still between 0
+    and 1 and still sums correctly.
+
+    This test is the only thing standing between that bug and a demo.
+    """
+    _, _, ranked = build_open_deadline_pipeline()
+
+    by_days = {
+        scored.product.delivery_days: term.normalised
+        for scored in ranked
+        for term in scored.terms
+        if term.criterion == "delivery"
+    }
+    fastest = min(by_days)
+    slowest = max(by_days)
+
+    assert math.isclose(by_days[fastest], 1.0, abs_tol=1e-9), (
+        "The quickest supplier in the pool must score full marks on delivery."
+    )
+    assert math.isclose(by_days[slowest], 0.0, abs_tol=1e-9), (
+        "The slowest must score zero. If these two are the wrong way round, "
+        "_min_max was called without lower_is_better."
+    )
+
+
+def test_delivery_keeps_its_weight_when_there_is_no_deadline():
+    """"No deadline" is not "speed is worth nothing to me".
+
+    The criterion is still weighted and still separates the pool; only the
+    method it is measured by changes.
+    """
+    _, _, ranked = build_open_deadline_pipeline()
+    delivery_terms = [
+        term for scored in ranked for term in scored.terms if term.criterion == "delivery"
+    ]
+
+    assert all(term.weight == GOLDEN_WEIGHTS["delivery"] for term in delivery_terms)
+    assert len({term.normalised for term in delivery_terms}) > 1, (
+        "Delivery must still tell the products apart."
+    )
+    assert all(term.method == ranking.METHOD_MIN_MAX_FASTEST for term in delivery_terms)
+
+
+def test_nothing_is_rejected_on_lead_time_when_there_is_no_deadline():
+    """The hard gate is a promise the BUYER made. With no window there is none.
+
+    The ten-day brief excludes at least one product purely for arriving late;
+    with the window removed, that product has to qualify.
+    """
+    _, _, capped_results, _ = build_pipeline()
+    late_only = {
+        result.product.product_id
+        for result in capped_results
+        if not result.passed and set(result.violations) == {"max_delivery_days"}
+    }
+    assert late_only, "The capped brief should reject something on delivery alone."
+
+    _, open_results, _ = build_open_deadline_pipeline()
+    still_rejected = {
+        result.product.product_id for result in open_results if not result.passed
+    }
+
+    assert not (late_only & still_rejected), (
+        "A product excluded only for being late must qualify once the buyer "
+        "says they have no deadline."
+    )
+    assert all(
+        "max_delivery_days" not in result.violations for result in open_results
+    ), "No product may carry a delivery violation when no window was set."
+
+
+def test_the_golden_numbers_are_untouched_by_any_of_this():
+    """The demo brief states ten days, so it keeps the margin method exactly."""
+    _, _, _, ranked = build_pipeline()
+
+    assert [scored.score for scored in ranked[:3]] == [58.0, 48.7, 33.7]
+    assert all(
+        term.method == ranking.METHOD_MARGIN
+        for scored in ranked
+        for term in scored.terms
+        if term.criterion == "delivery"
+    )

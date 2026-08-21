@@ -34,6 +34,18 @@ for a seller's rating, where there is no natural ceiling.
 Margin asks "how far under the user's own limit did this land?" — the right
 question for price and delivery, where the user gave us an explicit line.
 
+DELIVERY MOVES BETWEEN THE TWO, AND ONLY DELIVERY
+-------------------------------------------------
+A buyer is allowed to have no deadline ("no rush"). There is then no line to
+measure a margin against, so delivery falls back to min-max across the pool —
+fastest survivor 1.0, slowest 0.0. It keeps its full weight while doing so,
+because "I have no deadline" is not the same statement as "speed is worth
+nothing to me"; the first is about a date, the second is a preference, and the
+buyer can say either without the other.
+
+The demo brief states a ten-day window, so it takes the margin path and the
+golden numbers below are untouched by any of this.
+
 THE SQUARE ROOT IS THE INTERESTING PART
 ---------------------------------------
 It is there so a bargain cannot drown out what the user said mattered. Without
@@ -70,18 +82,29 @@ from agent.models import SOFT_CRITERIA, Product, ScoredProduct, ScoreTerm, Weigh
 
 # Which method each criterion uses. A table rather than an if-chain, so the
 # answer to "how was replacement normalised?" is one line you can point at.
+# Reliability and replacement are always compared across the pool; price is
+# always measured against the cap. DELIVERY IS THE ONE THAT MOVES: it uses the
+# cap when the buyer gave a deadline, and falls back to the pool when they said
+# they have none. There is no cap to measure against in that case, and a buyer
+# with no deadline still prefers the parcel that turns up sooner.
 MIN_MAX_CRITERIA = ("reliability", "replacement")
 MARGIN_CRITERIA = ("price", "delivery")
 
+# Delivery is the only criterion where a LOWER raw number is better, which is
+# why it needs its own label and its own flag through _min_max. Reliability and
+# replacement both read "more is better"; four days is better than nine.
+LOWER_IS_BETTER = ("delivery",)
+
 METHOD_MIN_MAX = "min-max across survivors"
 METHOD_MARGIN = "sqrt(margin vs cap)"
+METHOD_MIN_MAX_FASTEST = "fastest in pool (no deadline set)"
 
 
 def rank(
     products: list[Product],
     weights: Weights,
     max_price_per_unit_inr: float,
-    max_delivery_days: int,
+    max_delivery_days: int | None,
     audit: AuditLogger | None = None,
 ) -> list[ScoredProduct]:
     """Score and order the survivors of stage 3. Best first.
@@ -104,7 +127,22 @@ def rank(
         "reliability": [product.reliability_rating for product in products],
         "replacement": [float(product.replacement_window_days) for product in products],
     }
-    caps = {"price": max_price_per_unit_inr, "delivery": float(max_delivery_days)}
+    caps = {"price": max_price_per_unit_inr}
+
+    # WHICH METHOD DELIVERY USES IS DECIDED HERE, ONCE, FROM THE BRIEF.
+    # With a deadline, "how far under your own line did this land?" is the right
+    # question and margin answers it. With no deadline there is no line, so the
+    # only honest question left is "how does this compare with the alternatives?"
+    # - which is the question min-max already answers for reliability.
+    #
+    # Note what this is NOT: dropping delivery, or moving its weight elsewhere.
+    # "I have no deadline" does not mean "speed is worth nothing to me". The
+    # criterion keeps its weight and still separates a four-day supplier from a
+    # nine-day one; it just stops being measured against a date nobody set.
+    if max_delivery_days is None:
+        pools["delivery"] = [float(product.delivery_days) for product in products]
+    else:
+        caps["delivery"] = float(max_delivery_days)
 
     scored: list[ScoredProduct] = []
     for product in products:
@@ -118,9 +156,12 @@ def rank(
         terms: list[ScoreTerm] = []
         for criterion in SOFT_CRITERIA:
             value = raw_values[criterion]
-            if criterion in MIN_MAX_CRITERIA:
-                normalised = _min_max(value, pools[criterion])
-                method = METHOD_MIN_MAX
+            # Read from the dicts built above rather than from the tuples,
+            # because delivery's membership is decided per brief.
+            if criterion in pools:
+                lower_is_better = criterion in LOWER_IS_BETTER
+                normalised = _min_max(value, pools[criterion], lower_is_better)
+                method = METHOD_MIN_MAX_FASTEST if lower_is_better else METHOD_MIN_MAX
             else:
                 normalised = _margin(value, caps[criterion])
                 method = METHOD_MARGIN
@@ -183,18 +224,28 @@ def rank(
     return ordered
 
 
-def _min_max(value: float, pool: list[float]) -> float:
+def _min_max(value: float, pool: list[float], lower_is_better: bool = False) -> float:
     """Place a value against the best and worst in the surviving pool.
 
     When every survivor scores the same, there is no spread to measure and we
     return 1.0 — nobody is penalised for a pool that happens to be uniform. It
     cannot change the ordering either way, since it adds the same amount to
     every product's score.
+
+    `lower_is_better` INVERTS THE SCALE, AND FORGETTING IT IS A SILENT BUG.
+    Every other caller of this function measures something where more is better
+    - a higher rating, a longer replacement window. Delivery is days, and fewer
+    days is better. Handed the raw fraction, the slowest supplier in the pool
+    would score 1.0 and the fastest 0.0, the ranking would invert, and nothing
+    on the screen would look wrong: the numbers would all still be between 0 and
+    1 and still sum correctly. tests/test_ranking.py pins the direction for
+    exactly that reason.
     """
     low, high = min(pool), max(pool)
     if high == low:
         return 1.0
-    return (value - low) / (high - low)
+    fraction = (value - low) / (high - low)
+    return 1.0 - fraction if lower_is_better else fraction
 
 
 def _margin(value: float, cap: float) -> float:

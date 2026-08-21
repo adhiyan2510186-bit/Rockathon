@@ -173,7 +173,16 @@ class Brief(BaseModel):
         description="Required physical specs, e.g. ['double-wall', '200x150x80mm']. Non-negotiable.",
     )
     max_price_per_unit_inr: float = Field(gt=0, description="Per-unit ceiling (Rs 22). Negotiable tier.")
-    max_delivery_days: int = Field(gt=0, description="Delivery window in days (10). Negotiable tier.")
+    # None is a real answer, not a missing one: it means the buyer told us there
+    # is no deadline ("no rush"). Stage 3 then rejects nothing on lead time and
+    # stage 4 scores delivery against the pool instead of against a window.
+    # It never means "we forgot to ask" - the stage-0 gate in agent/language.py
+    # is what guarantees that, and it is the reason that gate still asks.
+    max_delivery_days: int | None = Field(
+        default=None, gt=0,
+        description="Delivery window in days (10). Negotiable tier. None = the "
+        "buyer stated no deadline, so delivery is ranked but never gated.",
+    )
 
     # --- SOFT input: what the user said mattered ------------------------------
     stated_priorities: dict[str, str] = Field(

@@ -342,9 +342,13 @@ def _no_vendor_coverage(context: TransactionContext, audit: AuditLogger) -> Esca
     stocked = discovery.available_categories()
     stocked_text = ", ".join(stocked) if stocked else "nothing"
 
+    window_text = (
+        f"within {brief.max_delivery_days} days"
+        if brief.max_delivery_days is not None else "with no delivery deadline"
+    )
     headline = (
         f"I understood the brief - {brief.quantity:,} units of {brief.category}, up to Rs "
-        f"{brief.max_price_per_unit_inr:,.2f} a unit, within {brief.max_delivery_days} days - "
+        f"{brief.max_price_per_unit_inr:,.2f} a unit, {window_text} - "
         f"but no vendor source stocks {brief.category}. My catalogs cover {stocked_text}. "
         f"Nothing was searched and nothing was bought."
     )
@@ -499,9 +503,17 @@ def _negotiable_deltas(brief: Brief, product: Product) -> dict[str, tuple[float,
     if over_price > 0:
         deltas["max_price_per_unit_inr"] = (over_price, over_price / brief.max_price_per_unit_inr)
 
-    late_days = product.delivery_days - brief.max_delivery_days
-    if late_days > 0:
-        deltas["max_delivery_days"] = (float(late_days), late_days / brief.max_delivery_days)
+    # One guard, three beneficiaries. _near_miss_note and _proposed_relaxations
+    # both read this dict, so a window that was never set simply never produces
+    # a delivery delta: the note skips it and the relaxation loop hits its own
+    # `continue`. It also removes a division by zero that the old int-only field
+    # made reachable the moment a window of 0 got through.
+    if brief.max_delivery_days is not None:
+        late_days = product.delivery_days - brief.max_delivery_days
+        if late_days > 0:
+            deltas["max_delivery_days"] = (
+                float(late_days), late_days / brief.max_delivery_days
+            )
 
     return deltas
 

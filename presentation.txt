@@ -1375,6 +1375,71 @@ A: "Real vendor integrations - auth, pagination, rate limits, and vendors whose
                  was opaque. We found that out before writing a second one."
 
 
+8.8.18  THE TRAP: WE REQUIRED AN ANSWER AND ACCEPTED ONLY ONE SHAPE OF IT,
+        WITHOUT EVER SAYING WHAT THAT SHAPE WAS
+    The agent would not start without a delivery deadline. It asked for one
+    politely - "Before I start looking, your delivery deadline in days?" - and
+    the only reply it could actually read was a digit followed by the word
+    "days". "Two weeks" failed. "A month" failed. "No rush" failed. And because
+    a reply is appended to the brief so far and the whole thing is re-checked,
+    the same question came back every time, forever. The most reasonable answer
+    a buyer can give - "I have no deadline" - was the one answer the system
+    treated as silence.
+
+    Naive: widen the regex until it stops embarrassing us. That fixes the
+    typing and leaves the real hole, which is that a required field had no way
+    to hold "there is no requirement". The model said `max_delivery_days: int =
+    Field(gt=0)`. Not optional. A brief without a deadline could not be
+    constructed at all - the scope gate was the only thing standing between us
+    and a ValidationError, and nobody had noticed it was doing that job.
+
+    What we do: make "no deadline" a value the system can hold, and keep the
+    question. `None` on that field now means one specific thing - the buyer
+    told us there is no deadline - and never "we forgot to ask", which is
+    exactly what the gate still being there guarantees. Then the same seam the
+    price cap already had: stage 3 does not enforce a limit the buyer never
+    set, stage 4 still ranks delivery, and the audit note says out loud that
+    nothing was rejected on lead time.
+
+    We also refused two tempting additions. "ASAP" is not a number; any value we
+    picked would be our opinion printed back as the buyer's own HARD constraint,
+    on the one field where inventing a number does the most damage. Calendar
+    dates ("by 30 August") would make the same sentence parse to a different
+    window tomorrow, which breaks the property the whole project is built on.
+
+    THE LINE:   "The field could not hold 'no deadline', so the gate asking for
+                 one was load-bearing - it was the only thing stopping a crash.
+                 We made the absence representable, then kept the question."
+
+
+8.8.19  THE TRAP: THE ONE-LINE FIX THAT WOULD HAVE RANKED THE SLOWEST SUPPLIER
+        FIRST AND LOOKED FINE DOING IT
+    With no deadline there is no cap to measure a margin against, so delivery
+    has to fall back to the other method we already have: min-max across the
+    surviving pool. That is a one-line change - add "delivery" to the min-max
+    list - and it is wrong.
+
+    Min-max is written for criteria where MORE is better. A higher rating is
+    better; a longer replacement window is better. Delivery is days, and fewer
+    is better. Handed the raw fraction, the slowest supplier in the pool scores
+    1.0 on delivery and the fastest scores 0.0.
+
+    What makes it dangerous is that nothing looks wrong. Every number is still
+    between 0 and 1. The contributions still sum to the score. The bars still
+    render. The winner is simply the wrong product, for a reason no one reading
+    the screen can see - and our golden test does not catch it, because the demo
+    brief states a ten-day window and never takes this path at all.
+
+    What we do: an explicit `lower_is_better` flag through the normaliser, and a
+    test that asserts the DIRECTION rather than the numbers - fastest in pool
+    scores 1.0, slowest scores 0.0. We broke the inversion on purpose and
+    confirmed that test, and only that test, went red.
+
+    THE LINE:   "Adding delivery to the min-max list is one line and it silently
+                 ranks the slowest supplier first. The golden test stays green
+                 through it. We wrote the test that does not."
+
+
 ================================================================================
 MAINTENANCE
 ================================================================================
@@ -1390,6 +1455,7 @@ places where we can show judgement.
 Last updated: after the interface work - reversing four of our own design rules
 and rewriting the reasons to match, taking out a blur that hung the demo laptop
 twice, finding two EFFICIENCY.md references pointing at prose while the test
-guarding them stayed green, and discovering the page background we were about to
-build had been in the stylesheet all along, drawn below the visible floor and
-covered by Streamlit's own header (8.8.14 - 8.8.17).
+guarding them stayed green, discovering the page background we were about to
+build had been in the stylesheet all along, and making "no delivery deadline"
+an answer the system can hold rather than a question it asks forever
+(8.8.14 - 8.8.19).

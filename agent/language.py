@@ -143,6 +143,17 @@ class _Extraction(BaseModel):
     specs: list[str] = Field(default_factory=list)
     max_price_per_unit_inr: float | None = None
     max_delivery_days: int | None = None
+    # THREE STATES, NOT TWO, AND THE THIRD IS WHY THIS FIELD EXISTS.
+    # `max_delivery_days = None` used to carry two different meanings that the
+    # gate has to tell apart: "the buyer never mentioned a deadline" (ask them)
+    # and "the buyer says there is no deadline" (get on with it). A single
+    # nullable int cannot say both, so the second one gets its own flag.
+    # Set it and leave the number null; never both.
+    delivery_is_open: bool = Field(
+        default=False,
+        description="True only when the buyer SAID there is no deadline - 'no "
+        "rush', 'whenever'. Not the same as failing to mention one.",
+    )
     stated_priorities: list[_StatedPriority] = Field(default_factory=list)
     flexibility_order: list[str] = Field(
         default_factory=list,
@@ -236,7 +247,10 @@ def _default_question(missing: list[str]) -> str:
     asks = {
         "category": "what you're buying",
         "quantity": "how many units you need",
-        "max_delivery_days": "your delivery deadline in days",
+        # Naming the get-out is the point. "your delivery deadline in days"
+        # described the only shape the parser accepted without ever saying so,
+        # and a buyer with no deadline had no way to say that.
+        "max_delivery_days": "your delivery deadline, or say 'no rush' if you have none",
         "max_price_per_unit_inr": "your per-unit price ceiling",
     }
     wanted = [asks[field] for field in missing if field in asks] or ["a bit more detail"]
@@ -348,7 +362,12 @@ def _to_brief(raw_text: str, extraction: _Extraction, audit: AuditLogger | None)
         quantity=extraction.quantity or 0,
         specs=extraction.specs,
         max_price_per_unit_inr=cap,
-        max_delivery_days=extraction.max_delivery_days or 0,
+        # Passed straight through, including None. The `or 0` that used to be
+        # here could only ever produce a number the Brief then rejected
+        # (`gt=0`), so an unstated deadline was a ValidationError waiting on the
+        # scope gate to prevent it. None is now a value the field can hold and
+        # every stage downstream reads as "no window was set".
+        max_delivery_days=extraction.max_delivery_days,
         stated_priorities=priorities,
         field_status=status,
         flexibility_order=extraction.flexibility_order,
@@ -448,8 +467,9 @@ _SCOPE_TASK = (
     "You are the intake step of a procurement assistant. Decide ONE of:\n"
     "- out_of_scope: the message is not about buying goods or supplies at all.\n"
     "- incomplete: it is a buying request, but it does not say what is being "
-    "bought, or how many, or by when.\n"
-    "- in_scope: it says what, how many, and a delivery deadline.\n\n"
+    "bought, or how many, or anything at all about when it is needed.\n"
+    "- in_scope: it says what, how many, and EITHER a delivery deadline OR that there is no deadline.\n"
+    "A buyer is allowed to have no date. 'No rush', 'whenever', 'take your time' and 'no deadline' are COMPLETE answers about timing, not missing ones, and someone who has already said they have no deadline must never be asked for one again.\n\n"
     "List the missing field names using exactly these words: category, quantity, "
     "max_delivery_days. If incomplete, write ONE short question that asks for all "
     "the missing pieces together. Do not answer the user's request and do not "
@@ -498,6 +518,18 @@ def _extraction_task() -> str:
         "name; the names mean what they say. "
         "Saying nothing about a criterion is different and is NOT a "
         "priority: leave it out entirely.\n\n"
+        "TIMING HAS THREE ANSWERS, NOT TWO. If the user gives a deadline, "
+        "put it in max_delivery_days in DAYS, converting yourself - two "
+        "weeks is 14, a month is 30.\n"
+        "If the user says there is no deadline ('no rush', 'whenever', "
+        "'take your time'), set delivery_is_open true and leave "
+        "max_delivery_days null.\n"
+        "If the user says nothing about timing at all, leave both alone. "
+        "That is the case we ask a question about, and it is NOT the same "
+        "as being told there is no deadline.\n\n"
+        "A deadline and a PREFERENCE about speed are different facts. 'We "
+        "do not care about delivery speed' is a priority; 'no rush' is an "
+        "open deadline. A message can state either without the other.\n\n"
         "Leave a numeric field null if the user did not state it. Never guess a "
         "number. Put physical or technical requirements - materials, "
         "dimensions, sizes, capacities - in specs.\n\n"
@@ -660,6 +692,58 @@ _NEGATION_CUES: tuple[str, ...] = (
     "do not mind", "least of", "not a priority", "no issue with",
 )
 
+# --- how long is "two weeks"? -------------------------------------------------
+# Calendar arithmetic, so it lives here rather than in config.yaml. config.yaml
+# holds LIMITS - things a buyer or a finance manager might argue about and edit.
+# Seven days in a week is not one of those. A month is thirty because a buying
+# window is a rough span, not a calendar date, and thirty is the convention
+# every purchasing system already uses.
+#
+# Order matters: the longest unit first, so "18 months" cannot be read as
+# "18 mon..." by a shorter pattern.
+_DELIVERY_UNITS: tuple[tuple[str, int], ...] = (
+    (r"(\d+)\s*months?", 30),
+    (r"(\d+)\s*weeks?", 7),
+)
+
+# The article forms, which carry no digit for the patterns above to catch.
+# Checked against the lowered sentence, longest first so "a fortnight" is not
+# shadowed by a prefix of something else.
+_DELIVERY_PHRASES: dict[str, int] = {
+    "a fortnight": 14,
+    "one fortnight": 14,
+    "a month": 30,
+    "one month": 30,
+    "next month": 30,
+    "a week": 7,
+    "one week": 7,
+    "next week": 7,
+}
+
+# WHAT A BUYER SAYS WHEN THERE IS NO DEADLINE.
+#
+# This list is the whole reason the interface stopped being a dead end. The gate
+# asks for a delivery window and would only accept a digit followed by the word
+# "days"; someone whose honest answer was "no rush" got the same question back
+# forever, because their reply was appended to the brief and re-checked against
+# the same regex.
+#
+# These are about the DEADLINE, and they are deliberately separate from
+# _NEGATION_CUES, which is about a PREFERENCE. "We do not care about delivery
+# speed" says the buyer will not weight speed highly (a stage-2 weight of 0.00).
+# "No rush" says there is no date to hit (no stage-3 gate at all). Two different
+# facts about two different stages, and a brief can state either without the
+# other. The overlap in ordinary English is why both lists exist and why neither
+# is allowed to read the other's phrases.
+_NO_DEADLINE_CUES: tuple[str, ...] = (
+    "no rush", "no hurry", "not in a rush", "not in a hurry",
+    "no deadline", "no delivery deadline", "no due date",
+    "whenever", "take your time", "not urgent", "no time pressure",
+    "flexible on delivery", "flexible on the delivery",
+    "no particular deadline", "no specific deadline",
+)
+
+
 # The offline parser's idea of where a product name stops. Everything in
 # _CLAUSE_BOUNDARY opens a clause ABOUT the purchase (what it may cost, when it
 # must land) rather than naming the thing itself, so the noun phrase ends there.
@@ -798,7 +882,12 @@ def _offline_scope(text: str) -> _ScopeCheck:
         missing.append("category")
     if not extraction.quantity:
         missing.append("quantity")
-    if not extraction.max_delivery_days:
+    # "No rush" is an ANSWER, not a hole. The gate is still here and still asks
+    # once - it just stops treating a buyer who genuinely has no deadline as
+    # someone who failed to answer. That was the dead end: the reply was
+    # appended to the brief and re-checked against the same regex, so the same
+    # question came back forever.
+    if not extraction.max_delivery_days and not extraction.delivery_is_open:
         missing.append("max_delivery_days")
 
     if missing:
@@ -846,11 +935,36 @@ def _offline_extract(text: str) -> _Extraction:
         working = working.replace(price_match.group(0), " ", 1)
 
     # --- delivery window ---------------------------------------------------
+    # A NUMBER ALWAYS WINS. Only when nothing numeric was said do we look for a
+    # phrase that means "there is no deadline" - so "within 12 days, no rush
+    # otherwise" is a twelve-day window, not an open one.
+    #
+    # EVERY BRANCH STRIPS WHAT IT MATCHED, and that is not tidiness. Whatever
+    # survives this function is read as the QUANTITY further down (see the note
+    # at the top), so an unstripped "2 weeks" becomes an order for two units.
     days: int | None = None
+    delivery_is_open = False
+
     days_match = re.search(r"(\d+)\s*(?:working |business |calendar )?days?", working)
     if days_match:
         days = int(days_match.group(1))
         working = working.replace(days_match.group(0), " ", 1)
+    else:
+        for pattern, multiplier in _DELIVERY_UNITS:
+            unit_match = re.search(pattern, working)
+            if unit_match:
+                days = int(unit_match.group(1)) * multiplier
+                working = working.replace(unit_match.group(0), " ", 1)
+                break
+        else:
+            for phrase, span in _DELIVERY_PHRASES.items():
+                if phrase in lowered:
+                    days = span
+                    working = working.replace(phrase, " ", 1)
+                    break
+
+    if days is None and any(phrase in lowered for phrase in _NO_DEADLINE_CUES):
+        delivery_is_open = True
 
     # --- category ----------------------------------------------------------
     # Found BEFORE specs, because which words count as a physical requirement
@@ -955,5 +1069,6 @@ def _offline_extract(text: str) -> _Extraction:
         specs=specs,
         max_price_per_unit_inr=cap,
         max_delivery_days=days,
+        delivery_is_open=delivery_is_open,
         stated_priorities=priorities,
     )

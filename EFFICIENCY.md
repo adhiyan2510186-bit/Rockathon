@@ -397,8 +397,8 @@ anyone teaches it one."*
 is never sent — not sent and ignored. Two API calls saved per brief, and nothing
 downstream changes.
 
-**Where.** `agent/language.py:522`, `_use_model()` — the one line that decides
-whether a call happens. `agent/language.py:589`, `_skipped_note()` says which of
+**Where.** `agent/language.py:554`, `_use_model()` — the one line that decides
+whether a call happens. `agent/language.py:621`, `_skipped_note()` says which of
 the two reasons applied. `app.py:514`, `_language_switch()` is the sidebar
 control, and `app.py`, `handle_message()` reads the flag **once** and passes it
 to both `check_scope()` and `extract_brief()`, so a single brief can never be

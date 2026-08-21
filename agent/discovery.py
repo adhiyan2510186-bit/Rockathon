@@ -169,6 +169,9 @@ def apply_hard_gates(brief: Brief, products: list[Product]) -> list[FilterResult
     cap_was_stated = (
         brief.field_status.get("max_price_per_unit_inr") is not FieldStatus.ASSUMED
     )
+    # The same question asked of the other negotiable limit, and hoisted for the
+    # same reason: it is one fact about the brief, not one fact per product.
+    window_was_stated = delivery_cap is not None
 
     results: list[FilterResult] = []
 
@@ -200,7 +203,12 @@ def apply_hard_gates(brief: Brief, products: list[Product]) -> list[FilterResult
                 f"{price_cap:.2f} cap by Rs {over:.2f}"
             )
 
-        if product.delivery_days > delivery_cap:
+        # Guarded exactly like the price cap above, and for the reason given at
+        # the top of this function: a hard gate is a promise the BUYER made. A
+        # buyer who said "no rush" made no promise about lead time, so there is
+        # nothing here to enforce and every delivery date qualifies. Stage 4
+        # still ranks on speed - see the pool method in agent/ranking.py.
+        if window_was_stated and product.delivery_days > delivery_cap:
             late = product.delivery_days - delivery_cap
             violations["max_delivery_days"] = (
                 f"arrives in {product.delivery_days} days against a "
@@ -238,11 +246,15 @@ def run(
     cap_was_stated = (
         brief.field_status.get("max_price_per_unit_inr") is not FieldStatus.ASSUMED
     )
-    gate_note = (
+    window_was_stated = brief.max_delivery_days is not None
+    gate_note = "".join((
         "" if cap_was_stated else
         " No per-unit ceiling was stated, so nothing was rejected on price; "
-        "price was scored instead."
-    )
+        "price was scored instead.",
+        "" if window_was_stated else
+        " No delivery deadline was set, so nothing was rejected on lead time; "
+        "delivery was scored instead.",
+    ))
 
     if audit:
         audit.decision(

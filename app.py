@@ -736,6 +736,14 @@ def _brief_readback(ctx) -> None:
         f"max ₹{brief.max_price_per_unit_inr:.2f}/unit" if cap_stated
         else "no price ceiling given"
     )
+    # Same shape as the price chip above: a limit the buyer did not set is
+    # still worth showing, because "no deadline" is a fact about this order that
+    # changes which products qualified.
+    window_stated = brief.max_delivery_days is not None
+    window_chip = (
+        f"within {brief.max_delivery_days} days" if window_stated
+        else "no delivery deadline"
+    )
 
     ui.section("What we understood")
     ui.chips([
@@ -743,16 +751,26 @@ def _brief_readback(ctx) -> None:
         (brief.category, None),
         *[(spec, None) for spec in brief.specs],
         (price_chip, None),
-        (f"within {brief.max_delivery_days} days", None),
+        (window_chip, None),
     ])
-    if cap_stated:
-        st.caption("Any product missing one of these is not considered.")
-    else:
-        st.caption(
-            "Any product missing one of these is not considered. You set no price "
-            "limit, so nothing was ruled out on cost — price still counts towards "
-            "the ranking below."
+    # WHICH LIMITS THE BUYER DID NOT SET, SAID PLAINLY.
+    # Both negotiable limits can be absent, and when one is, the sentence below
+    # is the only place a buyer learns that nothing was ruled out on it. Built
+    # from a list rather than written out four times, because "no price limit",
+    # "no deadline", "neither" and "both set" is four sentences to keep in step.
+    unruled = []
+    if not cap_stated:
+        unruled.append("cost")
+    if not window_stated:
+        unruled.append("delivery time")
+
+    caption = "Any product missing one of these is not considered."
+    if unruled:
+        caption += (
+            f" Nothing was ruled out on {' or '.join(unruled)}, because you set "
+            f"no limit there — but it still counts towards the ranking below."
         )
+    st.caption(caption)
 
     if ctx.weights:
         st.markdown("")
@@ -787,7 +805,11 @@ def _brief_readback(ctx) -> None:
                      f"default of ₹{brief.max_price_per_unit_inr:.2f} was recorded "
                      f"as an assumption, not applied as a limit)"
             ),
-            "max_delivery_days": brief.max_delivery_days,
+            "max_delivery_days": (
+                brief.max_delivery_days if window_stated
+                else "none stated - you said there was no deadline, so nothing "
+                     "was ruled out on delivery time"
+            ),
         })
         if ctx.weights:
             st.markdown("**Preferences** — ranking only. Never rejects anything.")
@@ -848,7 +870,8 @@ def render_recommendation() -> None:
         ("Order total", f"₹{total:,.0f}",
          f"{ctx.brief.quantity:,} {config.unit_noun(ctx.brief.category)}"),
         ("Delivery", f"{winner.product.delivery_days} days",
-         f"{ctx.brief.max_delivery_days - winner.product.delivery_days} days inside your deadline"),
+         f"{ctx.brief.max_delivery_days - winner.product.delivery_days} days inside your deadline"
+         if ctx.brief.max_delivery_days is not None else "no deadline set"),
         ("Supplier rating", f"{winner.product.reliability_rating:.1f}",
          f"best of the {len(ctx.ranked)} that qualified"),
         ("Match", f"{winner.score:.1f}",

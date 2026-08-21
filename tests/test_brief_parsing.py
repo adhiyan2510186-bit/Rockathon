@@ -342,3 +342,84 @@ def test_no_key_and_chosen_offline_are_told_apart(monkeypatch):
     monkeypatch.setenv("GEMINI_API_KEY", "")
 
     assert "no API key" in language.extract_brief(BRIEF).note
+
+
+# ---------------------------------------------------------------------------
+# "I have no deadline" is an answer, not a hole
+# ---------------------------------------------------------------------------
+# The gate used to require a delivery window and accept exactly one shape for
+# it: a digit followed by the word "days". A buyer whose honest answer was "no
+# rush" got the same question back forever, because app.py appends the reply to
+# the brief and re-runs the same check. These tests pin the way out.
+
+
+@pytest.mark.parametrize("phrase", [
+    "no rush",
+    "no hurry",
+    "no deadline",
+    "whenever",
+    "take your time",
+    "not urgent",
+])
+def test_a_buyer_with_no_deadline_is_not_asked_for_one(phrase):
+    """The complaint, pinned: an open-ended answer has to get past the gate."""
+    brief = f"25 headsets, over-ear, max Rs 4,000 each, {phrase}"
+
+    extraction = language._offline_extract(brief)
+    assert extraction.delivery_is_open is True
+    assert extraction.max_delivery_days is None
+
+    assert language._offline_scope(brief).verdict == "in_scope", (
+        f"'{phrase}' says there is no deadline. Asking again for one is the dead "
+        f"end this change exists to remove."
+    )
+    assert parse(brief).max_delivery_days is None
+
+
+@pytest.mark.parametrize("brief,days", [
+    ("25 headsets, over-ear, max Rs 4,000 each, in 2 weeks", 14),
+    ("25 headsets, over-ear, max Rs 4,000 each, within 6 weeks", 42),
+    ("25 headsets, over-ear, max Rs 4,000 each, within a month", 30),
+    ("25 headsets, over-ear, max Rs 4,000 each, in 3 months", 90),
+    ("25 headsets, over-ear, max Rs 4,000 each, in a fortnight", 14),
+    ("25 headsets, over-ear, max Rs 4,000 each, delivered within 12 days", 12),
+])
+def test_a_window_can_be_said_in_weeks_or_months(brief, days):
+    """"Two weeks" is a delivery window a buyer would actually type."""
+    assert parse(brief).max_delivery_days == days
+
+
+def test_a_stated_number_beats_an_open_ended_phrase():
+    """A date and a shrug in one sentence: the date is the constraint."""
+    parsed = parse("40 headsets within 12 days, no rush otherwise")
+
+    assert parsed.max_delivery_days == 12
+
+
+def test_a_window_in_weeks_is_not_mistaken_for_the_order_size():
+    """The regression the strip guards against.
+
+    Whatever survives the delivery match is read as the quantity further down,
+    so an unstripped "2 weeks" turns a 200-unit order into an order for 2.
+    """
+    parsed = parse("200 bags of cement, max Rs 400 each, in 2 weeks")
+
+    assert parsed.quantity == 200
+    assert parsed.max_delivery_days == 14
+
+
+def test_dismissing_delivery_speed_is_not_the_same_as_having_no_deadline():
+    """Two different facts about two different stages, and both can be stated.
+
+    "We do not care about delivery speed" is a PREFERENCE - it zeroes the
+    stage-4 weight. "No rush" is an open DEADLINE - it removes the stage-3 gate.
+    A brief can say one without the other, and neither list is allowed to read
+    the other's phrases.
+    """
+    priority_only = parse("40 headsets within 12 days. We do not care about delivery speed.")
+    assert priority_only.max_delivery_days == 12
+    assert priority_only.stated_priorities.get("delivery") == "does_not_matter"
+
+    deadline_only = parse("40 headsets, over-ear, max Rs 4,000 each, no rush")
+    assert deadline_only.max_delivery_days is None
+    assert "delivery" not in deadline_only.stated_priorities
