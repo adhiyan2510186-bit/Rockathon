@@ -720,6 +720,70 @@ def css(p: "Palette") -> str:
   }}
   [data-testid="stSidebar"] .block-container {{ padding-top: 1.5rem; }}
 
+  /* WHO IS SIGNED IN.
+     An account block, not a person. The name is always "User" - we do not know
+     who is at the keyboard, and a name invented here would end up in a record a
+     finance manager reads. The line under it is the one fact about this account
+     that changes what the agent may do on its own, so it replaces the loose
+     caption that used to float below the button.
+
+     The mark is a neutral disc, deliberately NOT the brand gradient the product
+     mark wears. Two gradient discs one above the other would read as the same
+     thing twice; the product is violet, you are ink. */
+  .acct {{
+      display: flex; align-items: center; gap: 0.625rem;
+      padding: 0.625rem 0.75rem; margin-bottom: 0.875rem;
+      border: 1px solid var(--border); border-radius: 10px;
+      background: var(--glass-fill); box-shadow: inset 0 1px 0 var(--sheen);
+  }}
+  .acct-mark {{
+      width: 2rem; height: 2rem; border-radius: 999px; flex: none;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: var(--surface-2); border: 1px solid var(--border-strong);
+      color: var(--ink); font-size: 0.8125rem; font-weight: 600;
+  }}
+  .acct-text {{
+      display: flex; flex-direction: column; line-height: 1.3; min-width: 0;
+  }}
+  .acct-name {{ font-size: 0.8125rem; font-weight: 600; color: var(--ink); }}
+  .acct-line {{ font-size: 0.6875rem; color: var(--ink-faint); }}
+
+  /* PAST ORDERS.
+     One row per finished order, each one a real button that opens that order's
+     own record. Scoped by the widget key rather than by a marker element, so the
+     rule reaches these rows and nothing else in the panel - the "New order"
+     button sits in the same column and must keep looking like a button.
+
+     Two weights per row for the same reason the reorder cards use two: the item
+     is what you are looking for, the reference and the total are what you check
+     once you have found it. */
+  [class*="st-key-past_"] .stButton > button {{
+      width: 100%; min-height: 0; height: auto;
+      display: flex; align-items: center; justify-content: flex-start;
+      text-align: left; white-space: normal; line-height: 1.4;
+      padding: 0.5rem 0.625rem; margin-bottom: 0.25rem; border-radius: 8px;
+      background: transparent; color: var(--ink-2);
+      border: 1px solid var(--border); border-left: 2px solid var(--border-strong);
+      transition: border-color var(--dur) var(--ease), color var(--dur) var(--ease),
+                  background var(--dur) var(--ease);
+  }}
+  [class*="st-key-past_"] .stButton > button:hover {{
+      color: var(--ink); background: var(--surface-2);
+      border-color: var(--border-strong); border-left-color: var(--accent);
+  }}
+  [class*="st-key-past_"] .stButton > button:focus-visible {{
+      outline: 2px solid var(--accent); outline-offset: 2px;
+  }}
+  [class*="st-key-past_"] .stButton > button > div {{
+      width: 100%; justify-content: flex-start;
+  }}
+  [class*="st-key-past_"] .stButton p {{
+      text-align: left; margin: 0; font-size: 0.6875rem; line-height: 1.45;
+  }}
+  [class*="st-key-past_"] .stButton strong {{
+      display: block; color: var(--ink); font-weight: 600; font-size: 0.8125rem;
+  }}
+
   /* ---- misc ------------------------------------------------------------- */
   .rule {{ height: 1px; background: var(--border); margin: 1.5rem 0; border: 0; }}
   .provenance {{

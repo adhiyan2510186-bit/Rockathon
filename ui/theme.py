@@ -459,6 +459,38 @@ def app_header(note: str = "") -> None:
     )
 
 
+def sidebar_account(name: str, line: str) -> None:
+    """Who is signed in, at the top of the sidebar.
+
+    Every product a buyer uses all day tells them whose account they are in, and
+    an app that does not is a tool someone is demonstrating rather than a tool
+    someone works in. So this is here for the same reason the order reference is
+    in the header: it is chrome a real user expects.
+
+    The name is passed in and it is always "User". We do not know who is at the
+    keyboard, and this is the same string the approval is recorded under - so if
+    we ever invented a name to make the panel feel warmer, that invention would
+    end up in a record a finance manager reads. One value, one spelling, both
+    places.
+
+    `line` is the fact about this account that changes what the agent may do
+    alone: the amount above which it has to stop and ask. That belongs next to
+    the account rather than floating as a caption, because it is a property of
+    who you are here, not of the order on screen.
+    """
+    from html import escape
+
+    st.markdown(
+        f'<div class="acct">'
+        f'<span class="acct-mark">{escape(name[:1].upper())}</span>'
+        f'<span class="acct-text">'
+        f'<span class="acct-name">{escape(name)}</span>'
+        f'<span class="acct-line">{escape(line)}</span>'
+        f"</span></div>",
+        unsafe_allow_html=True,
+    )
+
+
 def sidebar_brand() -> None:
     """The same lockup, small, at the foot of the sidebar.
 

@@ -51,6 +51,8 @@ twice.
 
 from __future__ import annotations
 
+from typing import Any, NamedTuple
+
 import streamlit as st
 
 from agent import (
@@ -148,6 +150,37 @@ _FINISHED = {
     TransactionStatus.EXPIRED,
 }
 
+# Who the sidebar says is signed in. The same string the approval is recorded
+# under - see APPROVER above. Spelling it once means the panel and the audit
+# entry can never disagree about who acted.
+ACCOUNT_NAME = APPROVER
+
+
+class PastOrder(NamedTuple):
+    """One finished order, kept so its record can be reopened.
+
+    It holds the transaction context and its logger rather than a summary of
+    them. That is the whole trick: reopening a past order shows the SAME record
+    the live screen showed, rendered by the same function, because it is the same
+    objects. A second, prettier copy of an order's figures kept for a sidebar is
+    exactly how a record ends up disagreeing with itself.
+
+    `summary` rides along because the paid price lives there and not on the
+    context - the screen needs what was actually charged, not what was quoted.
+
+    Nothing here is written to disk on our account. The JSONL export was already
+    written the moment each event happened, so a past order in this list is a
+    pointer to a run, not a second store of it. Close the app and the list goes;
+    the audit files stay exactly where they were.
+    """
+
+    transaction_id: str
+    item: str
+    line: str
+    ctx: Any
+    log: Any
+    summary: Any
+
 
 # ---------------------------------------------------------------------------
 # State
@@ -174,6 +207,10 @@ def init_state() -> None:
         "payment": None,
         "summary": None,
         "last_brief": "",          # so a failure can be re-tested in one click
+        # Finished orders from this session, newest first, and which one is open
+        # on screen. Deliberately session-scoped: closing the app clears them.
+        "history": [],
+        "viewing": None,           # a transaction id, when a past order is open
         "switches": config.failure_injection(),
         "source_keys": list(sources.ALL_SOURCE_KEYS),
         # Whether to spend a model call on the next brief. Starts wherever
@@ -195,6 +232,10 @@ def reset() -> None:
     # here, and a reason typed against last week's chairs must not be attached to
     # this week's boxes.
     st.session_state["decline_reason"] = ""
+    # A past order being read is about a different transaction, so it does not
+    # survive starting a new one. `history` deliberately DOES survive - it is the
+    # account's record of the session, not part of the order being cleared.
+    st.session_state["viewing"] = None
     for key in ("ctx", "log", "market", "auth", "stage3_escalation",
                 "confirmation", "payment", "summary", "pending_context"):
         st.session_state[key] = None
@@ -246,6 +287,9 @@ def handle_message(text: str) -> None:
     This is conversation state, so it lives here rather than in the engine.
     """
     say("user", text)
+
+    # Typing is about the order in hand, so reading a past one ends here.
+    st.session_state["viewing"] = None
 
     ctx = st.session_state["ctx"]
     if ctx is None or ctx.status in _FINISHED:
@@ -433,6 +477,87 @@ def execute() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Past orders — the session's own record
+# ---------------------------------------------------------------------------
+
+def _remember_finished_order() -> None:
+    """File the current order under past orders once it has finished.
+
+    Called once at the top of the sidebar, which is the only place that runs on
+    every single re-run whatever screen is open. Doing it here rather than at the
+    end of `execute()` means no path can finish an order and forget to file it -
+    a decline, an expiry and a completed purchase all arrive at the same check.
+
+    Terminal states only, and each id filed once. An order still awaiting a
+    person is not a past order, and a list that grew a duplicate row every time
+    Streamlit re-ran the file would be unusable within a minute.
+    """
+    ctx = st.session_state["ctx"]
+    log = st.session_state["log"]
+    if ctx is None or log is None or ctx.status not in _FINISHED:
+        return
+    if any(order.transaction_id == ctx.transaction_id
+           for order in st.session_state["history"]):
+        return
+
+    summary = st.session_state["summary"]
+    chosen = ctx.selected or (ctx.ranked[0] if ctx.ranked else None)
+
+    # What was bought, and what happened. A declined order says so plainly -
+    # a list that only shows purchases would quietly lose the runs where the
+    # answer was no, and those are the ones worth being able to point at.
+    if summary is not None:
+        line = f"₹{summary.amount_inr:,.0f} · Ordered"
+    elif ctx.status is TransactionStatus.DECLINED:
+        line = "Declined · nothing bought"
+    else:
+        line = "Expired · nothing bought"
+
+    st.session_state["history"].insert(0, PastOrder(
+        transaction_id=ctx.transaction_id,
+        item=chosen.product.name if chosen is not None else "Nothing chosen",
+        line=line,
+        ctx=ctx,
+        log=log,
+        summary=summary,
+    ))
+
+
+def _open_past_order() -> PastOrder | None:
+    """The past order currently on screen, if the sidebar opened one."""
+    viewing = st.session_state["viewing"]
+    if not viewing:
+        return None
+    for order in st.session_state["history"]:
+        if order.transaction_id == viewing:
+            return order
+    return None
+
+
+def _past_orders_panel() -> None:
+    """The list itself. Each row opens that order's own record.
+
+    These are real orders from this session, not a stub - the item, the amount
+    and the reference are read off the transaction the engine actually ran. That
+    is the difference between this list and the reorder shortcuts on the opening
+    screen, which are starting points we wrote by hand.
+    """
+    history = st.session_state["history"]
+    if not history:
+        return
+
+    st.caption("Your orders")
+    for order in history:
+        if st.button(
+            f"**{order.item}**  \n{order.transaction_id} · {order.line}",
+            width="stretch",
+            key=f"past_{order.transaction_id}",
+        ):
+            st.session_state["viewing"] = order.transaction_id
+            st.rerun()
+
+
+# ---------------------------------------------------------------------------
 # Sidebar — deliberately quiet
 # ---------------------------------------------------------------------------
 
@@ -444,15 +569,29 @@ def render_sidebar() -> None:
     and leaving them open on the main surface would make the app look like a test
     harness.
     """
+    _remember_finished_order()
+
     with st.sidebar:
         # No heading here. The product's name is already in the page header two
         # inches away, and a sidebar that repeats it is a second title competing
-        # with the first.
-        ctx = st.session_state["ctx"]
-        st.caption(
-            f"{len(ctx.audit)} events on this order" if ctx is not None
-            else "No order in progress"
+        # with the first. The account block is not a heading either - it says
+        # whose panel this is, which is a different job.
+        theme.sidebar_account(
+            ACCOUNT_NAME,
+            f"Approves above ₹{config.authorisation_limit_inr():,.0f}",
         )
+
+        ctx = st.session_state["ctx"]
+        # "This order" means the one on screen, so the count is dropped while a
+        # past order is open - otherwise the panel counts one order's events
+        # beside another order's record, and one of the two numbers is a lie.
+        # The pill below stays either way: it is a call to action about the order
+        # in progress and says so in its own words.
+        if not st.session_state["viewing"]:
+            st.caption(
+                f"{len(ctx.audit)} events on this order" if ctx is not None
+                else "No order in progress"
+            )
 
         # The one ambient signal in the app. An order that is waiting on a person
         # is waiting whichever tab you happen to be reading, and the sidebar is
@@ -470,7 +609,11 @@ def render_sidebar() -> None:
             reset()
             st.rerun()
 
-        st.caption(f"Approval needed above ₹{config.authorisation_limit_inr():,.0f}")
+        # Finished orders, newest first. Sits above the controls because it is
+        # the only thing in this panel a buyer opens on purpose; everything
+        # below it is setup.
+        st.markdown("")
+        _past_orders_panel()
 
         with st.expander("Suppliers"):
             chosen = []
@@ -670,8 +813,9 @@ def _empty_request_state() -> None:
     # fast way to start without typing a long sentence live, but they are not
     # framed as demo buttons, because to a real user they would not be.
     #
-    # Honest scope: this is a stub with hardcoded entries. There is no request
-    # history in this build, and nothing here reads one.
+    # Honest scope: these four are hardcoded starting points, not a record of
+    # anything. The real record is "Your orders" in the sidebar - orders this
+    # session actually placed - and nothing here reads it.
     st.caption("Recent requests")
 
     # A 2x2 grid of cards rather than four buttons down the left edge. Four
@@ -1154,7 +1298,7 @@ def _escalation_options(outcome) -> None:
 # Screen 4 — Activity
 # ---------------------------------------------------------------------------
 
-def _order_record(ctx) -> None:
+def _order_record(ctx, summary) -> None:
     """The order this trail is about, at the top of the trail.
 
     A list of events answers "what did it do?". It does not answer the question
@@ -1174,7 +1318,6 @@ def _order_record(ctx) -> None:
         st.caption("No product was chosen, so nothing was ordered.")
         return
 
-    summary = st.session_state["summary"]
     product = chosen.product
     quantity = ctx.brief.quantity
 
@@ -1231,7 +1374,32 @@ def render_activity() -> None:
         st.caption("Nothing has happened yet.")
         return
 
-    _order_record(ctx)
+    _record_screen(ctx, log, st.session_state["summary"])
+
+
+def render_past_order(order: PastOrder) -> None:
+    """A finished order reopened from the sidebar, and the way back.
+
+    It calls the same function the live screen calls, with that order's own
+    objects. There is no second rendering of an order anywhere in this file, so
+    a record cannot look one way while it is happening and another way a week
+    later - which is the only version of this feature worth having in a product
+    whose whole claim is that the record can be trusted.
+
+    It replaces the four screens rather than switching to one of them. The tabs
+    are about the order in progress; a finished order is a different subject, and
+    borrowing one of its tabs would leave three showing somebody else's numbers.
+    """
+    if st.button("← Back", key="close_past"):
+        st.session_state["viewing"] = None
+        st.rerun()
+
+    _record_screen(order.ctx, order.log, order.summary)
+
+
+def _record_screen(ctx, log, summary) -> None:
+    """The order, then everything that happened to it, then the saved copy."""
+    _order_record(ctx, summary)
 
     ui.rule()
     ui.section("What happened")
@@ -1272,23 +1440,35 @@ init_state()
 # The header carries the current order reference on its right. It is the one
 # number a buyer needs from every screen - it is what they quote on the phone -
 # so it belongs in the chrome rather than being hunted for on the trail.
-_ctx = st.session_state["ctx"]
-theme.app_header(_ctx.transaction_id if _ctx is not None else "")
-
+# The sidebar files any finished order into the history list, so it runs before
+# anything reads that list.
 render_sidebar()
 
-request_tab, recommendation_tab, approval_tab, activity_tab = st.tabs(
-    ["Request", "Recommendation", "Approval", "Activity"]
+# Opening a past order puts its reference in the header too. The reference is
+# what a buyer quotes on the phone, and while a past order is on screen it is
+# that order they would be quoting.
+_past = _open_past_order()
+_ctx = st.session_state["ctx"]
+theme.app_header(
+    _past.transaction_id if _past is not None
+    else (_ctx.transaction_id if _ctx is not None else "")
 )
 
-with request_tab:
-    render_request()
-with recommendation_tab:
-    render_recommendation()
-with approval_tab:
-    render_approval()
-with activity_tab:
-    render_activity()
+if _past is not None:
+    render_past_order(_past)
+else:
+    request_tab, recommendation_tab, approval_tab, activity_tab = st.tabs(
+        ["Request", "Recommendation", "Approval", "Activity"]
+    )
+
+    with request_tab:
+        render_request()
+    with recommendation_tab:
+        render_recommendation()
+    with approval_tab:
+        render_approval()
+    with activity_tab:
+        render_activity()
 
 # The chat box sits outside the tabs so it is reachable from any screen.
 if prompt := st.chat_input("Describe what you need to buy…"):

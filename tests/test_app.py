@@ -538,6 +538,65 @@ def test_the_timing_signal_reaches_the_screen_without_moving_the_decision():
 
 
 # ---------------------------------------------------------------------------
+# Past orders
+# ---------------------------------------------------------------------------
+
+def test_an_order_only_joins_the_list_once_it_has_finished():
+    """A live order is not a past order, and a finished one files itself."""
+    app = _click(_fresh(), "start_recent")
+    assert app.session_state["ctx"].status.value == "awaiting_approval"
+    assert app.session_state["history"] == [], "an unfinished order must not be filed"
+
+    app = _click(app, "approve")
+    history = app.session_state["history"]
+    assert len(history) == 1
+    assert history[0].transaction_id == app.session_state["ctx"].transaction_id
+    assert "Ordered" in history[0].line
+
+
+def test_a_declined_order_is_kept_and_says_nothing_was_bought():
+    """The runs where the answer was no are the ones worth being able to reopen."""
+    app = _click(_click(_fresh(), "start_recent"), "decline")
+    history = app.session_state["history"]
+    assert len(history) == 1
+    assert "nothing bought" in history[0].line
+
+
+def test_opening_a_past_order_shows_that_order_and_not_the_live_one():
+    """Clicking a past order opens its own record, and Back returns to the tabs."""
+    app = _click(_click(_fresh(), "start_recent"), "approve")
+    finished = app.session_state["history"][0].transaction_id
+
+    # A second order, so the two could be confused if the screen read the wrong one.
+    app = _click(_click(app, "new_order"), "start_recent_furniture")
+    assert app.session_state["ctx"].transaction_id != finished
+
+    app = _click(app, f"past_{finished}")
+    assert not app.exception
+    assert app.session_state["viewing"] == finished
+    assert not app.tabs, "a past order replaces the four screens rather than borrowing one"
+
+    surface = " ".join(str(element.value) for element in app.markdown)
+    assert finished in surface, "the reopened record must be the order that was clicked"
+
+    app = _click(app, "close_past")
+    assert app.session_state["viewing"] is None
+    assert len(app.tabs) == 4
+
+
+def test_a_new_order_keeps_the_history_and_closes_the_one_being_read():
+    """Starting work clears the order, never the account's record of the session."""
+    app = _click(_click(_fresh(), "start_recent"), "approve")
+    finished = app.session_state["history"][0].transaction_id
+    app = _click(app, f"past_{finished}")
+
+    app = _click(app, "new_order")
+    assert app.session_state["viewing"] is None
+    assert app.session_state["ctx"] is None
+    assert len(app.session_state["history"]) == 1, "history is not part of the order"
+
+
+# ---------------------------------------------------------------------------
 # The product bar
 # ---------------------------------------------------------------------------
 

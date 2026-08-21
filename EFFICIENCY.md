@@ -183,9 +183,9 @@ That is not a promise — the toggle you just watched is the same seam."*
 pipeline at the weight engine. The sentence is never parsed twice and the
 language model is never called twice.
 
-**Where.** `app.py:304` — `apply_context()`, which sets the tag on the brief
+**Where.** `app.py:348` — `apply_context()`, which sets the tag on the brief
 already sitting in the transaction context and calls `rank_and_authorise()`
-(`app.py:333`). `handle_message()` stops at `weights.context_needed()` before it
+(`app.py:377`). `handle_message()` stops at `weights.context_needed()` before it
 computes anything.
 
 **What the naive version does.** Re-sends the full sentence through
@@ -399,7 +399,7 @@ downstream changes.
 
 **Where.** `agent/language.py:554`, `_use_model()` — the one line that decides
 whether a call happens. `agent/language.py:621`, `_skipped_note()` says which of
-the two reasons applied. `app.py:514`, `_language_switch()` is the sidebar
+the two reasons applied. `app.py:657`, `_language_switch()` is the sidebar
 control, and `app.py`, `handle_message()` reads the flag **once** and passes it
 to both `check_scope()` and `extract_brief()`, so a single brief can never be
 half-read by the model and half by the word matcher.
@@ -461,6 +461,43 @@ covers it rendering across every state the demo passes through.
 **The line.** *"The progress display is the audit log. Not a view of it, not a
 copy of it — we hand the same list to the renderer that we hand to the export,
 so there is no version of this where the screen and the record disagree."*
+
+---
+
+## 10 · Reopening a past order re-computes nothing
+
+**Claim.** Opening a finished order from the sidebar costs no ranking, no
+discovery, no model call and no disk read. The record that appears is the record
+that was already there.
+
+**Where.**
+- `app.py:483` — `_remember_finished_order()` files the transaction context and
+  its logger, the live objects, the moment the order reaches a terminal state.
+- `app.py:1380` — `render_past_order()` hands those objects to
+  `app.py:1400` — `_record_screen()`, the exact function the live screen calls.
+
+**What the naive version does.** Two obvious versions, and both are worse:
+
+1. Store a formatted summary per order — item, total, status — and render the
+   sidebar from that. Now the same order has two sets of figures in memory, and
+   the day one of them is updated and the other is not, the panel disagrees with
+   the record it links to.
+2. Re-read the JSONL and rebuild the screen from it. That is a disk read and a
+   parse per click, to reproduce a set of objects that never left memory.
+
+**Measured — a structural claim, not a benchmark.** There is one rendering of an
+order in the whole interface. `_record_screen()` takes the context, the logger
+and the close summary as parameters and reads nothing from `st.session_state`,
+which is what makes it callable with a past order's objects at all. Reopening is
+a dictionary lookup by transaction id and a re-render.
+
+The one thing that IS re-read from disk is the "check this against the saved
+copy" drill-down, and that is deliberate for the same reason stage 6 refuses the
+cache: a saved copy compared against our own memory is not a check.
+
+**The line.** *"The past order screen is not a summary we kept. It is the same
+objects and the same render function — which is why it cannot say anything
+different from what the order said while it was happening."*
 
 ---
 

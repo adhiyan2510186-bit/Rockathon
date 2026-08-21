@@ -1440,6 +1440,59 @@ A: "Real vendor integrations - auth, pagination, rate limits, and vendors whose
                  through it. We wrote the test that does not."
 
 
+8.8.20  THE TRAP: A SIDEBAR OF PAST ORDERS THAT NOBODY EVER PLACED
+    An account block and a list of past orders is what makes a build read as a
+    product rather than a demo, and it is also the easiest thing in the whole
+    app to fake. Four plausible rows - an item, a total, a date - and the panel
+    looks lived-in on the first screenshot.
+
+    We are the project whose entire claim is that the record can be trusted. A
+    fabricated order in a list that links to an audit trail is the one lie this
+    product cannot survive telling, and it is a lie a judge finds by clicking.
+
+    What the obvious build does: hardcode three or four past orders, and either
+    make the rows inert or link them all to the same sample log.
+
+    What we do: the list holds only orders THIS session actually ran, and it
+    holds the transaction context and its logger - the live objects - not a
+    summary of them. Clicking a row calls the same render function the live
+    screen calls, so a reopened order cannot show a figure the order never had.
+    Nothing is written to disk on the list's account; the JSONL export was
+    already written as each event happened. Close the app and the list is gone,
+    because a session's memory is not a database and we are not pretending it is.
+
+    An order that was DECLINED gets a row too, saying nothing was bought. A list
+    that only shows purchases quietly loses every run where the answer was no,
+    and those are the runs worth being able to point at.
+
+    THE LINE:   "Every row in that list is an order this session actually placed.
+                 We could have hardcoded four and looked established - but the
+                 one thing we cannot fake is the record."
+
+
+8.8.21  THE TRAP: STREAMLIT CANNOT SELECT A TAB, SO THE FEATURE QUIETLY
+        BECOMES A WORSE FEATURE
+    "Clicking a past order takes you to its audit log" runs straight into a
+    Streamlit limit: `st.tabs` has no programmatic selection. There is no
+    supported way to say "now show the Activity tab".
+
+    The tempting workarounds are all worse than the problem. Rebuild the tab
+    strip as a radio group so we can set it - a refactor of every screen, on a
+    demo path we said was frozen. Or drop the click and let the sidebar be
+    decoration.
+
+    What we do: a past order REPLACES the four screens instead of borrowing one,
+    with a Back button. That is not a workaround dressed up - it is the better
+    interaction. The four tabs are about the order in progress; a finished order
+    is a different subject, and showing it inside them would leave three tabs
+    displaying somebody else's numbers. Every order-list-to-order-detail screen
+    in every commerce tool works exactly this way.
+
+    THE LINE:   "The framework could not switch tabs for us, so we asked whether
+                 it should. A finished order is a different subject from the one
+                 in progress - it gets its own screen and a way back."
+
+
 ================================================================================
 MAINTENANCE
 ================================================================================
@@ -1457,5 +1510,6 @@ and rewriting the reasons to match, taking out a blur that hung the demo laptop
 twice, finding two EFFICIENCY.md references pointing at prose while the test
 guarding them stayed green, discovering the page background we were about to
 build had been in the stylesheet all along, and making "no delivery deadline"
-an answer the system can hold rather than a question it asks forever
-(8.8.14 - 8.8.19).
+an answer the system can hold rather than a question it asks forever, and
+giving the app an account and a real list of the orders it has placed rather
+than a convincing set of ones it has not (8.8.14 - 8.8.21).
