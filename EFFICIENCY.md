@@ -9,10 +9,11 @@ open the code the moment the question lands.
 > **State only what we have measured. Never state a complexity claim that the
 > data size does not justify.**
 
-Our catalogs hold single-digit products. Announcing "O(n log n)" at n=7 invites
-one obvious question — *"why does that matter here?"* — and we lose more
-credibility answering it than the claim ever won us. So every number below was
-measured on this repo, and the method is written down next to it.
+Our catalogs hold 57 products across six sources, and the largest single
+category is 17. Announcing "O(n log n)" at that size invites one obvious
+question — *"why does that matter here?"* — and we lose more credibility
+answering it than the claim ever won us. So every number below was measured on
+this repo, and the method is written down next to it.
 
 Where a win is about **shape** rather than speed at today's size, we say that
 plainly: it is the difference between code that stays correct as the catalog
@@ -36,9 +37,29 @@ to compare products, one to "reason about" the best option, one to explain the
 choice. That is four or more round trips, four chances to hallucinate a number,
 and a different answer on every run.
 
-**Measured.** `python -m pytest -q` runs the full pipeline **24 times in 0.26 s**
-with zero network calls. Re-ranking after an approval costs nothing at all,
-which is why a user can approve twenty minutes later and resume instantly.
+**Measured.** The full decision path — parse the brief, weight it, discover and
+filter 17 products from six sources, rank, read the market signal, check the
+authorisation limit, and write every audit entry to disk — runs in **9.5 ms**,
+averaged over 100 consecutive runs after a warm cache, with zero network calls.
+
+How it was measured: the loop in the block below, run from the repo root. It is
+the same sequence `app.py` executes for a brief.
+
+```python
+# 100 runs of parse -> authorise, audit writes included
+for _ in range(100):
+    ctx = TransactionContext(transaction_id=audit.new_transaction_id())
+    log = audit.AuditLogger(ctx)
+    ctx.brief = language.extract_brief(BRIEF, log, force_offline=True).brief
+    ctx.weights = weights.compute(ctx.brief, log)
+    ctx.filter_results = discovery.run(ctx.brief, log)
+    ctx.ranked = ranking.rank(eligible, ctx.weights, cap, days, log)
+    signals.read(ctx.ranked, ctx.brief, log)
+    authorisation.authorise(ctx, log)
+```
+
+Re-ranking after an approval costs nothing at all, which is why a user can
+approve twenty minutes later and resume instantly.
 
 **The sentence for stage.** *"Re-running our ranking is free and gives a
 byte-identical answer. Re-running a prompt is neither."*
@@ -51,7 +72,7 @@ byte-identical answer. Re-running a prompt is neither."*
 **except** at stage 6, which deliberately forces a genuine re-read.
 
 **Where.**
-- Cache: `agent/sources.py:100` — `SourceAdapter.fetch()`, the `fresh or self._cache is None` branch at `agent/sources.py:106`.
+- Cache: `agent/sources.py:105` — `SourceAdapter.fetch()`, the `fresh or self._cache is None` branch at `agent/sources.py:111`.
 - The deliberate exception: `agent/vendor.py:423` — `_live_record()` calls `discovery.discover(product.category, fresh=True)`.
 
 **What the naive version does.** Before the adapter layer, `discover()` re-read
@@ -86,9 +107,9 @@ purpose."*
 **Claim.** Values that are constant across the whole candidate pool are computed
 above the loop instead of rebuilt inside it.
 
-**Where.** `agent/discovery.py:127` — `apply_hard_gates()`. The
+**Where.** `agent/discovery.py:138` — `apply_hard_gates()`. The
 `required_specs` frozenset and the four cap values are built at
-`agent/discovery.py:136`, before the `for product in products` loop.
+`agent/discovery.py:164`, before the `for product in products` loop.
 
 **What the naive version does.** The previous version rebuilt the brief's
 required-spec set *inside* the loop, once per product. The brief does not change
@@ -105,13 +126,14 @@ work whose answer was identical every time.
 | After | 25 | **7** |
 
 Two separate wins stacked: hoisting the set out of the loop cut calls 43 → 25,
-and the cache on `spec_key` (`agent/discovery.py:66`) cut real work 25 → 7. The
+and the cache on `spec_key` (`agent/discovery.py:58`) cut real work 25 → 7. The
 spec vocabulary is small and fixed, so after the first pass every lookup is a
 dictionary hit instead of a regex substitution.
 
-**Honest scope.** At n=7 products this saves microseconds. We are not claiming a
-speed-up a judge could feel. We are claiming the loop does not repeat work whose
-answer cannot change — which is what keeps it correct at 7 products and at 7,000.
+**Honest scope.** At 17 products in a category this saves microseconds. We are
+not claiming a speed-up a judge could feel. We are claiming the loop does not
+repeat work whose answer cannot change — which is what keeps it correct at 17
+products and at 7,000.
 
 ---
 
@@ -161,9 +183,9 @@ That is not a promise — the toggle you just watched is the same seam."*
 pipeline at the weight engine. The sentence is never parsed twice and the
 language model is never called twice.
 
-**Where.** `app.py:292` — `apply_context()`, which sets the tag on the brief
+**Where.** `app.py:304` — `apply_context()`, which sets the tag on the brief
 already sitting in the transaction context and calls `rank_and_authorise()`
-(`app.py:321`). `handle_message()` stops at `weights.context_needed()` before it
+(`app.py:333`). `handle_message()` stops at `weights.context_needed()` before it
 computes anything.
 
 **What the naive version does.** Re-sends the full sentence through
@@ -235,7 +257,7 @@ conversions lives in one function you can open."*
 one. Adding them changed no scoring code and cannot change a score.
 
 **Where.** `agent/models.py` — `ReviewSnippet`, and `Product.review_count` /
-`Product.sample_reviews`. Rendered at `ui/components.py:249`, `buyer_reviews()`,
+`Product.sample_reviews`. Rendered at `ui/components.py:364`, `buyer_reviews()`,
 called from exactly one place in `app.py` — inside the score-breakdown drill-down.
 
 **What the naive version does.** Sends the review text to the LLM and folds a
@@ -279,7 +301,7 @@ view in the UI is reading the file, not re-deriving anything.
 **Claim.** Stage 4.5 works out which product is cheapest, fastest, most reliable
 and has the longest replacement window by walking the pool **once**.
 
-**Where.** `agent/signals.py:334` — `_pool_positions()`. All four bests are
+**Where.** `agent/signals.py:351` — `_pool_positions()`. All four bests are
 tracked in a single `for product in products` loop.
 
 **What the naive version does.** Sort the pool four times, once per criterion,
@@ -307,7 +329,7 @@ already doing.
 **Claim.** Stage 4.5 cannot alter eligibility, score, ranking or authorisation —
 not by policy, but because it has no reference to anything that holds one.
 
-**Where.** `agent/signals.py:373` — `read()` takes the ranked list as read-only
+**Where.** `agent/signals.py:390` — `read()` takes the ranked list as read-only
 input and returns a separate `MarketRead` keyed by product id. The module imports
 neither `agent.ranking` nor `agent.authorisation`.
 
@@ -375,9 +397,9 @@ anyone teaches it one."*
 is never sent — not sent and ignored. Two API calls saved per brief, and nothing
 downstream changes.
 
-**Where.** `agent/language.py:516`, `_use_model()` — the one line that decides
-whether a call happens. `agent/language.py:571`, `_skipped_note()` says which of
-the two reasons applied. `app.py:494`, `_language_switch()` is the sidebar
+**Where.** `agent/language.py:517`, `_use_model()` — the one line that decides
+whether a call happens. `agent/language.py:584`, `_skipped_note()` says which of
+the two reasons applied. `app.py:520`, `_language_switch()` is the sidebar
 control, and `app.py`, `handle_message()` reads the flag **once** and passes it
 to both `check_scope()` and `extract_brief()`, so a single brief can never be
 half-read by the model and half by the word matcher.

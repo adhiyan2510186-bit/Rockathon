@@ -274,11 +274,17 @@ and hands back the same normalised `Product`. Everything downstream (filter,
 ranker, signal, authorisation, audit) is source-agnostic and untouched when a
 source is added.
 
-Current adapters:
+Current adapters — six, over three shapes:
 
-- `PackHubAdapter` — direct vendor JSON (rupees, days, rating /5, clean specs)
-- `BoxBazaarAdapter` — aggregator CSV (paise, ship ranges, score /100, returns
-  as a sentence, specs as a pipe-blob)
+- `PackHubAdapter`, `OfficeStockAdapter` — direct vendor JSON (rupees, days,
+  rating /5, clean specs)
+- `BoxBazaarAdapter`, `TradeBridgeAdapter` — aggregator CSV (paise, ship ranges,
+  score /100, returns as a sentence, specs as a pipe-blob)
+- `AmazonAdapter`, `FlipkartAdapter` — marketplace JSON (nested rating object,
+  its own delivery wording)
+
+Six adapters, three `read()` implementations. That ratio is the point: a new
+source of a shape we already handle is a subclass and a file path.
 
 The UI carries a **source toggle**. Same engine, different feeds, identical
 downstream behaviour. That toggle is the demonstration: we are not claiming the
@@ -414,9 +420,11 @@ Three properties to hold:
   permitted to name a category; `tests/test_category_is_data.py` fails if any
   other module contains one as a live string. Adding a category is a config
   block plus catalog rows — no new branch, no new code path. We currently stock
-  **packaging, furniture and laptops**, and the three are priced so that
-  furniture sits inside the authorisation limit (agent proceeds alone) and
-  laptops sit far outside it (agent escalates).
+  **packaging, furniture, laptops and headsets**, priced so that furniture sits
+  inside the authorisation limit (agent proceeds alone) and laptops sit far
+  outside it (agent escalates). `labels` is configured with no catalog behind it
+  on purpose — it proves `available_categories()` reads what we can actually
+  buy rather than what we hold opinions about.
 - **The four soft criteria are NOT per-category.** Reliability, price,
   replacement and delivery are the universal commercial questions — a
   replacement window is a warranty on a chair. Only display labels may vary.
@@ -435,14 +443,14 @@ We want to show judges this system is efficient. The rule is:
 > **State only what we have measured. Never state a complexity claim that the
 > data size does not justify.**
 
-Our catalog is single-digit products. Big-O theatre at n=8 is worse than
-silence: one judge asking *"why does O(n log n) matter here?"* costs us more
-than the claim ever won. What we may legitimately claim, because it is true and
-measurable:
+Our catalog is 57 products across six sources — the largest single category is
+17. Big-O theatre at that size is worse than silence: one judge asking *"why
+does O(n log n) matter here?"* costs us more than the claim ever won. What we
+may legitimately claim, because it is true and measurable:
 
 | Claim | Why it is real |
 | ----- | -------------- |
-| **One LLM call per brief**, not a chain | Fewer round trips, lower cost, lower latency |
+| **Two LLM calls per brief** (scope, then extraction) — never a chain | Fewer round trips, lower cost, lower latency. Both happen before any decision; neither is repeated |
 | **Zero LLM calls in the decision path** | Re-ranking is free, instant, and identical every run |
 | **Min/max computed once per criterion**, not per product | Genuine O(n·k) instead of O(n²·k) |
 | **Approval resumes at stage 6** | Discovery and the LLM never re-run on approval |
