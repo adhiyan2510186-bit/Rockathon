@@ -52,4 +52,8 @@ runOnSave = true
 # print, record - while hiding the developer items (rerun, clear cache, deploy)
 # that would make the app look like a dev tool on stage.
 toolbarMode = "viewer"
-showErrorDetails = true
+
+# A Python traceback on a projector is the fastest way to stop looking like a
+# product. If something throws mid-demo the viewer gets a plain message and we
+# read the real error in the terminal we launched from, where it belongs.
+showErrorDetails = "none"

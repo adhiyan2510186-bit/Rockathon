@@ -489,6 +489,34 @@ def test_the_whole_demo_path_runs_without_an_exception():
     assert state["ctx"].status.value == "completed"
 
 
+def test_a_declines_reason_reaches_the_record():
+    """The WHY of a refusal, which was being dropped on the floor.
+
+    The button read the reason from a session key nothing ever wrote, so every
+    decline was logged as "none given" no matter what a buyer typed.
+    """
+    app = _click(_fresh(), "start_recent")
+    app.text_input(key="decline_reason").set_value("budget moved to next quarter").run()
+    app = _click(app, "decline")
+
+    declines = [
+        entry for entry in app.session_state["ctx"].audit
+        if entry.detail.get("declined_by")
+    ]
+    assert declines, "declining must be recorded"
+    assert declines[-1].detail["reason"] == "budget moved to next quarter"
+
+
+def test_a_reason_does_not_survive_into_the_next_order():
+    """A widget outlives the order it was typed for unless something clears it."""
+    app = _click(_fresh(), "start_recent")
+    app.text_input(key="decline_reason").set_value("wrong supplier").run()
+    app = _click(app, "decline")
+    app = _click(app, "new_order")
+
+    assert app.session_state["decline_reason"] == ""
+
+
 def test_declining_buys_nothing():
     app = _click(_fresh(), "start_recent")
     app = _click(app, "decline")

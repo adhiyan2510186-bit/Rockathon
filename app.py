@@ -191,6 +191,10 @@ def reset() -> None:
     st.session_state["brief_note"] = ""
     st.session_state["scope_note"] = ""
     st.session_state["pending_brief"] = ""
+    # A widget's value outlives the order it was typed for unless it is cleared
+    # here, and a reason typed against last week's chairs must not be attached to
+    # this week's boxes.
+    st.session_state["decline_reason"] = ""
     for key in ("ctx", "log", "market", "auth", "stage3_escalation",
                 "confirmation", "payment", "summary", "pending_context"):
         st.session_state[key] = None
@@ -947,6 +951,19 @@ def _approval_actions(ctx, auth) -> None:
         return
 
     st.markdown("")
+
+    # The reason is optional and it is the only field on this screen. A decline
+    # recorded as "reason: none given" answers the WHAT and leaves the WHY blank,
+    # which is the one question a finance manager reading this back will actually
+    # have. It used to be read from a session key nothing ever wrote, so every
+    # decline was logged without one.
+    st.text_input(
+        "Reason for declining (optional)",
+        key="decline_reason",
+        placeholder="e.g. budget moved to next quarter",
+        label_visibility="collapsed",
+    )
+
     approve, decline = st.columns([1, 1])
     with approve:
         if st.button("Approve this order", type="primary", width="stretch", key="approve"):
@@ -956,7 +973,7 @@ def _approval_actions(ctx, auth) -> None:
     with decline:
         if st.button("Decline", width="stretch", key="decline"):
             authorisation.decline(ctx, st.session_state["log"],
-                                  reason=st.session_state.get("decline_reason", ""),
+                                  reason=st.session_state.get("decline_reason", "").strip(),
                                   decliner=APPROVER)
             st.rerun()
 
