@@ -619,11 +619,47 @@ def css(p: "Palette") -> str:
   [data-testid="stDataFrame"] * {{ font-family: var(--font) !important; }}
 
   /* ---- code / audit payloads -------------------------------------------- */
+  /* The finance record and the raw entries are the two places a reader is meant
+     to check our arithmetic rather than read our prose, so they get a monospace
+     face and a container that behaves like one.
+
+     `overflow-x: auto` is the load-bearing line. A single long JSON entry with
+     no spaces in it will otherwise stretch its container, and because that
+     container is inside the page grid, the WHOLE PAGE gets a horizontal
+     scrollbar - every panel above and below suddenly 40px too wide. Containing
+     the scroll inside the block is the difference between one wide element and
+     a broken layout. */
   .stCode, pre, code {{ font-family: var(--mono) !important; }}
   .stCode > pre {{
-      background: var(--surface-2) !important; border: 1px solid var(--border);
-      border-radius: 6px; font-size: 0.75rem; line-height: 1.6;
+      background: var(--glass-fill-2) !important;
+      border: 1px solid var(--border);
+      border-radius: 8px; font-size: 0.75rem; line-height: 1.65;
+      box-shadow: inset 0 1px 0 var(--sheen);
+      overflow-x: auto;
   }}
+  /* A scrollbar people can see. The default on a dark page is a dark bar on a
+     dark trough, which is a control that only exists once you have already
+     guessed it is there. */
+  .stCode > pre::-webkit-scrollbar {{ height: 8px; }}
+  .stCode > pre::-webkit-scrollbar-track {{ background: transparent; }}
+  .stCode > pre::-webkit-scrollbar-thumb {{
+      background: var(--border-strong); border-radius: 999px;
+  }}
+  .stCode > pre::-webkit-scrollbar-thumb:hover {{ background: var(--ink-faint); }}
+
+  /* One saved entry, read back off disk. The reference is the thing a reader
+     matches against the file, so it is the only part in monospace. */
+  .entry {{
+      display: flex; align-items: baseline; gap: 0.625rem;
+      padding: 0.4375rem 0; border-top: 1px solid var(--border);
+      font-size: 0.8125rem; line-height: 1.5;
+  }}
+  .entry:first-child {{ border-top: 0; }}
+  .entry-id {{
+      font-family: var(--mono); font-size: 0.6875rem; color: var(--ink-faint);
+      white-space: nowrap; letter-spacing: -0.01em;
+  }}
+  .entry-why {{ color: var(--ink-2); min-width: 0; }}
 
   /* ---- sidebar ---------------------------------------------------------- */
   /* The sidebar overlaps both canvas pools down its whole height, which makes it

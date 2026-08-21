@@ -454,6 +454,18 @@ def render_sidebar() -> None:
             else "No order in progress"
         )
 
+        # The one ambient signal in the app. An order that is waiting on a person
+        # is waiting whichever tab you happen to be reading, and the sidebar is
+        # the only thing on screen from all four - so this is where a pulse
+        # earns its keep rather than being decoration on a screen you are
+        # already looking at.
+        #
+        # It appears for exactly one status and disappears the moment that
+        # status changes. A finished order does not pulse, because a record that
+        # throbs is claiming something is still happening to it.
+        if ctx is not None and ctx.status is TransactionStatus.AWAITING_APPROVAL:
+            ui.status_pill("waiting", live=True)
+
         if st.button("New order", width="stretch", key="new_order"):
             reset()
             st.rerun()
@@ -1149,17 +1161,29 @@ def _order_record(ctx) -> None:
     unit_price = summary.unit_price_inr if summary else product.price_per_unit_inr
     total = summary.amount_inr if summary else product.order_total_inr(quantity)
 
+    # The outcome is a tag rather than a word tacked onto the supplier badge.
+    # `kind` drives the colour and `label` the wording, so a screen can say
+    # "Declined" instead of the generic "Stopped" without being able to
+    # accidentally paint a declined order green.
+    #
+    # `live` is only ever true while a person is genuinely being waited on. It
+    # is the pulse, and a record that throbs after the fact would be claiming
+    # activity that is not happening.
     if summary is not None:
-        outcome = "Bought"
+        kind, label = "placed", "Bought"
         who = APPROVER if summary.approved_by_human else "Agent, within its limit"
     elif ctx.status is TransactionStatus.AWAITING_APPROVAL:
-        outcome, who = "Waiting on you", "Nobody yet — nothing ordered"
+        kind, label = "waiting", "Waiting on you"
+        who = "Nobody yet — nothing ordered"
     elif ctx.status is TransactionStatus.DECLINED:
-        outcome, who = "Declined", f"{APPROVER} said no"
+        kind, label = "stopped", "Declined"
+        who = f"{APPROVER} said no"
     else:
-        outcome, who = "Chosen", "Not ordered"
+        kind, label = "qualified", "Chosen"
+        who = "Not ordered"
 
-    ui.source_badge(product, extra=outcome)
+    ui.source_badge(product)
+    ui.status_pill(kind, label, live=kind == "waiting")
     ui.keyvalues([
         ("Item", product.name),
         ("Quantity", f"{quantity:,} {config.unit_noun(ctx.brief.category)}"),
@@ -1203,14 +1227,14 @@ def render_activity() -> None:
         )
         replayed = audit_module.replay(ctx.transaction_id)
         st.caption(f"{len(replayed)} entries, {ctx.transaction_id}")
-        for entry in replayed:
-            st.markdown(f"- `{entry.entry_id}` **{entry.event_type.value}** — {entry.reasoning}")
+        ui.saved_entries(replayed)
 
     st.download_button(
         "Download audit trail",
         data=log.jsonl_path().read_text(encoding="utf-8"),
         file_name=log.jsonl_path().name,
         mime="application/x-ndjson",
+        width="stretch",
     )
 
 

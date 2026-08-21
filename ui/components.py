@@ -254,6 +254,27 @@ def trace(entries: Sequence, reasons: bool = True) -> None:
     st.markdown(f'<div class="trail">{"".join(rows)}</div>', unsafe_allow_html=True)
 
 
+def saved_entries(entries: Sequence) -> None:
+    """The audit file read back off disk, one row per entry.
+
+    Deliberately NOT the rail above. The rail is the run as it happened, in our
+    words. This is the saved file in ITS words - the reference a finance system
+    would quote, next to the sentence stored beside it. Showing the two in the
+    same shape would blur the point of having both, which is that a reader can
+    check one against the other.
+
+    The reference is the only part set in monospace, because it is the only part
+    anyone is going to match character by character against the export.
+    """
+    rows = [
+        f'<div class="entry">'
+        f'<span class="entry-id">{escape(entry.entry_id)}</span>'
+        f'<span class="entry-why">{escape(entry.reasoning)}</span></div>'
+        for entry in entries
+    ]
+    st.markdown("".join(rows), unsafe_allow_html=True)
+
+
 def outcome_steps(items: Sequence[tuple[str, str, str, Sequence[str]]]) -> None:
     """What happened after approval, as the same rail the record uses.
 
