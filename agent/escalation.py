@@ -305,7 +305,7 @@ def _no_eligible_match(context: TransactionContext, audit: AuditLogger) -> Escal
 
     audit.escalation(
         STAGE_DISCOVERY,
-        f"No product passed all hard constraints; surfaced {len(options)} near-miss(es) "
+        f"Nothing met every requirement, so we put up the {len(options)} closest "
         f"for a human to accept or reject. No purchase executed.",
         detail,
     )
@@ -518,7 +518,11 @@ def _near_miss_note(brief: Brief, product: Product) -> str:
         )
     if "max_delivery_days" in deltas:
         over, fraction = deltas["max_delivery_days"]
-        parts.append(f"{int(over)} day(s) later than your window ({fraction:.0%} over)")
+        days = int(over)
+        parts.append(
+            f"{days} {'day' if days == 1 else 'days'} later than your window "
+            f"({fraction:.0%} over)"
+        )
     return "; ".join(parts) if parts else "within every negotiable limit"
 
 
@@ -791,9 +795,9 @@ def _option_failed(
         }
         audit.escalation(
             stage,
-            f"{failed_label} {failure}; the next eligible option trails by {gap} points, "
-            f"over the {threshold:.0f}-point substitution threshold, so the swap was not made "
-            f"automatically. No purchase executed.",
+            f"{failed_label} {failure}; the next option that qualifies scores {gap} "
+            f"points lower, which is more than we will substitute without asking "
+            f"({threshold:.0f} points). Nothing was swapped and no purchase executed.",
             detail,
         )
         context.status = TransactionStatus.AWAITING_APPROVAL

@@ -204,7 +204,8 @@ def apply_hard_gates(brief: Brief, products: list[Product]) -> list[FilterResult
             late = product.delivery_days - delivery_cap
             violations["max_delivery_days"] = (
                 f"arrives in {product.delivery_days} days against a "
-                f"{delivery_cap}-day window, {late} day(s) late"
+                f"{delivery_cap}-day window, {late} "
+                f"{'day' if late == 1 else 'days'} late"
             )
 
         results.append(
@@ -246,8 +247,9 @@ def run(
     if audit:
         audit.decision(
             STAGE_DISCOVERY,
-            f"Checked {len(results)} products from {len(used)} source(s) against the "
-            f"hard constraints; {len(eligible)} qualified.{gate_note}",
+            f"Checked {len(results)} {config.unit_noun(brief.category)} from "
+            f"{len(used)} {'supplier' if len(used) == 1 else 'suppliers'} against "
+            f"what you asked for; {len(eligible)} can do all of it.{gate_note}",
             {
                 "sources": used,
                 "considered": len(results),

@@ -80,14 +80,49 @@ def _click(app: AppTest, key: str) -> AppTest:
     return app.button(key=key).click().run()
 
 
+def _inside_a_drill_down(app: AppTest) -> set[int]:
+    """Every element that sits inside an expander, however deeply nested.
+
+    Identified by object identity, because the same sentence can legitimately
+    appear both on the surface and inside a breakdown, and only one of those is
+    a problem.
+    """
+    hidden: set[int] = set()
+
+    def walk(container) -> None:
+        for element in container.children.values() if isinstance(container.children, dict) else container.children:
+            hidden.add(id(element))
+            if getattr(element, "children", None):
+                walk(element)
+
+    for expander in app.expander:
+        walk(expander)
+    return hidden
+
+
 def _surface_text(app: AppTest) -> str:
     """Everything a user can read without opening a drill-down.
 
-    Deliberately excludes expander contents - that is where implementation detail
-    is ALLOWED to live, and the whole progressive-disclosure design would be
-    pointless if this test refused to let it exist anywhere.
+    Two corrections to what this used to be, both of which had let real leaks
+    through:
+
+    It said it excluded expander contents and did not. `AppTest.markdown`
+    flattens the whole tree, so every word inside every breakdown was being
+    counted as surface. That made the test both too strict in principle and
+    useless in practice, because nobody could add a banned word to the list
+    without the drill-downs failing it. Contents are now genuinely subtracted.
+
+    And it collected markdown and captions only. Expander and button LABELS are
+    visible while the drill-down is shut, so they are as much the default
+    surface as any paragraph - and they were exactly where the leaks lived.
     """
-    parts = [str(element.value) for element in list(app.markdown) + list(app.caption)]
+    hidden = _inside_a_drill_down(app)
+    parts = [
+        str(element.value)
+        for element in list(app.markdown) + list(app.caption)
+        if id(element) not in hidden
+    ]
+    parts += [str(element.label) for element in list(app.expander) + list(app.button)]
     # Drop our own injected stylesheet: CSS class names are not user-facing text.
     return " ".join(part for part in parts if not part.lstrip().startswith("<style>")).lower()
 
@@ -486,6 +521,15 @@ PIPELINE_VOCABULARY = [
     "pure python", "normalise", "normalis", "claude.md",
     "hard gate", "soft criteri", "aggregator csv", "direct json",
     "pydantic", "audit logger", "transaction context",
+    # Raw enum values. The screen has plain words for every one of these
+    # (ui/theme.py owns them); anything printing the identifier has bypassed it.
+    "act_now", "order_soon", "no_rush", "unknown",
+    # Our vocabulary for our own machinery, not a buyer's for their purchase.
+    "hard constraint", "substitution threshold", "structured requirements",
+    "offline parser", "criterion", "criteria", "escalation", "near-miss(es)",
+    "default weights", "rescaled", "sum to 1",
+    # Programmer plurals. A buyer writes "2 suppliers", not "2 source(s)".
+    "source(s)", "day(s)", "(s)",
 ]
 
 
@@ -498,6 +542,23 @@ def test_no_pipeline_vocabulary_on_the_surface():
     assert not found, (
         f"pipeline vocabulary reached the default surface: {found}. "
         f"Move it into a drill-down, a docstring, or presentation.txt."
+    )
+
+
+def test_no_pipeline_vocabulary_after_the_order_closes():
+    """The screen a buyer is left looking at, which nobody was checking.
+
+    The vocabulary test ran on one brief in one state - pre-approval - so every
+    word the confirmation and payment screens print was outside its reach. That
+    is where the retry line lives, and it prints an outcome for each attempt.
+    """
+    app = _click(_click(_fresh(), "start_recent"), "approve")
+    assert app.session_state["ctx"].status.value == "completed", "expected a closed order"
+
+    surface = _surface_text(app)
+    found = [word for word in PIPELINE_VOCABULARY if word in surface]
+    assert not found, (
+        f"pipeline vocabulary reached the screen after the order closed: {found}."
     )
 
 

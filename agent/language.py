@@ -267,7 +267,8 @@ def extract_brief(
     if audit:
         audit.decision(
             STAGE_EXTRACTION,
-            f"Brief parsed into structured requirements using the {source} parser.",
+            "Read your request and picked out what you asked for: what, how "
+            f"many, by when, and at what price.{_reader_note(source)}",
             {
                 "category": brief.category,
                 "quantity": brief.quantity,
@@ -566,6 +567,18 @@ def _read_extraction(
                 raise
             return _offline_extract(text), "offline", _offline_note(exc)
     return _offline_extract(text), "offline", _skipped_note(force_offline)
+
+
+def _reader_note(source: str) -> str:
+    """How the sentence was read, in words a buyer would use.
+
+    The audit trail has to record WHICH reader ran - a run parsed by word
+    matching and a run parsed by the model are not the same run, and a judge is
+    entitled to know which one they watched. But "the offline parser" is our
+    word for our own machinery. A buyer reads this entry too, in the same list,
+    so it says what happened rather than which code path did it.
+    """
+    return "" if source == "gemini" else " Read by word matching, with no AI."
 
 
 def _skipped_note(force_offline: bool) -> str:

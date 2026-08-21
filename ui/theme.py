@@ -255,14 +255,21 @@ def urgency(key: str) -> tuple[str, str, str]:
     The icon and the word are what make them safe, so nothing in the UI is ever
     allowed to render the colour on its own.
     """
+    from agent.signals import Urgency  # local import: theme is imported by everything
+
     palette = active()
     table = {
-        "act_now":    (palette.critical, "!", "Order today"),
-        "order_soon": (palette.serious,  "•", "Order this week"),
-        "no_rush":    (palette.good,     "✓", "No rush"),
-        "unknown":    (palette.ink_muted, "?", "No history"),
+        "act_now":    (palette.critical, "!"),
+        "order_soon": (palette.serious,  "•"),
+        "no_rush":    (palette.good,     "✓"),
+        "unknown":    (palette.ink_muted, "?"),
     }
-    return table.get(key, table["unknown"])
+    colour, icon = table.get(key, table["unknown"])
+    # The words come from the engine, not from here. agent.signals.Urgency owns
+    # them because the audit trail needs the same phrasing this screen shows, and
+    # two lists drifting apart is how "act_now" ended up printed to a buyer.
+    known = key if key in table else Urgency.UNKNOWN.value
+    return colour, icon, Urgency(known).label.capitalize()
 
 
 # ---------------------------------------------------------------------------

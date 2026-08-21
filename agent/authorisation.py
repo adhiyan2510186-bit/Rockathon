@@ -315,7 +315,8 @@ def approve(
     audit.decision(
         STAGE_AUTHORISATION,
         f"{approver} approved the Rs {total:,.0f} order for {selected.product.label}, above "
-        f"the agent's Rs {limit:,.0f} limit; resuming at vendor confirmation.",
+        f"the Rs {limit:,.0f} the agent may commit on its own. Confirming with the "
+        f"supplier now.",
         {
             "approved_by": approver,
             "selected": selected.product.label,

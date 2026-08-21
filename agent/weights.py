@@ -392,9 +392,9 @@ def _reasoning(brief: Brief, values: dict[str, float], tag: str | None = None) -
     """
     in_context = bool(tag) and config.context_weights(brief.category, tag) is not None
     basis = (
-        f"the '{config.context_label(brief.category, tag).lower()}' weights"
+        f"the '{config.context_label(brief.category, tag).lower()}' balance"
         if in_context
-        else f"the documented {brief.category} default weights"
+        else f"our usual balance for this kind of order"
     )
 
     if not brief.stated_priorities:
@@ -403,10 +403,10 @@ def _reasoning(brief: Brief, values: dict[str, float], tag: str | None = None) -
         # a stated priority and are not the same event.
         if in_context:
             return (
-                f"No individual priority was stated, so {basis} were applied "
-                f"unchanged from the usage context the buyer selected."
+                f"You did not say what matters most, so we used {basis} for the "
+                f"way you told us these will be used."
             )
-        return f"No priority was stated, so {basis} were applied unchanged."
+        return f"You did not say what matters most, so we used {basis}."
 
     said = ", ".join(
         f"{criterion} {phrase.replace('_', ' ')} ({values[criterion]:.2f})"
@@ -414,6 +414,6 @@ def _reasoning(brief: Brief, values: dict[str, float], tag: str | None = None) -
         if criterion in values
     )
     return (
-        f"User stated {said}; the remaining criteria were rescaled from {basis} "
-        f"so the four weights still sum to 1.0."
+        f"You said {said}; everything else was adjusted around that, starting "
+        f"from {basis}."
     )

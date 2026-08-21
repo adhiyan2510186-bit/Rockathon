@@ -82,6 +82,23 @@ class Urgency(str, Enum):
     NO_RUSH = "no_rush"        # plenty of cover, price steady or falling
     UNKNOWN = "unknown"        # this source publishes no history — we say nothing
 
+    @property
+    def label(self) -> str:
+        """The words a buyer reads. The enum value is for us, never for them.
+
+        This lives on the enum rather than in the interface because the audit
+        trail needs it too, and the audit trail is written down here. When the
+        label existed only in ui/theme.py, the reasoning string reached for
+        `.value` instead and put "act_now" on the screen and into the record a
+        finance manager reads. One list of words, wherever it is needed.
+        """
+        return {
+            Urgency.ACT_NOW: "order today",
+            Urgency.ORDER_SOON: "order this week",
+            Urgency.NO_RUSH: "no rush",
+            Urgency.UNKNOWN: "no history",
+        }[self]
+
 
 # How the four states sort, so "take whichever read is more urgent" is one line.
 _RANK: dict[Urgency, int] = {
@@ -420,7 +437,7 @@ def _log(result: MarketRead, audit: AuditLogger) -> None:
             "timing pressure. Advisory only — ranking and authorisation unchanged."
         )
     else:
-        names = ", ".join(f"{s.product_label} ({s.urgency.value})" for s in flagged)
+        names = ", ".join(f"{s.product_label} ({s.urgency.label})" for s in flagged)
         reasoning = (
             f"Timing pressure noted on {names}. Advisory only — this did not change "
             f"eligibility, score, ranking, or the authorisation decision."

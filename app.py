@@ -998,7 +998,7 @@ def _outcome_trail(ctx) -> None:
         # run actually was.
         if payment.declines:
             for attempt in payment.attempts:
-                st.caption(f"Attempt {attempt.attempt}: {attempt.outcome.value} — {attempt.reason}")
+                st.caption(f"Attempt {attempt.attempt}: {attempt.outcome.label} — {attempt.reason}")
         if payment.escalation is not None:
             _escalation_options(payment.escalation)
 
@@ -1133,13 +1133,13 @@ def render_activity() -> None:
     with ui.detail("The finance record"):
         st.code(log.finance_view(), language="text")
 
-    with ui.detail("Read it back from disk"):
+    with ui.detail("Check this against the saved copy"):
         st.caption(
-            "Re-read from the exported file rather than from memory — the log on "
-            "disk is what a finance system would receive."
+            "This is the saved record, read back from the file itself — the same "
+            "one your finance team receives, not a copy of what is on screen."
         )
         replayed = audit_module.replay(ctx.transaction_id)
-        st.caption(f"{len(replayed)} entries read back from {log.jsonl_path().name}")
+        st.caption(f"{len(replayed)} entries, {ctx.transaction_id}")
         for entry in replayed:
             st.markdown(f"- `{entry.entry_id}` **{entry.event_type.value}** — {entry.reasoning}")
 

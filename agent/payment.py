@@ -110,6 +110,20 @@ class AttemptOutcome(str, Enum):
     APPROVED = "approved"
     DECLINED = "declined"
 
+    @property
+    def label(self) -> str:
+        """The words the screen shows. Same rule as Urgency.label.
+
+        These two values happen to be readable English already, which is exactly
+        why printing `.value` went unnoticed - it looked fine until the day
+        somebody added a third state named after the code rather than the event.
+        The screen asks for a label; what the enum is called stays our business.
+        """
+        return {
+            AttemptOutcome.APPROVED: "went through",
+            AttemptOutcome.DECLINED: "declined",
+        }[self]
+
 
 class PaymentAttempt(BaseModel):
     """One trip to the gateway, kept whether it worked or not.
@@ -314,7 +328,8 @@ def _paid(
         retry_note = " The first attempt was declined; the retry succeeded."
     elif declines_earlier:
         retry_note = (
-            f" Approved first time, after {declines_earlier} declined attempt(s) on the "
+            f" Approved first time, after {declines_earlier} declined "
+            f"{'attempt' if declines_earlier == 1 else 'attempts'} on the "
             f"option this one replaced."
         )
     else:
@@ -324,9 +339,16 @@ def _paid(
         STAGE_PAYMENT,
         f"Paid Rs {approved.amount_inr:,.0f} for {approved.product_label} against lock "
         f"{approved.lock_reference} on attempt {approved.attempt}"
-        + (f", after {declines_here} decline(s) against this lock." if declines_here else ".")
         + (
-            f" {declines_earlier} earlier decline(s) belonged to the option it replaced."
+            f", after {declines_here} "
+            f"{'decline' if declines_here == 1 else 'declines'} against this lock."
+            if declines_here
+            else "."
+        )
+        + (
+            f" {declines_earlier} earlier "
+            f"{'decline' if declines_earlier == 1 else 'declines'} belonged to the "
+            f"option it replaced."
             if declines_earlier
             else ""
         ),
