@@ -1078,6 +1078,43 @@ SECTION 8.8 - MORE THAN ONE KIND OF PURCHASE
     filter took the guess and enforced it like policy. An assumption is allowed
     to fill in a blank. It is not allowed to disqualify anybody."
 
+8.8.10  THE TRAP: THE ONLY WAY TO SAVE QUOTA WAS TO HIDE THE API KEY
+    The free tier bills PER DAY, and reading one brief costs two calls - the
+    scope check at stage 0 and the extraction at stage 1. Twenty rehearsal runs
+    is forty calls spent before a judge has seen anything. We had already lost
+    whole afternoons to this once and changed model over it.
+
+    The only lever we had was deleting the key from .env. That works, and it is
+    the wrong lever: with no key the app also stops being able to show that it
+    HAS a language step. You cannot demonstrate the thing you switched off by
+    making it look like it was never built.
+
+    Naive: add a flag, and check it after the call - or add it in a prompt.
+    Both are theatre. A flag read after the request has been sent has saved
+    nothing at all, and it is exactly the kind of "off switch" that is off in
+    the UI and on in the bill.
+
+    What we do: one switch on screen - "Use AI to read my request" - that is
+    read ONCE per brief and passed into both language calls, so a brief can
+    never be half-read by the model and half by the word matcher. When it is
+    off, no request is constructed and none is sent. The app says which reader
+    ran and WHY: "switched off, so no request was sent" is a different sentence
+    from "rate limit reached", because a choice the user made must never read as
+    a fault they need to go and fix.
+
+    The reason we can offer that switch at all is the architecture, not a
+    feature we added. The model only ever turns a sentence into fields. Swap the
+    reader and the ranking, the limit check and the audit trail are untouched -
+    we have a test asserting the two paths produce an identical Brief, field for
+    field.
+
+    THE LINE: "Turn the AI off, mid-demo, and ask us the same question again.
+    You get the same ranking and the same escalation, because the model was
+    never the part that decided anything. That is not a fallback we bolted on -
+    it is what 'the LLM interprets language, it never decides the purchase'
+    actually buys you."
+
+
 ================================================================================
 SECTION 9 - LIKELY QUESTIONS, AND THE SHORT ANSWER
 ================================================================================
@@ -1127,5 +1164,5 @@ differently, and we had a reason. Same shape every time:
 Skip anything that is just a feature description. This file is only for the
 places where we can show judgement.
 
-Last updated: after the interface was re-tokenised to one dark surface and the
-theme stopped being decided in two places at once (8.5.4).
+Last updated: after the language step got an off switch that actually stops the
+request being sent, rather than one that spends it and looks away (8.8.10).

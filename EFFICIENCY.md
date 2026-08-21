@@ -369,6 +369,43 @@ anyone teaches it one."*
 
 ---
 
+## 1b · The model call can be switched off without switching the product off
+
+**Claim.** A run can be told to skip the language model entirely, and the request
+is never sent — not sent and ignored. Two API calls saved per brief, and nothing
+downstream changes.
+
+**Where.** `agent/language.py:516`, `_use_model()` — the one line that decides
+whether a call happens. `agent/language.py:571`, `_skipped_note()` says which of
+the two reasons applied. `app.py:494`, `_language_switch()` is the sidebar
+control, and `app.py`, `handle_message()` reads the flag **once** and passes it
+to both `check_scope()` and `extract_brief()`, so a single brief can never be
+half-read by the model and half by the word matcher.
+
+**What the naive version does.** Two versions are worse, and we had the first
+one. (a) The only way to save quota is to delete the API key, which also makes
+the app look like it has no AI in it — you cannot demonstrate the thing you
+turned off. (b) Call the model anyway and discard the answer on a flag, which
+costs exactly as much as not having the switch.
+
+**Measured.** Reading one brief costs **2 calls** — the scope check at stage 0
+and the extraction at stage 1. Gemini's free tier bills per day, so the switch
+is worth 2 calls × however many times we rehearse. `tests/test_brief_parsing.py`
+asserts the negative directly: with a key present and `_call_gemini` replaced by
+a function that raises, `force_offline=True` completes both stages.
+`tests/test_app.py` does the same through the real checkbox.
+
+**Why it cannot change an answer.** Both parsers return the same `_Extraction`
+and go through the same `_to_brief()`. `test_forcing_offline_changes_who_read_
+it_and_nothing_else` asserts the two Briefs are equal field for field, which is
+the claim the sidebar caption makes to the user.
+
+**The sentence for stage.** *"The model reads the sentence. It does not decide
+anything — so we can turn it off mid-demo and show you the same ranking, with
+the app telling you plainly that it is reading your words itself."*
+
+---
+
 ## How to add to this file
 
 Log the win **when you write the code**, not at the end. Each entry needs:

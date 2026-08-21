@@ -505,3 +505,44 @@ def test_the_simulated_data_label_is_always_present():
     """We never draw a convincing chart and let a reader assume it is real."""
     app = _click(_fresh(), "start_recent")
     assert "simulated market data" in _surface_text(app)
+
+
+# ---------------------------------------------------------------------------
+# The parser switch
+# ---------------------------------------------------------------------------
+# The free tier is a daily allowance and one brief spends two calls, so an
+# afternoon of rehearsal can spend the demo. tests/test_brief_parsing.py proves
+# force_offline makes no call; these prove the switch on screen is wired to it.
+
+def test_the_switch_is_off_and_unusable_with_no_key():
+    """No key means there is no choice to offer, so we do not pretend there is.
+
+    The autouse `offline` fixture at the top of this file is what clears the key.
+    """
+    app = _fresh()
+    box = app.checkbox(key="use_model_box")
+
+    assert box.value is False
+    assert box.disabled is True
+    assert app.session_state["use_model"] is False
+
+
+def test_turning_the_switch_off_is_carried_into_the_run(monkeypatch):
+    """And the note says we chose it, rather than implying something failed."""
+    from agent import language
+
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key-never-called")
+    monkeypatch.setattr(
+        language, "_call_gemini",
+        lambda *a, **k: pytest.fail("the switch was off and the model was called"),
+    )
+
+    app = _fresh()
+    app = app.checkbox(key="use_model_box").uncheck().run()
+    app = app.chat_input[0].set_value(
+        "5,000 kraft mailer boxes, double-wall, max Rs 22 per unit, within 10 days"
+    ).run()
+
+    assert app.exception == []
+    assert "switched off" in app.session_state["brief_note"]
+    assert app.session_state["ctx"].brief is not None

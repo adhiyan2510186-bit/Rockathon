@@ -41,6 +41,20 @@ happens to the result.
 
 We always say which path ran. `.source` is 'gemini' or 'offline' and the UI
 prints it. We degrade honestly; we never pretend a model call happened.
+
+The offline path is reachable three ways, and they are genuinely different
+things:
+
+    no API key         nothing to call
+    a call failed      out of quota, or the model is down (allow_offline_fallback)
+    we CHOSE to        force_offline=True, from the sidebar switch
+
+The third one exists because the free tier is a DAILY allowance, and one brief
+costs two calls — the scope check and the extraction. Every rehearsal run we
+make with the model on is a run we cannot make on stage. `force_offline` skips
+the call entirely rather than making it and discarding the answer, so the
+allowance is genuinely untouched, and the note we surface says we chose this
+rather than implying something broke.
 """
 
 from __future__ import annotations
@@ -143,7 +157,12 @@ class _ScopeCheck(BaseModel):
 # Stage 0 — scope & completeness gate
 # ---------------------------------------------------------------------------
 
-def check_scope(text: str, audit: AuditLogger | None = None) -> ScopeOutcome:
+def check_scope(
+    text: str,
+    audit: AuditLogger | None = None,
+    *,
+    force_offline: bool = False,
+) -> ScopeOutcome:
     """Decide whether to start work on this message at all.
 
     Three outcomes and no others: refuse politely (not procurement), ask ONE
@@ -154,8 +173,12 @@ def check_scope(text: str, audit: AuditLogger | None = None) -> ScopeOutcome:
     reserved for the three stage-5 triggers — if a routine clarifying question
     counted as an escalation, the boundary we are demonstrating would blur on the
     very first screen.
+
+    `force_offline` skips the model and reads the sentence by word matching. A
+    caller's choice, passed in rather than read from a global, so a run's parser
+    is decided in one visible place instead of by whatever last set a flag.
     """
-    check, source, note = _read_scope(text)
+    check, source, note = _read_scope(text, force_offline)
 
     if check.verdict == "out_of_scope":
         verdict = ScopeVerdict(verdict="out_of_scope", message=SCOPE_STATEMENT, missing_fields=[])
@@ -221,14 +244,24 @@ def _default_question(missing: list[str]) -> str:
 # Stage 1 — requirement extraction (and the labels stage 2 needs)
 # ---------------------------------------------------------------------------
 
-def extract_brief(text: str, audit: AuditLogger | None = None) -> BriefOutcome:
+def extract_brief(
+    text: str,
+    audit: AuditLogger | None = None,
+    *,
+    force_offline: bool = False,
+) -> BriefOutcome:
     """Turn the sentence into a Brief. The handover from English to arithmetic.
 
     Everything before this line is interpretation of language. Everything after
     it is plain Python. Once this function returns, the model has no further say
     in the run — it is not consulted again at any stage.
+
+    `force_offline` reads the sentence by word matching instead of calling the
+    model. Note what it does NOT change: the Brief that comes out, the audit
+    entry's shape, or anything downstream. Only who did the reading, and the log
+    records which parser that was.
     """
-    extraction, source, note = _read_extraction(text)
+    extraction, source, note = _read_extraction(text, force_offline)
     brief = _to_brief(text, extraction, audit)
 
     if audit:
@@ -480,9 +513,36 @@ def _extraction_task() -> str:
 # Choosing a path
 # ---------------------------------------------------------------------------
 
-def _read_scope(text: str) -> tuple[_ScopeCheck, Literal["gemini", "offline"], str]:
+def _use_model(force_offline: bool) -> bool:
+    """Whether this particular read should call the model.
+
+    Two ways to end up offline: the caller asked for it, or there is no key to
+    call with. Both skip the call rather than making one and discarding the
+    answer — the point of the switch is the request that never leaves.
+
+    config.use_model_default() is deliberately NOT consulted here. It is the
+    position the UI switch starts in, and if this function enforced it as well
+    then a config of false would silently ignore a user turning the switch back
+    on. One decision, one owner: config seeds the switch, the switch is passed in
+    as force_offline, and this line reads only what it was handed.
+    """
+    return not force_offline and is_online()
+
+
+# What we tell the user when we did not call the model. Kept apart from
+# _offline_note() below, which explains a call that FAILED. Collapsing the two
+# would mean a deliberate choice reads as a fault, and "the AI is off because you
+# turned it off" and "the AI is off because it stopped answering" are not
+# something a user should have to tell apart from one shared sentence.
+_CHOSE_OFFLINE_NOTE = "offline mode - AI reading is switched off, so no request was sent"
+_NO_KEY_NOTE = "offline mode - no API key, no AI used"
+
+
+def _read_scope(
+    text: str, force_offline: bool = False,
+) -> tuple[_ScopeCheck, Literal["gemini", "offline"], str]:
     """Stage 0's reading of the sentence, via Gemini if we can, offline if we must."""
-    if is_online():
+    if _use_model(force_offline):
         try:
             check = _call_gemini(_build_prompt(text, _SCOPE_TASK), _ScopeCheck)
             return check, "gemini", f"read by {config.llm_model()}"
@@ -490,12 +550,14 @@ def _read_scope(text: str) -> tuple[_ScopeCheck, Literal["gemini", "offline"], s
             if not config.allow_offline_fallback():
                 raise
             return _offline_scope(text), "offline", _offline_note(exc)
-    return _offline_scope(text), "offline", "offline mode - no API key, no AI used"
+    return _offline_scope(text), "offline", _skipped_note(force_offline)
 
 
-def _read_extraction(text: str) -> tuple[_Extraction, Literal["gemini", "offline"], str]:
+def _read_extraction(
+    text: str, force_offline: bool = False,
+) -> tuple[_Extraction, Literal["gemini", "offline"], str]:
     """Stage 1's reading of the sentence, same two paths."""
-    if is_online():
+    if _use_model(force_offline):
         try:
             extraction = _call_gemini(_build_prompt(text, _extraction_task()), _Extraction)
             return extraction, "gemini", f"read by {config.llm_model()}"
@@ -503,7 +565,12 @@ def _read_extraction(text: str) -> tuple[_Extraction, Literal["gemini", "offline
             if not config.allow_offline_fallback():
                 raise
             return _offline_extract(text), "offline", _offline_note(exc)
-    return _offline_extract(text), "offline", "offline mode - no API key, no AI used"
+    return _offline_extract(text), "offline", _skipped_note(force_offline)
+
+
+def _skipped_note(force_offline: bool) -> str:
+    """Why no call was made: because we chose not to, or because we could not."""
+    return _CHOSE_OFFLINE_NOTE if force_offline else _NO_KEY_NOTE
 
 
 def _offline_note(exc: Exception) -> str:

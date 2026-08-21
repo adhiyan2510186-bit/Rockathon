@@ -176,6 +176,9 @@ def init_state() -> None:
         "last_brief": "",          # so a failure can be re-tested in one click
         "switches": config.failure_injection(),
         "source_keys": list(sources.ALL_SOURCE_KEYS),
+        # Whether to spend a model call on the next brief. Starts wherever
+        # config.yaml says; the sidebar switch moves it for the session.
+        "use_model": config.use_model_default(),
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -257,7 +260,11 @@ def handle_message(text: str) -> None:
     brief_text = f"{pending} {text}".strip() if pending else text
 
     # -- should we even start? ---------------------------------------------
-    scope = language.check_scope(brief_text, log)
+    # One flag, read once and passed to both language calls, so a single brief
+    # can never be half-read by the model and half by the word matcher.
+    offline = not st.session_state["use_model"]
+
+    scope = language.check_scope(brief_text, log, force_offline=offline)
     st.session_state["scope_note"] = scope.note
     if scope.verdict.verdict == "out_of_scope":
         st.session_state["pending_brief"] = ""
@@ -272,7 +279,7 @@ def handle_message(text: str) -> None:
     st.session_state["last_brief"] = brief_text
 
     # -- the sentence becomes numbers --------------------------------------
-    parsed = language.extract_brief(brief_text, log)
+    parsed = language.extract_brief(brief_text, log, force_offline=offline)
     st.session_state["brief_note"] = parsed.note
     ctx.brief = parsed.brief
 
@@ -459,6 +466,9 @@ def render_sidebar() -> None:
             # demonstration of anything, it just looks broken.
             st.session_state["source_keys"] = chosen or list(sources.ALL_SOURCE_KEYS)
 
+        with st.expander("Reading your request"):
+            _language_switch()
+
         with st.expander("Demo controls"):
             st.caption("Force a failure to see how the agent responds.")
             switches = dict(st.session_state["switches"])
@@ -479,6 +489,44 @@ def render_sidebar() -> None:
                     "Starts a fresh order with a new reference and its own audit "
                     "file, using the switches above."
                 )
+
+
+def _language_switch() -> None:
+    """Choose who reads the brief: the model, or the word matcher on this machine.
+
+    Why a user-facing control and not just a config line. The free tier is a
+    DAILY allowance and one brief spends two calls, so every practice run with
+    the model on is a run we cannot make on stage. Before this switch existed the
+    only way to save the allowance was to hide the API key, which also made the
+    app look like it had no AI at all.
+
+    It is worded for a buyer, not for us, because a buyer has the same two
+    reasons to want it: cost, and not sending their purchasing plans to a third
+    party. What it can NEVER do is change the outcome — both readings produce the
+    same structured brief and everything after stage 2 is plain Python either
+    way. The caption says exactly that, because a control that looks like it
+    might quietly change the answer is worse than no control.
+
+    With no API key there is nothing to switch, so the box is disabled rather
+    than offering a choice that does not exist.
+    """
+    have_key = language.is_online()
+
+    st.session_state["use_model"] = st.checkbox(
+        "Use AI to read my request",
+        value=st.session_state["use_model"] and have_key,
+        disabled=not have_key,
+        key="use_model_box",
+    )
+
+    if not have_key:
+        st.caption("No API key set, so requests are read on this machine.")
+    elif st.session_state["use_model"]:
+        st.caption("Costs one AI request per brief.")
+    else:
+        st.caption("Read on this machine by word matching. Nothing is sent anywhere.")
+
+    st.caption("Either way, the ranking and the spending limit are worked out the same.")
 
 
 # ---------------------------------------------------------------------------

@@ -332,10 +332,25 @@ market_signal:
 #   agent/language.py switches to a deterministic word-matching parser so a demo
 #   cannot die mid-run. The UI labels this plainly — we degrade honestly, we
 #   never fake a model call.
+#
+# use_model: which position the app's "use AI to read my request" switch starts
+#   in. A different question from allow_offline_fallback, which only says what to
+#   do when a call FAILS; this says whether we mean to make one.
+#
+#   Set it false and a session begins with the word-matching parser, so no
+#   request leaves the machine and the daily free-tier allowance is untouched —
+#   which is what a rehearsal run wants. Leave it true and the demo opens showing
+#   a real model call. Either way the switch in the sidebar moves it, because
+#   this is a default and not a lock.
+#
+#   Nothing downstream can tell the difference: both parsers hand back the same
+#   _Extraction and go through the same _to_brief(). What changes is only who
+#   read the sentence, and the UI always says which one did.
 llm:
   provider: gemini
   model: gemini-3.5-flash-lite
   allow_offline_fallback: true
+  use_model: true
 
 # ---------------------------------------------------------------------------
 # Stages 6-7 — mock service failure injection

@@ -273,3 +273,72 @@ def test_priorities_only_ever_name_a_criterion_we_score_on():
         "200 chairs in 14 days, cheapest option please",
     ):
         assert set(parse(brief).stated_priorities) <= set(SOFT_CRITERIA)
+
+
+# ---------------------------------------------------------------------------
+# Choosing the parser — the switch that saves the daily allowance
+# ---------------------------------------------------------------------------
+# The free tier is a DAILY quota and one brief costs two calls, so a rehearsal
+# afternoon can spend the demo's budget. force_offline exists to stop that, and
+# the only thing worth testing about it is the negative: that no call is made.
+# A switch that still spends the request and throws the answer away would look
+# identical on screen.
+
+@pytest.fixture
+def with_key(monkeypatch):
+    """Pretend a key is configured, so the online path is the one being avoided."""
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key-not-used")
+    assert language.is_online() is True
+
+
+@pytest.fixture
+def call_is_a_failure(monkeypatch):
+    """Any model call from here on is the bug this section is about."""
+    def explode(*_args, **_kwargs):
+        raise AssertionError("force_offline still called the model")
+
+    monkeypatch.setattr(language, "_call_gemini", explode)
+
+
+BRIEF = "5,000 kraft mailer boxes, double-wall, max Rs 22 per unit, within 10 days"
+
+
+def test_force_offline_makes_no_model_call(with_key, call_is_a_failure):
+    """Both stage 0 and stage 1, because a brief costs one call each."""
+    scope = language.check_scope(BRIEF, force_offline=True)
+    parsed = language.extract_brief(BRIEF, force_offline=True)
+
+    assert scope.source == "offline"
+    assert parsed.source == "offline"
+
+
+def test_the_offline_note_says_we_chose_it_not_that_something_broke(with_key, call_is_a_failure):
+    """A deliberate choice must not read as a fault.
+
+    'Rate limit reached' next to a switch the user themselves turned off would
+    have them hunting a problem that does not exist.
+    """
+    note = language.extract_brief(BRIEF, force_offline=True).note
+
+    assert "switched off" in note
+    assert "rate limit" not in note
+    assert "unavailable" not in note
+
+
+def test_forcing_offline_changes_who_read_it_and_nothing_else(with_key, call_is_a_failure):
+    """The switch is a parser choice, not a behaviour change.
+
+    This is the claim the sidebar caption makes to the user, so it is pinned:
+    the Brief that comes out of the forced path is the same object the plain
+    offline path produces, field for field.
+    """
+    through_the_switch = language.extract_brief(BRIEF, force_offline=True).brief
+
+    assert through_the_switch == parse(BRIEF)
+
+
+def test_no_key_and_chosen_offline_are_told_apart(monkeypatch):
+    """Same parser, different reason, and the user is entitled to know which."""
+    monkeypatch.setenv("GEMINI_API_KEY", "")
+
+    assert "no API key" in language.extract_brief(BRIEF).note

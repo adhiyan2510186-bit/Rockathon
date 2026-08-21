@@ -599,6 +599,25 @@ def allow_offline_fallback() -> bool:
     return bool(load()["llm"]["allow_offline_fallback"])
 
 
+def use_model_default() -> bool:
+    """Which position the app's "use AI to read my request" switch starts in.
+
+    A DEFAULT, not a lock — the user can move the switch either way once the app
+    is running, and agent/language.py deliberately does not read this value, so
+    there is only one thing deciding any given run.
+
+    Separate question from allow_offline_fallback(): that one decides what to do
+    when a call FAILS, this one decides whether we intend to make one. Starting
+    it false is how a rehearsal session costs nothing — the free tier is a daily
+    allowance and every brief we read while practising is one we cannot read on
+    stage.
+
+    Read with .get() so an older config.yaml still loads and behaves the way it
+    did before this switch existed.
+    """
+    return bool(load()["llm"].get("use_model", True))
+
+
 # ---------------------------------------------------------------------------
 # Stages 6-7 — mock service switches
 # ---------------------------------------------------------------------------
