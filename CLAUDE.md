@@ -37,6 +37,12 @@ Running example throughout: Meena, ops manager at a Chennai D2C skincare brand,
 reordering packaging (mailer boxes, labels, void fill) from a few vendors, each
 with its own price cap and delivery window.
 
+Meena is our persona — she is who we design *for*, not a name the product prints
+back. **No screen ever names her.** Anywhere the UI or the audit trail records
+who acted, it says **`User`** (the agent's own side says `Agent`). We do not know
+who is signed in, and inventing a name in a record a finance manager reads is
+exactly the kind of unearned confidence this project exists to rule out.
+
 ---
 
 ## THE ONE RULE EVERYTHING ELSE SERVES
@@ -294,6 +300,11 @@ the claim the layer earns us. We are not building one for this demo (see
 The autonomous path: passes all hard gates + in stock + order total within the
 authorisation limit → proceeds through confirmation, payment, audit close. User
 gets a notification after the fact with the ranked comparison and score breakdown.
+
+**Who approved is recorded as `User`, never a persona name** (`app.py`,
+`APPROVER`). The stage-5 entry is one of the few written with actor `USER` — it
+marks where the agent's authority ended and a person's began. What matters in
+that record is *that a human stepped in*, not a name we would be making up.
 
 Three escalation triggers, and nothing else:
 1. No product passes all hard gates → relax negotiable constraints only, in the

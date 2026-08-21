@@ -129,8 +129,9 @@ OFF_TOPIC_EXAMPLE = "What's the weather in Chennai tomorrow?"
 
 # Who the approval is recorded as. The stage-5 audit entry is one of the very
 # few written with actor USER - it marks where the agent's authority ended and
-# a person's began - so it has to name someone rather than say "the user".
-APPROVER = "Meena (ops manager)"
+# a person's began. Deliberately generic: the record says a person approved,
+# without pretending we know which person the signed-in operator is.
+APPROVER = "User"
 
 # Keys come from the stage files themselves, so a rename cannot leave a control
 # flipping a switch nothing reads any more.
