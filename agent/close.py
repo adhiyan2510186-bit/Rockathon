@@ -35,8 +35,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from agent.audit import STAGE_CLOSE, AuditLogger
-from agent.models import TransactionContext, TransactionStatus
+from agent.audit import STAGE_AUTHORISATION, STAGE_CLOSE, AuditLogger
+from agent.models import Actor, EventType, TransactionContext, TransactionStatus
 from agent.payment import PaymentOutcome
 from agent.vendor import ConfirmationOutcome
 
@@ -99,10 +99,18 @@ def close(
     unit_price = confirmation.quote.quoted_price_inr if confirmation.quote else 0.0
 
     # Whether a human signed is read off the audit trail rather than inferred from
-    # the amount. A USER-actored decision entry is the record of the approval; the
-    # order total only tells you whether one was NEEDED.
+    # the amount. The order total only tells you whether an approval was NEEDED.
+    #
+    # The stage matters as much as the actor. A buyer answering the usage-context
+    # question is also recorded as a USER decision (weights.py), and it is not an
+    # approval - it is a preference. Only a USER decision at the AUTHORISATION
+    # gate is the record of a human taking the purchase on themselves. Without
+    # the stage test, any order where the buyer answered that question would
+    # close claiming a sign-off that never happened.
     approved_by_human = any(
-        entry.actor.value == "USER" and entry.event_type.value == "DECISION"
+        entry.stage == STAGE_AUTHORISATION
+        and entry.actor is Actor.USER
+        and entry.event_type is EventType.DECISION
         for entry in context.audit
     )
 
